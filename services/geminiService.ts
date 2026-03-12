@@ -152,13 +152,14 @@ export const suggestCropsForSeason = async (location: string, plantingDate: stri
   return JSON.parse(response.text || '[]');
 };
 
-export const getCropRotationAdvice = async (location: string, currentCrops: string[], language: string = 'English') => {
+export const getCropRotationAdvice = async (location: string, currentCrops: string[], soilType: string, history: string[], language: string = 'English') => {
   const ai = getAIClient();
-  const prompt = `Act as an expert Indian agronomist. For a farm in ${location}, currently growing ${currentCrops.join(', ')}, provide a strategic "Symbiotic Cultivation Plan".
+  const prompt = `Act as an expert Indian agronomist. For a farm in ${location}, with ${soilType} soil, currently growing ${currentCrops.join(', ')}, and a history of planting ${history.join(', ')}, provide a strategic "Crop Rotation & Symbiotic Plan".
   Address:
-  1. Optimal Crop Rotation: A 3-year cycle to maximize soil nitrogen and break pest cycles.
+  1. Optimal Crop Rotation: A 3-year cycle to maximize soil nitrogen, improve soil structure, and break pest cycles.
   2. Companion Planting: Which secondary crops (e.g. Marigolds, Pulses) should be planted alongside the main crops.
   3. Intercropping Strategies: Specific row-ratio patterns for better yield (e.g. 1:2 Mustard/Wheat).
+  4. Soil Health Recovery: How this rotation specifically addresses the ${soilType} soil type.
   Provide the response in ${language}. Use clear sections and professional tone.`;
 
   const response = await withRetry<GenerateContentResponse>(() => ai.models.generateContent({
@@ -454,21 +455,23 @@ export const fetchMarketPrices = async (crop: string, location: string, language
   };
 };
 
-export const getCropAdvice = async (crop: string, location: string, soilType: string, language: string = 'English') => {
+export const getCropAdvice = async (crop: string, location: string, soilType: string, language: string = 'English', weatherContext?: string) => {
   const ai = getAIClient();
+  const weatherInfo = weatherContext ? `Current weather conditions: ${weatherContext}.` : '';
   const response = await withRetry<GenerateContentResponse>(() => ai.models.generateContent({
     model: 'gemini-3-pro-preview',
-    contents: `Give comprehensive Indian farming advice for ${crop} in ${location} with ${soilType} soil. Include season (Kharif/Rabi), irrigation, and IPM. Provide the entire response in ${language}.`,
+    contents: `Give comprehensive Indian farming advice for ${crop} in ${location} with ${soilType} soil. ${weatherInfo} Include season (Kharif/Rabi), irrigation, and IPM. Provide the entire response in ${language}.`,
     config: { thinkingConfig: { thinkingBudget: 2000 } }
   }));
   return response.text;
 };
 
-export const getFertilizerAdvice = async (crop: string, location: string, soilType: string, language: string = 'English'): Promise<FertilizerPlan> => {
+export const getFertilizerAdvice = async (crop: string, location: string, soilType: string, language: string = 'English', weatherContext?: string): Promise<FertilizerPlan> => {
   const ai = getAIClient();
+  const weatherInfo = weatherContext ? `Consider these current weather conditions for application timing and nutrient leaching risks: ${weatherContext}.` : '';
   const response = await withRetry<GenerateContentResponse>(() => ai.models.generateContent({
     model: 'gemini-3-pro-preview',
-    contents: `Provide detailed fertilizer plan for ${crop} in ${location} with ${soilType} soil (Indian context). Adhere to Soil Health Card guidelines. Provide all descriptive text and instructions in ${language}.`,
+    contents: `Provide detailed fertilizer plan for ${crop} in ${location} with ${soilType} soil (Indian context). ${weatherInfo} Adhere to Soil Health Card guidelines. Provide all descriptive text and instructions in ${language}.`,
     config: {
       responseMimeType: "application/json",
       responseSchema: {
@@ -509,12 +512,29 @@ export const getFertilizerAdvice = async (crop: string, location: string, soilTy
   return JSON.parse(response.text || '{}');
 };
 
-export const chatWithExpert = async (message: string, history: any[], language: string = 'English') => {
+export const chatWithExpert = async (message: string, history: any[], language: string = 'English', profile?: any) => {
   const ai = getAIClient();
+  const profileContext = profile ? `
+  FARMER PROFILE CONTEXT:
+  - Farmer Name: ${profile.farmerName}
+  - Farm Name: ${profile.farmName}
+  - Location: ${profile.location} (${profile.state}, ${profile.district})
+  - Farm Size: ${profile.farmSize} ${profile.sizeUnit}
+  - Soil Type: ${profile.soilType}
+  - Irrigation: ${profile.irrigation}
+  - Terrain: ${profile.terrain}
+  - Active Crops: ${profile.mainCrops.join(', ')}
+  - Crop History: ${JSON.stringify(profile.cropHistory)}
+  - Past Issues: ${profile.pastIssues.join(', ')}
+  ` : '';
+
   const chat = ai.chats.create({
     model: 'gemini-3-flash-preview',
     config: {
-      systemInstruction: `You are KrishiExpert, a senior Indian agricultural advisor. You know Mandi trends, government schemes, and localized soil health card parameters. CRITICAL: Always respond in ${language}.`
+      systemInstruction: `You are KrishiExpert, a senior Indian agricultural advisor. You know Mandi trends, government schemes, and localized soil health card parameters. 
+      ${profileContext}
+      Use the farmer's profile data to provide highly personalized, context-aware advice. If they have a history of specific pests or soil issues, address them.
+      CRITICAL: Always respond in ${language}.`
     }
   });
   const response = await withRetry<GenerateContentResponse>(() => chat.sendMessage({ message }));

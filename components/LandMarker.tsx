@@ -39,10 +39,13 @@ import {
   ChevronRight,
   MapPinned,
   Magnet,
-  Waypoints
+  Waypoints,
+  CloudRain,
+  Thermometer,
+  Cloud
 } from 'lucide-react';
 
-const WEATHER_API_KEY = "42d5aa17c7f2866670e62b4c77cb3d32";
+const WEATHER_API_KEY = import.meta.env.VITE_WEATHER_API_KEY;
 
 type IndianUnit = 'Ha' | 'Ac' | 'Bigha' | 'Guntha' | 'Ac-Gn';
 type Mode = 'Boundary' | 'Infrastructure' | 'Ruler' | 'SoilSample';
@@ -99,7 +102,9 @@ const LandMarker: React.FC<LandMarkerProps> = ({ language, onBack }) => {
   const [showSavedFields, setShowSavedFields] = React.useState(true);
   const [showCurrentPath, setShowCurrentPath] = React.useState(true);
   const [showMapData, setShowMapData] = React.useState(true);
+  const [showWeather, setShowWeather] = React.useState(false);
   const [showLayerControls, setShowLayerControls] = React.useState(false);
+  const [weatherData, setWeatherData] = React.useState<{ temp: number, desc: string, icon: string } | null>(null);
   
   // Camera & Soil State
   const [showCamera, setShowCamera] = React.useState(false);
@@ -128,7 +133,8 @@ const LandMarker: React.FC<LandMarkerProps> = ({ language, onBack }) => {
     ruler: L.FeatureGroup | null;
     features: L.FeatureGroup | null;
     tiles: L.TileLayer | null;
-  }>({ current: null, saved: null, snap: null, ruler: null, features: null, tiles: null });
+    weather: L.TileLayer | null;
+  }>({ current: null, saved: null, snap: null, ruler: null, features: null, tiles: null, weather: null });
   
   const watchIdRef = React.useRef<number | null>(null);
   const videoRef = React.useRef<HTMLVideoElement>(null);
@@ -165,6 +171,45 @@ const LandMarker: React.FC<LandMarkerProps> = ({ language, onBack }) => {
     const newMode = !isSatellite;
     setIsSatellite(newMode);
     layersRef.current.tiles.setUrl(newMode ? SATELLITE_URL : STANDARD_URL);
+  };
+
+  const fetchWeather = async () => {
+    if (!mapRef.current) return;
+    const center = mapRef.current.getCenter();
+    try {
+      const res = await fetch(`https://api.openweathermap.org/data/2.5/weather?lat=${center.lat}&lon=${center.lng}&appid=${WEATHER_API_KEY}&units=metric`);
+      const data = await res.json();
+      if (data.main) {
+        setWeatherData({
+          temp: Math.round(data.main.temp),
+          desc: data.weather[0].description,
+          icon: data.weather[0].icon
+        });
+      }
+    } catch (e) {
+      console.error("Weather fetch failed", e);
+    }
+  };
+
+  const toggleWeatherLayer = () => {
+    if (!mapRef.current) return;
+    const newState = !showWeather;
+    setShowWeather(newState);
+    
+    if (newState) {
+      if (!layersRef.current.weather) {
+        layersRef.current.weather = L.tileLayer(`https://tile.openweathermap.org/map/precipitation_new/{z}/{x}/{y}.png?appid=${WEATHER_API_KEY}`, {
+          maxZoom: 20,
+          opacity: 0.6
+        });
+      }
+      layersRef.current.weather.addTo(mapRef.current);
+      fetchWeather();
+    } else {
+      if (layersRef.current.weather) {
+        layersRef.current.weather.remove();
+      }
+    }
   };
 
   const fetchOSMFeatures = async () => {
@@ -419,7 +464,8 @@ const LandMarker: React.FC<LandMarkerProps> = ({ language, onBack }) => {
         snap: L.featureGroup().addTo(map),
         ruler: L.featureGroup().addTo(map),
         features: L.featureGroup().addTo(map),
-        tiles
+        tiles,
+        weather: null
       };
 
       map.on('mousemove', (e) => setSnapIndicator(findSnapPoint(e.latlng)));
@@ -442,6 +488,9 @@ const LandMarker: React.FC<LandMarkerProps> = ({ language, onBack }) => {
       map.on('moveend', () => {
         if (stateRef.current.mapSnappingEnabled) {
           fetchOSMFeatures();
+        }
+        if (showWeather) {
+          fetchWeather();
         }
       });
 
@@ -519,15 +568,15 @@ const LandMarker: React.FC<LandMarkerProps> = ({ language, onBack }) => {
           </button>
           
           <div className="bg-black/60 backdrop-blur-2xl p-6 rounded-[2.5rem] border border-white/10 shadow-2xl min-w-[220px] relative overflow-hidden">
-            <div className="absolute top-0 left-0 w-1 h-full bg-emerald-500" />
+            <div className="absolute top-0 left-0 w-1 h-full bg-emerald-500 shadow-[0_0_15px_rgba(16,185,129,0.5)]" />
             <div className="flex items-center gap-3 mb-2">
               <div className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse shadow-[0_0_10px_rgba(16,185,129,0.8)]" />
-              <p className="text-[9px] font-black text-emerald-400 uppercase tracking-[0.3em]">System Active</p>
+              <p className="text-[9px] font-black text-emerald-500 uppercase tracking-[0.3em]">System Active</p>
             </div>
-            <h2 className="text-2xl font-black text-white tracking-tighter leading-none">FieldMapper <span className="text-emerald-500 font-mono text-lg">v2.4</span></h2>
+            <h2 className="text-2xl font-black text-white tracking-tighter leading-none font-display">FieldMapper <span className="text-emerald-500 font-mono text-lg">v2.4</span></h2>
             <div className="flex items-center gap-2 mt-3">
               <Activity className="w-3 h-3 text-white/20" />
-              <p className="text-[10px] font-bold text-white/40 uppercase tracking-widest">{activeMode} Mode Engaged</p>
+              <p className="text-[10px] font-black text-white/40 uppercase tracking-widest">{activeMode} Mode Engaged</p>
             </div>
           </div>
         </div>
@@ -643,6 +692,30 @@ const LandMarker: React.FC<LandMarkerProps> = ({ language, onBack }) => {
               onToggle={() => setShowMapData(!showMapData)} 
               icon={Magnet}
             />
+            <VisibilityToggle 
+              label="Weather Radar" 
+              active={showWeather} 
+              onToggle={toggleWeatherLayer} 
+              icon={CloudRain}
+            />
+          </div>
+        </div>
+      )}
+
+      {/* Weather HUD Overlay */}
+      {showWeather && weatherData && (
+        <div className="absolute top-24 left-6 z-10 pointer-events-none animate-in slide-in-from-left-8 duration-500">
+          <div className="bg-black/60 backdrop-blur-2xl p-5 rounded-[2rem] border border-white/10 shadow-2xl flex items-center gap-5">
+            <div className="w-12 h-12 bg-emerald-500/20 rounded-2xl flex items-center justify-center border border-emerald-500/20">
+              <img src={`https://openweathermap.org/img/wn/${weatherData.icon}@2x.png`} className="w-10 h-10" alt="Weather" />
+            </div>
+            <div>
+              <div className="flex items-baseline gap-2">
+                <span className="text-2xl font-black text-white tracking-tighter">{weatherData.temp}°</span>
+                <span className="text-[10px] font-bold text-emerald-400 uppercase tracking-widest">{weatherData.desc}</span>
+              </div>
+              <p className="text-[8px] font-black text-white/30 uppercase tracking-[0.2em] mt-1">Map Center Conditions</p>
+            </div>
           </div>
         </div>
       )}
@@ -699,7 +772,7 @@ const LandMarker: React.FC<LandMarkerProps> = ({ language, onBack }) => {
 
              <button 
                onClick={() => setShowSaveModal(true)}
-               className="h-16 px-10 bg-emerald-600 text-white rounded-3xl shadow-[0_25px_50px_-12px_rgba(16,185,129,0.5)] flex items-center gap-4 active:scale-95 transition-all hover:bg-emerald-500 border border-emerald-400/30 group"
+               className="h-16 px-10 bg-emerald-500 text-black rounded-3xl shadow-[0_25px_50px_-12px_rgba(16,185,129,0.5)] flex items-center gap-4 active:scale-95 transition-all hover:bg-emerald-400 border border-emerald-400/30 group"
              >
                <Save className="w-6 h-6 group-hover:bounce" />
                <span className="text-[11px] font-black uppercase tracking-[0.2em]">Commit Survey</span>
@@ -710,7 +783,7 @@ const LandMarker: React.FC<LandMarkerProps> = ({ language, onBack }) => {
         {/* Mode Selector - Hardware Style */}
         <div className="bg-black/80 backdrop-blur-3xl p-3 rounded-[3rem] border border-white/10 shadow-[0_40px_80px_-20px_rgba(0,0,0,1)] flex items-center gap-2 pointer-events-auto ring-1 ring-white/5 relative">
            <div className="absolute -top-10 left-1/2 -translate-x-1/2 bg-emerald-500/10 backdrop-blur-md px-4 py-1 rounded-full border border-emerald-500/20">
-             <p className="text-[8px] font-black text-emerald-400 uppercase tracking-[0.4em]">Control Matrix</p>
+             <p className="text-[8px] font-black text-emerald-500 uppercase tracking-[0.4em]">Control Matrix</p>
            </div>
            
            <ModeBtn id="Boundary" icon={MapPinned} active={activeMode === 'Boundary'} onClick={setActiveMode} label="Plot" />
@@ -738,26 +811,26 @@ const LandMarker: React.FC<LandMarkerProps> = ({ language, onBack }) => {
       {showLedger && (
         <div className="fixed inset-0 z-[100] bg-black/60 backdrop-blur-md flex items-end animate-in fade-in duration-300">
            <div className="absolute inset-0" onClick={() => setShowLedger(false)} />
-           <div className="bg-white w-full max-w-md mx-auto rounded-t-[3.5rem] p-10 animate-in slide-in-from-bottom-full relative shadow-2xl">
+           <div className="bg-[#0a0c10] w-full max-w-md mx-auto rounded-t-[3.5rem] p-10 animate-in slide-in-from-bottom-full relative shadow-2xl border-t border-white/10">
               <div className="flex justify-between items-start mb-8">
                  <div>
-                    <h3 className="text-3xl font-black text-stone-900 tracking-tighter">Field Registry</h3>
-                    <p className="text-[10px] font-bold text-stone-400 uppercase tracking-widest mt-1">Grounded Survey Archive</p>
+                    <h3 className="text-3xl font-black text-white tracking-tighter font-display">Field Registry</h3>
+                    <p className="text-[10px] font-black text-emerald-500 uppercase tracking-widest mt-1">Grounded Survey Archive</p>
                  </div>
-                 <button onClick={() => setShowLedger(false)} className="p-3 bg-stone-50 rounded-full"><X className="w-5 h-5"/></button>
+                 <button onClick={() => setShowLedger(false)} className="p-3 bg-white/5 hover:bg-white/10 rounded-full transition-colors"><X className="w-5 h-5 text-white"/></button>
               </div>
               <div className="space-y-3 max-h-[50vh] overflow-y-auto no-scrollbar pb-10">
-                 {savedFields.length === 0 ? <p className="text-center py-10 opacity-30 text-xs font-black uppercase">No Land Records</p> : 
+                 {savedFields.length === 0 ? <p className="text-center py-10 opacity-30 text-xs font-black uppercase text-white">No Land Records</p> : 
                    savedFields.map(f => (
-                     <div key={f.id} className="p-5 bg-stone-50 border border-stone-100 rounded-[2rem] flex items-center gap-4 group">
+                     <div key={f.id} className="p-5 bg-white/5 border border-white/10 rounded-[2rem] flex items-center gap-4 group hover:bg-white/10 transition-colors">
                         <div className="w-12 h-12 rounded-2xl flex items-center justify-center shadow-inner shrink-0" style={{ backgroundColor: `${f.color}20`, color: f.color }}>
                            <MapIcon className="w-5 h-5" />
                         </div>
                         <div className="flex-1 min-w-0">
-                           <h4 className="font-black text-stone-900 text-sm leading-none mb-1">{f.name}</h4>
-                           <p className="text-[9px] font-bold text-stone-400 uppercase">{formatArea(f.area * 10000, areaUnit)} • {f.cropType}</p>
+                           <h4 className="font-black text-white text-sm leading-none mb-1">{f.name}</h4>
+                           <p className="text-[9px] font-black text-white/40 uppercase">{formatArea(f.area * 10000, areaUnit)} • {f.cropType}</p>
                         </div>
-                        <button onClick={() => { setSavedFields(savedFields.filter(x=>x.id!==f.id)); localStorage.setItem('agri_saved_fields', JSON.stringify(savedFields.filter(x=>x.id!==f.id))); }} className="p-2 text-stone-300 hover:text-rose-500"><Trash2 className="w-4 h-4"/></button>
+                        <button onClick={() => { setSavedFields(savedFields.filter(x=>x.id!==f.id)); localStorage.setItem('agri_saved_fields', JSON.stringify(savedFields.filter(x=>x.id!==f.id))); }} className="p-2 text-white/20 hover:text-rose-500 transition-colors"><Trash2 className="w-4 h-4"/></button>
                      </div>
                    ))
                  }
@@ -769,24 +842,24 @@ const LandMarker: React.FC<LandMarkerProps> = ({ language, onBack }) => {
       {/* Save Modal */}
       {showSaveModal && (
         <div className="fixed inset-0 z-[110] bg-black/60 backdrop-blur-xl flex items-center justify-center p-6 animate-in fade-in duration-300">
-           <div className="bg-white w-full max-w-sm rounded-[3.5rem] p-10 shadow-2xl relative">
-              <h3 className="text-3xl font-black text-stone-900 tracking-tighter mb-8 leading-none">Commit Survey</h3>
+           <div className="bg-[#0a0c10] w-full max-w-sm rounded-[3.5rem] p-10 shadow-2xl relative border border-white/10">
+              <h3 className="text-3xl font-black text-white tracking-tighter mb-8 leading-none font-display">Commit Survey</h3>
               <div className="space-y-6">
-                 <div className="bg-stone-50 p-4 rounded-2xl flex justify-between items-center border border-stone-100 shadow-inner">
-                    <span className="text-[10px] font-black text-stone-400 uppercase tracking-widest">Survey Area</span>
-                    <span className="text-sm font-black text-emerald-600">{formatArea(calculateArea(currentPoints), areaUnit)}</span>
+                 <div className="bg-white/5 p-4 rounded-2xl flex justify-between items-center border border-white/10 shadow-inner">
+                    <span className="text-[10px] font-black text-white/40 uppercase tracking-widest">Survey Area</span>
+                    <span className="text-sm font-black text-emerald-500">{formatArea(calculateArea(currentPoints), areaUnit)}</span>
                  </div>
                  <div className="space-y-1">
-                    <label className="text-[10px] font-black text-stone-400 uppercase tracking-widest ml-4">Parcel Name</label>
-                    <input value={fieldName} onChange={e => setFieldName(e.target.value)} placeholder="e.g. North Ridge" className="w-full bg-stone-50 border border-stone-100 p-5 rounded-3xl font-bold text-sm outline-none focus:ring-2 focus:ring-emerald-500" />
+                    <label className="text-[10px] font-black text-white/40 uppercase tracking-widest ml-4">Parcel Name</label>
+                    <input value={fieldName} onChange={e => setFieldName(e.target.value)} placeholder="e.g. North Ridge" className="w-full bg-white/5 border border-white/10 p-5 rounded-3xl font-black text-sm text-white outline-none focus:border-emerald-500/50 transition-colors placeholder:text-white/20" />
                  </div>
                  <div className="space-y-1">
-                    <label className="text-[10px] font-black text-stone-400 uppercase tracking-widest ml-4">Crop</label>
-                    <input value={fieldCrop} onChange={e => setFieldCrop(e.target.value)} placeholder="e.g. Basmati Rice" className="w-full bg-stone-50 border border-stone-100 p-5 rounded-3xl font-bold text-sm outline-none focus:ring-2 focus:ring-emerald-500" />
+                    <label className="text-[10px] font-black text-white/40 uppercase tracking-widest ml-4">Crop</label>
+                    <input value={fieldCrop} onChange={e => setFieldCrop(e.target.value)} placeholder="e.g. Basmati Rice" className="w-full bg-white/5 border border-white/10 p-5 rounded-3xl font-black text-sm text-white outline-none focus:border-emerald-500/50 transition-colors placeholder:text-white/20" />
                  </div>
                  <div className="flex gap-3 pt-6">
-                    <button onClick={() => setShowSaveModal(false)} className="px-6 py-4 bg-stone-100 text-stone-500 font-bold rounded-2xl text-xs uppercase tracking-widest">Back</button>
-                    <button onClick={saveField} className="flex-1 bg-stone-900 text-white font-black py-4 rounded-2xl shadow-xl flex items-center justify-center gap-2"><CheckCircle2 className="w-5 h-5 text-emerald-400"/> Confirm</button>
+                    <button onClick={() => setShowSaveModal(false)} className="px-6 py-4 bg-white/5 text-white/40 hover:text-white font-black rounded-2xl text-[10px] uppercase tracking-widest border border-white/10 transition-colors">Back</button>
+                    <button onClick={saveField} className="flex-1 bg-emerald-500 text-black font-black py-4 rounded-2xl shadow-[0_15px_30px_-10px_rgba(16,185,129,0.5)] flex items-center justify-center gap-2 hover:bg-emerald-400 transition-colors"><CheckCircle2 className="w-5 h-5"/> Confirm</button>
                  </div>
               </div>
            </div>
@@ -796,25 +869,49 @@ const LandMarker: React.FC<LandMarkerProps> = ({ language, onBack }) => {
       {/* Camera View for Soil */}
       {showCamera && (
         <div className="fixed inset-0 z-[200] bg-black flex flex-col items-center justify-center">
-          <div className="absolute top-8 inset-x-6 flex justify-between items-center">
-             <button onClick={stopCamera} className="p-4 bg-white/10 rounded-full text-white"><X className="w-8 h-8"/></button>
-             <span className="text-white text-[10px] font-black uppercase tracking-[0.3em]">AI Soil Probe</span>
-             <button onClick={() => setFacingMode(f => f === 'user' ? 'environment' : 'user')} className="p-4 bg-white/10 rounded-full text-white"><RefreshCw className="w-8 h-8"/></button>
+          <div className="absolute top-8 inset-x-6 flex justify-between items-center z-10">
+             <button onClick={stopCamera} className="p-4 bg-black/40 backdrop-blur-xl rounded-full text-white border border-white/10"><X className="w-8 h-8"/></button>
+             <div className="flex flex-col items-center">
+               <span className="text-emerald-500 text-[10px] font-black uppercase tracking-[0.4em]">AI Soil Probe</span>
+               <div className="w-12 h-0.5 bg-emerald-500 mt-1 shadow-[0_0_10px_rgba(16,185,129,0.8)]" />
+             </div>
+             <button onClick={() => setFacingMode(f => f === 'user' ? 'environment' : 'user')} className="p-4 bg-black/40 backdrop-blur-xl rounded-full text-white border border-white/10"><RefreshCw className="w-8 h-8"/></button>
           </div>
+          
+          <div className="absolute inset-0 border-[40px] border-black/40 pointer-events-none z-0">
+            <div className="w-full h-full border border-white/20 relative">
+              <div className="absolute top-0 left-0 w-8 h-8 border-t-4 border-l-4 border-emerald-500" />
+              <div className="absolute top-0 right-0 w-8 h-8 border-t-4 border-r-4 border-emerald-500" />
+              <div className="absolute bottom-0 left-0 w-8 h-8 border-b-4 border-l-4 border-emerald-500" />
+              <div className="absolute bottom-0 right-0 w-8 h-8 border-b-4 border-r-4 border-emerald-500" />
+            </div>
+          </div>
+
           <video ref={videoRef} autoPlay playsInline muted className="w-full h-full object-cover" />
           <canvas ref={canvasRef} className="hidden" />
-          <div className="absolute bottom-12">
-             <button onClick={handleCaptureSoil} className="w-24 h-24 rounded-full bg-white border-8 border-white/20 p-1 active:scale-90 transition-all shadow-2xl">
-                <div className="w-full h-full rounded-full border-4 border-stone-900 flex items-center justify-center"><div className="w-4 h-4 bg-emerald-500 rounded-full animate-pulse"/></div>
+          
+          <div className="absolute bottom-12 z-10">
+             <button onClick={handleCaptureSoil} className="w-24 h-24 rounded-full bg-white/10 border-8 border-white/5 p-1 active:scale-90 transition-all shadow-2xl group">
+                <div className="w-full h-full rounded-full border-4 border-emerald-500 flex items-center justify-center bg-emerald-500/20 group-hover:bg-emerald-500/40 transition-colors">
+                  <div className="w-4 h-4 bg-emerald-500 rounded-full animate-pulse shadow-[0_0_15px_rgba(16,185,129,1)]"/>
+                </div>
              </button>
           </div>
         </div>
       )}
 
       {analyzingSoilSample && (
-        <div className="fixed inset-0 z-[210] bg-white/95 backdrop-blur-3xl flex flex-col items-center justify-center gap-6">
-           <div className="w-16 h-16 border-8 border-emerald-50 border-t-emerald-600 rounded-full animate-spin" />
-           <p className="font-black text-emerald-600 uppercase tracking-widest text-[10px]">Analyzing Mineral Matrix...</p>
+        <div className="fixed inset-0 z-[210] bg-[#0a0c10]/95 backdrop-blur-3xl flex flex-col items-center justify-center gap-6">
+           <div className="relative">
+             <div className="w-24 h-24 border-4 border-white/5 border-t-emerald-500 rounded-full animate-spin shadow-[0_0_30px_rgba(16,185,129,0.2)]" />
+             <FlaskConical className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-8 h-8 text-emerald-500 animate-pulse" />
+           </div>
+           <div className="flex flex-col items-center gap-2">
+             <p className="font-black text-emerald-500 uppercase tracking-[0.3em] text-xs">Analyzing Mineral Matrix...</p>
+             <div className="w-48 h-1 bg-white/5 rounded-full overflow-hidden">
+               <div className="h-full bg-emerald-500 animate-progress shadow-[0_0_10px_rgba(16,185,129,0.8)]" />
+             </div>
+           </div>
         </div>
       )}
     </div>
@@ -824,7 +921,7 @@ const LandMarker: React.FC<LandMarkerProps> = ({ language, onBack }) => {
 const ModeBtn: React.FC<{ id: Mode, icon: any, active: boolean, onClick: (m: Mode) => void, label: string }> = ({ id, icon: Icon, active, onClick, label }) => (
   <button
     onClick={() => onClick(id)}
-    className={`w-14 h-14 rounded-2xl flex flex-col items-center justify-center transition-all gap-0.5 ${active ? 'bg-emerald-600 text-white shadow-[0_10px_20px_rgba(16,185,129,0.3)] scale-110' : 'text-white/40 hover:text-white hover:bg-white/5'}`}
+    className={`w-14 h-14 rounded-2xl flex flex-col items-center justify-center transition-all gap-0.5 ${active ? 'bg-emerald-500 text-black shadow-[0_10px_20px_rgba(16,185,129,0.3)] scale-110' : 'text-white/40 hover:text-white hover:bg-white/5'}`}
   >
     <Icon className="w-5 h-5" />
     <span className="text-[7px] font-black uppercase tracking-tighter">{label}</span>
@@ -834,7 +931,7 @@ const ModeBtn: React.FC<{ id: Mode, icon: any, active: boolean, onClick: (m: Mod
 const ToolBtn: React.FC<{ active: boolean, onClick: () => void, icon: any, label: string }> = ({ active, onClick, icon: Icon, label }) => (
   <button 
     onClick={onClick} 
-    className={`w-12 h-12 rounded-2xl flex flex-col items-center justify-center shadow-2xl border transition-all active:scale-90 ${active ? 'bg-emerald-600 text-white border-emerald-400/50' : 'bg-black/40 backdrop-blur-xl text-white/60 border-white/10 hover:bg-black/60'}`}
+    className={`w-12 h-12 rounded-2xl flex flex-col items-center justify-center shadow-2xl border transition-all active:scale-90 ${active ? 'bg-emerald-500 text-black border-emerald-400/50 shadow-[0_0_15px_rgba(16,185,129,0.3)]' : 'bg-black/40 backdrop-blur-xl text-white/60 border-white/10 hover:bg-black/60'}`}
   >
     <Icon className="w-4 h-4 mb-0.5"/>
     <span className="text-[6px] font-black uppercase tracking-widest">{label}</span>

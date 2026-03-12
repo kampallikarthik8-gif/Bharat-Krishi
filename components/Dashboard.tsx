@@ -37,6 +37,7 @@ const Dashboard: React.FC<DashboardProps> = ({ setView }) => {
     return saved ? JSON.parse(saved) : [];
   });
 
+  const farmerName = localStorage.getItem('agri_farmer_name')?.split(' ')[0] || 'Farmer';
   const pendingTasks = tasks.filter(t => t.status === 'Pending').slice(0, 4);
 
   React.useEffect(() => {
@@ -69,131 +70,206 @@ const Dashboard: React.FC<DashboardProps> = ({ setView }) => {
 
   const getWeatherIcon = (description: string, size: string = "w-10 h-10") => {
     const desc = description.toLowerCase();
-    if (desc.includes('rain')) return <CloudRain className={`${size} text-blue-500`} />;
-    if (desc.includes('cloud')) return <Cloud className={`${size} text-gray-400`} />;
-    if (desc.includes('clear')) return <Sun className={`${size} text-amber-500`} />;
-    if (desc.includes('storm')) return <CloudLightning className={`${size} text-purple-500`} />;
-    return <CloudSun className={`${size} text-amber-400`} />;
+    if (desc.includes('rain')) return <CloudRain className={`${size} text-blue-600`} />;
+    if (desc.includes('cloud')) return <Cloud className={`${size} text-stone-400`} />;
+    if (desc.includes('clear')) return <Sun className={`${size} text-amber-600`} />;
+    if (desc.includes('storm')) return <CloudLightning className={`${size} text-purple-600`} />;
+    return <CloudSun className={`${size} text-amber-500`} />;
   };
 
   return (
-    <div className="w-full flex flex-col pb-32 bg-stone-50/50 min-h-full">
+    <div className="w-full flex flex-col pb-32 bg-transparent min-h-full">
       
-      {/* Native App Header */}
-      <section className="px-6 pt-6 pb-4">
-        <div className="flex items-center justify-between">
+      {/* Welcome Header */}
+      <section className="px-6 pt-10 pb-6">
+        <div className="flex items-center justify-between border-b border-stone-200 pb-8">
           <div className="flex flex-col">
-            <span className="text-[9px] font-black text-amber-600 uppercase tracking-[0.2em] mb-0.5">Welcome back,</span>
-            <h2 className="text-2xl font-black text-stone-950 tracking-tight leading-none">
-              {localStorage.getItem('agri_farmer_name')?.split(' ')[0] || 'Farmer'}
+            <span className="text-[10px] font-bold text-emerald-700 uppercase tracking-[0.3em] mb-2">Daily Overview</span>
+            <h2 className="text-4xl font-bold text-stone-900 tracking-tight font-serif">
+              Namaste, <span className="text-emerald-700">{farmerName}.</span>
             </h2>
           </div>
-          <motion.button 
-            whileTap={{ scale: 0.9 }}
-            onClick={() => setView(AppView.SMART_ALERTS)}
-            className="w-10 h-10 bg-white rounded-xl shadow-sm border border-stone-100 flex items-center justify-center relative"
-          >
-            <Bell className="w-4 h-4 text-stone-400" />
-            <div className="absolute top-3 right-3 w-1.5 h-1.5 bg-amber-500 rounded-full border-2 border-white"></div>
-          </motion.button>
+          <div className="flex gap-2">
+            <motion.button 
+              whileTap={{ scale: 0.9 }}
+              onClick={() => setView(AppView.SMART_ALERTS)}
+              className="w-12 h-12 bg-white rounded-2xl border border-stone-200 flex items-center justify-center relative shadow-sm hover:border-emerald-600/50 transition-all"
+            >
+              <Bell className="w-5 h-5 text-stone-400" />
+              <div className="absolute top-3.5 right-3.5 w-2.5 h-2.5 bg-emerald-600 rounded-full border-2 border-white shadow-sm"></div>
+            </motion.button>
+          </div>
         </div>
       </section>
 
-      {/* Weather Widget - Native Style */}
-      <section className="px-6 mb-6">
+      {/* Quick Actions Grid */}
+      <section className="px-6 mb-10">
+        <div className="grid grid-cols-4 gap-4">
+          <QuickAction 
+            icon={<Camera />} 
+            label="Scan" 
+            color="bg-emerald-50 text-emerald-700" 
+            onClick={() => setView(AppView.DISEASE_SCANNER)} 
+          />
+          <QuickAction 
+            icon={<TrendingUp />} 
+            label="Prices" 
+            color="bg-amber-50 text-amber-700" 
+            onClick={() => setView(AppView.MARKET_PRICES)} 
+          />
+          <QuickAction 
+            icon={<MapPin />} 
+            label="Map" 
+            color="bg-blue-50 text-blue-700" 
+            onClick={() => setView(AppView.FIELD_MAP)} 
+          />
+          <QuickAction 
+            icon={<LayoutGrid />} 
+            label="Tools" 
+            color="bg-stone-100 text-stone-700" 
+            onClick={() => setView(AppView.TOOLS_HUB)} 
+          />
+        </div>
+      </section>
+
+      {/* Weather Card */}
+      <section className="px-6 mb-10">
         <motion.div 
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           onClick={() => setView(AppView.WEATHER_HUB)}
-          className="bg-gradient-to-br from-amber-500 via-orange-500 to-rose-500 rounded-3xl p-6 border border-white/10 shadow-2xl shadow-orange-200/20 relative overflow-hidden group active:scale-[0.98] transition-all text-white"
+          className="bg-white rounded-[2.5rem] p-8 border border-stone-200 relative overflow-hidden group cursor-pointer hover:border-emerald-600/30 transition-all shadow-xl shadow-stone-200/50"
         >
+          <div className="absolute top-0 right-0 p-12 opacity-[0.05] group-hover:opacity-[0.1] transition-opacity">
+            {weather && getWeatherIcon(weather.description, "w-64 h-64 rotate-12")}
+          </div>
+          
           {loadingWeather ? (
-            <div className="flex items-center justify-center py-4">
-              <Loader2 className="w-6 h-6 animate-spin text-white/20" />
+            <div className="flex items-center justify-center py-10">
+              <Loader2 className="w-8 h-8 animate-spin text-emerald-600/30" />
             </div>
           ) : (
-            <div className="flex justify-between items-center relative z-10">
-              <div className="space-y-1">
-                <div className="flex items-center gap-2 text-white/60">
-                  <MapPin className="w-3 h-3" />
-                  <span className="text-[10px] font-black uppercase tracking-widest">{weather.city}</span>
+            <div className="relative z-10 flex flex-col sm:flex-row sm:items-center justify-between gap-8">
+              <div className="space-y-6">
+                <div className="flex items-center gap-3">
+                  <div className="w-2 h-2 rounded-full bg-emerald-600 shadow-sm" />
+                  <span className="text-[10px] font-bold text-emerald-700 uppercase tracking-[0.2em]">{weather.city} Weather</span>
                 </div>
-                <div className="flex items-baseline gap-2">
-                  <span className="text-4xl font-black tracking-tighter text-white">{weather.temp}°</span>
-                  <span className="text-base font-bold text-white/80 uppercase">{weather.description}</span>
-                </div>
-                <div className="flex gap-4 pt-1">
-                  <div className="flex items-center gap-1.5 bg-white/10 backdrop-blur-md px-2.5 py-1 rounded-xl border border-white/10">
-                    <Droplets className="w-3 h-3 text-white" />
-                    <span className="text-[9px] font-black text-white">{weather.humidity}%</span>
-                  </div>
-                  <div className="flex items-center gap-1.5 bg-white/10 backdrop-blur-md px-2.5 py-1 rounded-xl border border-white/10">
-                    <Wind className="w-3 h-3 text-white" />
-                    <span className="text-[9px] font-black text-white">{weather.wind} km/h</span>
+                <div className="flex items-baseline gap-4">
+                  <span className="text-7xl font-bold font-serif tracking-tighter text-stone-900">{weather.temp}°</span>
+                  <div className="flex flex-col">
+                    <span className="text-xl font-bold text-emerald-800 capitalize leading-none mb-1">{weather.description}</span>
+                    <span className="text-[10px] font-medium text-stone-400 uppercase tracking-widest">Current Conditions</span>
                   </div>
                 </div>
               </div>
-              <div className="opacity-40">
-                {getWeatherIcon(weather.description, "w-16 h-16 text-white")}
+
+              <div className="grid grid-cols-2 gap-3 sm:flex sm:flex-col">
+                <div className="bg-stone-50 border border-stone-100 p-4 rounded-2xl flex items-center gap-4 min-w-[140px]">
+                  <div className="p-2 bg-emerald-100 rounded-lg"><Droplets className="w-4 h-4 text-emerald-700" /></div>
+                  <div className="flex flex-col">
+                    <span className="text-[8px] font-bold text-stone-400 uppercase">Humidity</span>
+                    <span className="text-sm font-bold text-stone-800">{weather.humidity}%</span>
+                  </div>
+                </div>
+                <div className="bg-stone-50 border border-stone-100 p-4 rounded-2xl flex items-center gap-4 min-w-[140px]">
+                  <div className="p-2 bg-emerald-100 rounded-lg"><Wind className="w-4 h-4 text-emerald-700" /></div>
+                  <div className="flex flex-col">
+                    <span className="text-[8px] font-bold text-stone-400 uppercase">Wind</span>
+                    <span className="text-sm font-bold text-stone-800">{weather.wind} <span className="text-[10px] opacity-60">km/h</span></span>
+                  </div>
+                </div>
               </div>
             </div>
           )}
         </motion.div>
       </section>
 
-      {/* Main Action Grid */}
-      <section className="px-6 mb-10">
+      {/* Quick Actions */}
+      <section className="px-6 mb-12">
         <div className="grid grid-cols-2 gap-4">
           <ActionCard 
             icon={<Camera className="w-5 h-5" />} 
             label="Disease Scan" 
             sub="AI Diagnosis"
-            color="bg-rose-500"
+            color="bg-rose-50 text-rose-600 border-rose-100"
             onClick={() => setView(AppView.DISEASE_SCANNER)}
           />
           <ActionCard 
             icon={<MapPin className="w-5 h-5" />} 
             label="Field Map" 
-            sub="Plot Intel"
-            color="bg-amber-500"
+            sub="Land Tracking"
+            color="bg-blue-50 text-blue-600 border-blue-100"
             onClick={() => setView(AppView.FIELD_MAP)}
           />
           <ActionCard 
             icon={<TrendingUp className="w-5 h-5" />} 
             label="Market" 
             sub="Live Prices"
-            color="bg-orange-500"
+            color="bg-emerald-50 text-emerald-700 border-emerald-100"
             onClick={() => setView(AppView.MARKET_PRICES)}
           />
           <ActionCard 
             icon={<LayoutGrid className="w-5 h-5" />} 
-            label="Arsenal" 
-            sub="Smart Tools"
-            color="bg-stone-900"
+            label="Tools Hub" 
+            sub="All Services"
+            color="bg-stone-50 text-stone-600 border-stone-100"
             onClick={() => setView(AppView.TOOLS_HUB)}
           />
         </div>
       </section>
 
-      {/* Mandi Ticker - Compact */}
-      <section className="w-full overflow-hidden bg-stone-950 py-3 mb-10">
+      {/* Ticker */}
+      <section className="w-full overflow-hidden bg-emerald-50/50 border-y border-emerald-100 py-5 mb-12">
         <div className="flex whitespace-nowrap animate-marquee">
           {[1, 2].map((i) => (
-            <div key={i} className="flex items-center gap-12 px-6">
-              <TickerItem label="WHEAT" value="₹2,450" change="+1.2%" up />
-              <TickerItem label="COTTON" value="₹7,800" change="-0.4%" />
-              <TickerItem label="RICE" value="₹3,100" change="+2.8%" up />
-              <TickerItem label="MAIZE" value="₹1,950" change="+0.5%" up />
+            <div key={i} className="flex items-center gap-16 px-8">
+              <TickerItem label="WHEAT/INR" value="2,450" change="+1.2%" up />
+              <TickerItem label="COTTON/INR" value="7,800" change="-0.4%" />
+              <TickerItem label="RICE/INR" value="3,100" change="+2.8%" up />
+              <TickerItem label="MAIZE/INR" value="1,950" change="+0.5%" up />
+              <TickerItem label="SOY/INR" value="4,200" change="+1.1%" up />
             </div>
           ))}
         </div>
       </section>
 
-      {/* Operational Agenda */}
+      {/* Recommendations */}
+      <section className="px-6 mb-12">
+        <div className="flex items-center justify-between mb-8">
+          <div className="flex items-center gap-3">
+            <div className="w-1.5 h-5 bg-emerald-600 rounded-full" />
+            <h3 className="text-[10px] font-bold text-stone-400 uppercase tracking-[0.3em]">Smart Suggestions</h3>
+          </div>
+        </div>
+        <div className="bg-white border border-stone-200 rounded-[2.5rem] p-8 flex items-center justify-between group active:scale-[0.98] transition-all cursor-pointer hover:border-emerald-600/50 hover:shadow-lg shadow-stone-200/30" onClick={() => setView(AppView.CROP_ROTATION_ADVISOR)}>
+          <div className="flex items-center gap-8">
+            <div className="w-20 h-20 rounded-[1.5rem] bg-emerald-50 flex items-center justify-center border border-emerald-100 text-emerald-700 group-hover:bg-emerald-600 group-hover:text-white transition-all">
+              <Sprout className="w-10 h-10" />
+            </div>
+            <div>
+              <p className="font-bold text-stone-900 text-2xl tracking-tight leading-none mb-2 font-serif">Crop Rotation Advisor</p>
+              <div className="flex items-center gap-3">
+                <span className="text-[10px] text-stone-400 font-bold uppercase tracking-widest">Status: Ready</span>
+                <div className="w-1 h-1 rounded-full bg-stone-200" />
+                <span className="text-[10px] text-emerald-700 font-bold uppercase tracking-widest">Optimized for {localStorage.getItem('agri_soil_type') || 'Soil'}</span>
+              </div>
+            </div>
+          </div>
+          <div className="w-14 h-14 bg-stone-50 rounded-2xl flex items-center justify-center text-stone-300 group-hover:text-emerald-600 group-hover:bg-emerald-50 transition-all border border-stone-100 group-hover:border-emerald-200">
+            <ArrowUpRight className="w-8 h-8" />
+          </div>
+        </div>
+      </section>
+
+      {/* Tasks */}
       <section className="px-6">
-        <div className="flex items-center justify-between mb-6">
-          <h3 className="text-[11px] font-black text-stone-400 uppercase tracking-[0.2em]">Operational Agenda</h3>
-          <button onClick={() => setView(AppView.TASK_MANAGER)} className="text-[10px] font-black text-amber-600 uppercase tracking-widest">View All</button>
+        <div className="flex items-center justify-between mb-8">
+          <div className="flex items-center gap-3">
+            <div className="w-1.5 h-5 bg-emerald-600 rounded-full" />
+            <h3 className="text-[10px] font-bold text-stone-400 uppercase tracking-[0.3em]">Your Tasks</h3>
+          </div>
+          <button onClick={() => setView(AppView.TASK_MANAGER)} className="text-[10px] font-bold text-emerald-700 hover:text-emerald-800 uppercase tracking-widest bg-emerald-50 px-5 py-2.5 rounded-full transition-all border border-emerald-100">View All</button>
         </div>
         
         <div className="space-y-4">
@@ -201,43 +277,53 @@ const Dashboard: React.FC<DashboardProps> = ({ setView }) => {
             pendingTasks.map((task, i) => (
               <motion.div 
                 key={task.id} 
-                initial={{ opacity: 0, x: -20 }}
+                initial={{ opacity: 0, x: -10 }}
                 animate={{ opacity: 1, x: 0 }}
-                transition={{ delay: i * 0.1 }}
+                transition={{ delay: i * 0.05 }}
                 onClick={() => setView(AppView.TASK_MANAGER)}
-                className="bg-white p-4 rounded-2xl border border-stone-100 flex items-center gap-4 active:scale-[0.98] transition-all shadow-sm"
+                className="bg-white p-6 rounded-[2rem] flex items-center gap-6 group active:scale-[0.98] transition-all border border-stone-200 hover:border-emerald-600/30 hover:shadow-md shadow-stone-200/20"
               >
-                <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${
-                  task.priority === 'High' ? 'bg-rose-50 text-rose-600' : 'bg-stone-50 text-stone-400'
+                <div className={`w-14 h-14 rounded-2xl flex items-center justify-center transition-all border ${
+                  task.priority === 'High' ? 'bg-rose-50 text-rose-600 border-rose-100' : 'bg-stone-50 text-stone-400 border-stone-100'
                 }`}>
-                  <Calendar className="w-5 h-5" />
+                  <Calendar className="w-6 h-6" />
                 </div>
                 <div className="flex-1">
-                  <p className="font-black text-stone-900 text-xs leading-tight">{task.title}</p>
-                  <p className="text-[9px] text-stone-400 font-bold uppercase tracking-widest mt-1">{task.category}</p>
+                  <p className="text-lg font-bold text-stone-900 leading-tight mb-1 font-serif">{task.title}</p>
+                  <div className="flex items-center gap-3">
+                    <span className="text-[9px] font-bold text-stone-400 uppercase tracking-widest">{task.category}</span>
+                    <div className="w-1 h-1 rounded-full bg-stone-200" />
+                    <span className={`text-[9px] font-bold uppercase tracking-widest ${task.priority === 'High' ? 'text-rose-600' : 'text-stone-400'}`}>{task.priority} Priority</span>
+                  </div>
                 </div>
-                <ChevronRight className="w-4 h-4 text-stone-200" />
+                <div className="w-10 h-10 rounded-xl flex items-center justify-center text-stone-300 group-hover:text-emerald-600 transition-all">
+                  <ChevronRight className="w-6 h-6" />
+                </div>
               </motion.div>
             ))
           ) : (
-            <div className="py-10 bg-white rounded-3xl text-center border border-dashed border-stone-200">
-               <CheckCircle2 className="w-8 h-8 text-emerald-500 mx-auto mb-2" />
-               <p className="text-[10px] font-black text-stone-400 uppercase tracking-widest">No Pending Tasks</p>
+            <div className="py-16 bg-white rounded-[2.5rem] text-center border border-dashed border-stone-200">
+               <CheckCircle2 className="w-10 h-10 text-emerald-600 mx-auto mb-4 opacity-20" />
+               <p className="text-[10px] font-bold text-stone-400 uppercase tracking-[0.3em]">All caught up!</p>
             </div>
           )}
         </div>
       </section>
 
-      {/* Marquee CSS */}
-      <style>{`
-        @keyframes marquee {
-          0% { transform: translateX(0); }
-          100% { transform: translateX(-50%); }
-        }
-        .animate-marquee {
-          animation: marquee 30s linear infinite;
-        }
-      `}</style>
+      {/* Footer */}
+      <section className="px-6 mt-20 mb-10 text-center">
+        <div className="flex items-center justify-center gap-4 mb-4 opacity-30">
+          <div className="h-px w-12 bg-stone-300" />
+          <span className="text-[8px] font-bold uppercase tracking-[0.5em] text-stone-400">Bharat Kisan</span>
+          <div className="h-px w-12 bg-stone-300" />
+        </div>
+        <p className="text-[8px] font-bold text-stone-300 uppercase tracking-[0.3em]">
+          © {new Date().getFullYear()} BHARAT-KISAN-SYSTEMS
+        </p>
+        <p className="text-[8px] font-bold text-stone-400 uppercase tracking-[0.2em] mt-3 opacity-60">
+          App Designed and Developed by Nexus Creative Studio
+        </p>
+      </section>
     </div>
   );
 };
@@ -246,24 +332,37 @@ const ActionCard: React.FC<{ icon: React.ReactNode, label: string, sub: string, 
   <motion.button 
     whileTap={{ scale: 0.95 }}
     onClick={onClick}
-    className="bg-white p-5 rounded-3xl border border-stone-100 text-left shadow-sm active:shadow-inner transition-all flex flex-col gap-3"
+    className="bg-white p-5 rounded-[2rem] border border-stone-200 text-left shadow-sm hover:shadow-md hover:border-emerald-600/20 transition-all flex flex-col gap-4"
   >
-    <div className={`w-10 h-10 ${color} rounded-xl flex items-center justify-center text-white shadow-lg`}>
+    <div className={`w-12 h-12 ${color} rounded-2xl flex items-center justify-center border shadow-sm`}>
       {icon}
     </div>
     <div>
-      <p className="font-black text-stone-950 text-xs leading-none mb-1">{label}</p>
-      <p className="text-[8px] font-bold text-stone-400 uppercase tracking-widest">{sub}</p>
+      <p className="font-bold text-stone-900 text-sm leading-none mb-1 font-serif">{label}</p>
+      <p className="text-[9px] font-bold text-stone-400 uppercase tracking-[0.1em]">{sub}</p>
     </div>
   </motion.button>
 );
 
 const TickerItem: React.FC<{ label: string, value: string, change: string, up?: boolean }> = ({ label, value, change, up }) => (
   <div className="flex items-center gap-3">
-    <span className="text-[10px] font-black text-stone-500 tracking-widest">{label}</span>
-    <span className="text-sm font-black text-white">{value}</span>
-    <span className={`text-[10px] font-black ${up ? 'text-emerald-400' : 'text-rose-400'}`}>{change}</span>
+    <span className="text-[10px] font-bold text-stone-400 tracking-wider">{label}</span>
+    <span className="text-sm font-bold text-stone-800">{value}</span>
+    <span className={`text-[10px] font-bold ${up ? 'text-emerald-700' : 'text-rose-600'}`}>{change}</span>
   </div>
+);
+
+const QuickAction: React.FC<{ icon: any, label: string, color: string, onClick: () => void }> = ({ icon, label, color, onClick }) => (
+  <motion.button
+    whileTap={{ scale: 0.9 }}
+    onClick={onClick}
+    className="flex flex-col items-center gap-2"
+  >
+    <div className={`w-14 h-14 ${color} rounded-2xl flex items-center justify-center shadow-sm border border-black/5`}>
+      {React.cloneElement(icon as React.ReactElement<any>, { className: "w-6 h-6" })}
+    </div>
+    <span className="text-[10px] font-bold text-stone-500 uppercase tracking-wider">{label}</span>
+  </motion.button>
 );
 
 export default Dashboard;

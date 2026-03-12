@@ -1,9 +1,11 @@
 
 import React from 'react';
-import { BookOpen, Plus, Trash2, Calendar, Tag, FileText, Sparkles, Loader2, ChevronRight, X } from 'lucide-react';
+import { BookOpen, Plus, Trash2, Calendar, Tag, FileText, Sparkles, Loader2, ChevronRight, X, Download } from 'lucide-react';
 import { JournalEntry } from '../types';
 import { analyzeJournal } from '../services/geminiService';
 import ReactMarkdown from 'react-markdown';
+import { jsPDF } from 'jspdf';
+import 'jspdf-autotable';
 
 interface FarmJournalProps {
   language: string;
@@ -28,6 +30,32 @@ const FarmJournal: React.FC<FarmJournalProps> = ({ language }) => {
   React.useEffect(() => {
     localStorage.setItem('agriassist_journal', JSON.stringify(entries));
   }, [entries]);
+
+  const exportPDF = () => {
+    const doc = new jsPDF();
+    doc.setFontSize(20);
+    doc.text('Bharat Kisan - Farm Journal Report', 14, 22);
+    doc.setFontSize(11);
+    doc.setTextColor(100);
+    doc.text(`Generated on: ${new Date().toLocaleString()}`, 14, 30);
+
+    const tableData = entries.map(entry => [
+      entry.date,
+      entry.category,
+      entry.crop,
+      entry.notes
+    ]);
+
+    (doc as any).autoTable({
+      startY: 40,
+      head: [['Date', 'Category', 'Crop/Field', 'Notes']],
+      body: tableData,
+      theme: 'striped',
+      headStyles: { fillColor: [45, 90, 39] }
+    });
+
+    doc.save(`BharatKisan_Journal_Report_${new Date().toISOString().split('T')[0]}.pdf`);
+  };
 
   const addEntry = (e: React.FormEvent) => {
     e.preventDefault();
@@ -70,13 +98,22 @@ const FarmJournal: React.FC<FarmJournalProps> = ({ language }) => {
           </h2>
           <p className="text-stone-500">Keep track of your farming activities and seasonal progress.</p>
         </div>
-        <button 
-          onClick={() => setShowForm(!showForm)}
-          className="bg-emerald-600 text-white font-bold px-6 py-3 rounded-xl hover:bg-emerald-700 transition-all flex items-center gap-2 shadow-lg shadow-emerald-200"
-        >
-          {showForm ? <Trash2 className="w-4 h-4" /> : <Plus className="w-4 h-4" />}
-          {showForm ? 'Cancel' : 'New Entry'}
-        </button>
+        <div className="flex items-center gap-3">
+          <button 
+            onClick={exportPDF}
+            className="bg-stone-100 text-stone-600 p-3 rounded-xl hover:bg-stone-200 transition-colors"
+            title="Export PDF"
+          >
+            <Download className="w-5 h-5" />
+          </button>
+          <button 
+            onClick={() => setShowForm(!showForm)}
+            className="bg-emerald-600 text-white font-bold px-6 py-3 rounded-xl hover:bg-emerald-700 transition-all flex items-center gap-2 shadow-lg shadow-emerald-200"
+          >
+            {showForm ? <Trash2 className="w-4 h-4" /> : <Plus className="w-4 h-4" />}
+            {showForm ? 'Cancel' : 'New Entry'}
+          </button>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

@@ -29,7 +29,9 @@ import {
   ChevronLeft,
   Droplets,
   Beaker,
-  Eye
+  Eye,
+  Thermometer,
+  Wind
 } from 'lucide-react';
 import Markdown from 'react-markdown';
 import { motion, AnimatePresence } from 'motion/react';
@@ -67,6 +69,7 @@ const SeasonalPlanner: React.FC<SeasonalPlannerProps> = ({ language: initialLang
   const [rotationAdvice, setRotationAdvice] = React.useState<string | null>(null);
   const [cropRecommendations, setCropRecommendations] = React.useState<RecommendedCrop[]>([]);
   const [calendarEvents, setCalendarEvents] = React.useState<SeasonalEvent[]>([]);
+  const [weather, setWeather] = React.useState<any>(null);
   const [loading, setLoading] = React.useState(false);
   const [detecting, setDetecting] = React.useState(false);
 
@@ -122,51 +125,51 @@ const SeasonalPlanner: React.FC<SeasonalPlannerProps> = ({ language: initialLang
     };
 
     return (
-      <div className="bg-white border border-stone-200 rounded-[2.5rem] overflow-hidden shadow-sm">
-        <div className="bg-stone-900 p-6 flex items-center justify-between text-white">
+    <div className="bg-[#11141b] border border-white/10 rounded-[2.5rem] overflow-hidden shadow-2xl glass-panel">
+        <div className="bg-black/40 p-6 flex items-center justify-between text-white border-b border-white/5">
           <div className="flex items-center gap-3">
-            <Calendar className="w-5 h-5 text-amber-400" />
-            <h3 className="font-black uppercase tracking-widest text-sm">{monthName} {year}</h3>
+            <Calendar className="w-5 h-5 text-emerald-500" />
+            <h3 className="font-black uppercase tracking-[0.3em] text-[10px] font-mono text-white/60">{monthName} {year}</h3>
           </div>
           <div className="flex gap-2">
-            <button onClick={prevMonth} className="p-2 hover:bg-white/10 rounded-xl transition-colors"><ChevronLeft className="w-5 h-5" /></button>
-            <button onClick={nextMonth} className="p-2 hover:bg-white/10 rounded-xl transition-colors"><ChevronRight className="w-5 h-5" /></button>
+            <button onClick={prevMonth} className="p-2 hover:bg-white/5 rounded-xl transition-colors border border-white/5"><ChevronLeft className="w-5 h-5" /></button>
+            <button onClick={nextMonth} className="p-2 hover:bg-white/5 rounded-xl transition-colors border border-white/5"><ChevronRight className="w-5 h-5" /></button>
           </div>
         </div>
         
-        <div className="grid grid-cols-7 border-b border-stone-100">
+        <div className="grid grid-cols-7 border-b border-white/5 bg-black/20">
           {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(d => (
-            <div key={d} className="py-3 text-center text-[10px] font-black text-stone-400 uppercase tracking-widest border-r border-stone-100 last:border-0">
+            <div key={d} className="py-3 text-center text-[8px] font-mono font-black text-white/20 uppercase tracking-widest border-r border-white/5 last:border-0">
               {d}
             </div>
           ))}
         </div>
 
-        <div className="grid grid-cols-7">
-          {blanks.map(b => <div key={`blank-${b}`} className="aspect-square border-r border-b border-stone-50 bg-stone-50/30" />)}
+        <div className="grid grid-cols-7 bg-black/10">
+          {blanks.map(b => <div key={`blank-${b}`} className="aspect-square border-r border-b border-white/5 bg-white/[0.02]" />)}
           {days.map(d => {
             const dayEvents = getEventsForDay(d);
             const isToday = new Date().toDateString() === new Date(currentMonth.getFullYear(), currentMonth.getMonth(), d).toDateString();
             
             return (
-              <div key={d} className={`aspect-square border-r border-b border-stone-100 p-2 relative group hover:bg-stone-50 transition-colors ${isToday ? 'bg-amber-50/30' : ''}`}>
-                <span className={`text-[10px] font-black ${isToday ? 'text-amber-600' : 'text-stone-400'}`}>{d}</span>
+              <div key={d} className={`aspect-square border-r border-b border-white/5 p-2 relative group hover:bg-white/[0.05] transition-colors ${isToday ? 'bg-emerald-500/5' : ''}`}>
+                <span className={`text-[10px] font-mono font-black ${isToday ? 'text-emerald-500' : 'text-white/20'}`}>{d}</span>
                 <div className="mt-1 flex flex-wrap gap-1">
                   {dayEvents.map((e, i) => (
-                    <div key={i} className={`w-1.5 h-1.5 rounded-full ${getTypeColor(e.type)}`} title={e.title} />
+                    <div key={i} className={`w-1.5 h-1.5 rounded-full ${getTypeColor(e.type)} shadow-[0_0_8px_rgba(0,0,0,0.5)]`} title={e.title} />
                   ))}
                 </div>
                 
                 {dayEvents.length > 0 && (
-                  <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-48 bg-stone-900 text-white p-3 rounded-2xl shadow-2xl opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity z-50">
+                  <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-48 bg-[#1a1d25] text-white p-4 rounded-2xl shadow-2xl opacity-0 group-hover:opacity-100 pointer-events-none transition-all border border-white/10 z-50 transform translate-y-2 group-hover:translate-y-0">
                     {dayEvents.map((e, i) => (
-                      <div key={i} className="mb-2 last:mb-0">
-                        <div className="flex items-center gap-2 mb-1">
-                          <div className={`p-1 rounded-md ${getTypeColor(e.type)}`}>{getTypeIcon(e.type)}</div>
-                          <span className="text-[10px] font-black uppercase tracking-widest">{e.type}</span>
+                      <div key={i} className="mb-3 last:mb-0">
+                        <div className="flex items-center gap-2 mb-1.5">
+                          <div className={`p-1 rounded-md ${getTypeColor(e.type)} bg-opacity-20`}>{getTypeIcon(e.type)}</div>
+                          <span className="text-[8px] font-mono font-black uppercase tracking-widest text-white/40">{e.type}</span>
                         </div>
-                        <p className="text-[11px] font-bold leading-tight">{e.title}</p>
-                        <p className="text-[9px] text-stone-400 mt-1 leading-tight">{e.description}</p>
+                        <p className="text-[11px] font-black leading-tight text-white/90">{e.title}</p>
+                        <p className="text-[9px] text-white/40 mt-1 leading-tight font-mono">{e.description}</p>
                       </div>
                     ))}
                   </div>
@@ -187,7 +190,7 @@ const SeasonalPlanner: React.FC<SeasonalPlannerProps> = ({ language: initialLang
       const [planningData, recommendations, rotation, calendar] = await Promise.all([
         fetchSeasonalPlanning(searchLoc, crops, language, plantingDate),
         suggestCropsForSeason(searchLoc, plantingDate, language),
-        getCropRotationAdvice(searchLoc, crops, language),
+        getCropRotationAdvice(searchLoc, crops, '', [], language),
         fetchSeasonalCalendar(searchLoc, crops, plantingDate, language)
       ]);
       setReport(planningData);
@@ -208,6 +211,7 @@ const SeasonalPlanner: React.FC<SeasonalPlannerProps> = ({ language: initialLang
         try {
           const res = await fetch(`https://api.openweathermap.org/data/2.5/weather?lat=${pos.coords.latitude}&lon=${pos.coords.longitude}&appid=${WEATHER_API_KEY}&units=metric`);
           const data = await res.json();
+          setWeather(data);
           const cityRegion = data.name && data.sys?.country ? `${data.name}, ${data.sys.country}` : "Unknown Location";
           setLocation(cityRegion);
           handlePlanning(cityRegion);
@@ -224,84 +228,115 @@ const SeasonalPlanner: React.FC<SeasonalPlannerProps> = ({ language: initialLang
   }, []);
 
   return (
-    <div className="space-y-8 pb-24 animate-in fade-in slide-in-from-bottom-6 duration-700">
+    <div className="space-y-12 pb-40 animate-in fade-in slide-in-from-bottom-6 duration-700">
       {/* Current Cropping Season Banner */}
-      <div className="bg-white rounded-[2.5rem] p-6 shadow-sm border border-stone-200 flex items-center justify-between">
-         <div className="flex items-center gap-4">
-            <div className="bg-stone-50 p-4 rounded-2xl border border-stone-100 shadow-inner">
-               {currentSeason.icon}
+      <div className="glass-panel rounded-[2.5rem] p-8 border border-white/10 flex items-center justify-between relative overflow-hidden group">
+         <div className="absolute inset-0 bg-gradient-to-r from-emerald-500/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+         <div className="flex items-center gap-6 relative z-10">
+            <div className="bg-white/5 p-5 rounded-2xl border border-white/10 shadow-inner group-hover:border-emerald-500/30 transition-colors">
+               {React.cloneElement(currentSeason.icon as any, { className: 'w-6 h-6 text-emerald-500' })}
             </div>
             <div>
-               <p className="text-[10px] font-black text-stone-400 uppercase tracking-widest">Active Indian Season</p>
-               <h3 className="text-xl font-black text-stone-900">{currentSeason.name}</h3>
+               <p className="text-[10px] font-mono font-black text-white/30 uppercase tracking-[0.4em] mb-1">Active Operational Season</p>
+               <h3 className="text-3xl font-black text-white tracking-tighter uppercase font-display">{currentSeason.name}</h3>
             </div>
          </div>
-         <div className="bg-emerald-50 px-4 py-2 rounded-xl border border-emerald-100">
-            <span className="text-[10px] font-black text-emerald-600 uppercase tracking-widest flex items-center gap-2">
-              <CheckCircle2 className="w-3 h-3" /> {currentSeason.status}
+         <div className="bg-emerald-500/10 px-6 py-3 rounded-2xl border border-emerald-500/20 relative z-10">
+            <span className="text-[10px] font-mono font-black text-emerald-500 uppercase tracking-widest flex items-center gap-3">
+              <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+              {currentSeason.status}
             </span>
          </div>
       </div>
 
-      <div className="bg-white rounded-[3rem] p-8 shadow-sm border border-stone-200">
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-10">
-          <div>
-            <h2 className="text-3xl font-black text-stone-900 flex items-center gap-3 tracking-tighter">
-              <div className="bg-[#ffddb3] p-2.5 rounded-2xl">
-                <Sparkles className="text-[#825500] w-6 h-6" />
-              </div>
-              Climate Strategy
+      {/* Weather Pulse Section */}
+      {weather && (
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <WeatherStat 
+            icon={<Thermometer className="w-4 h-4" />} 
+            label="Current Temp" 
+            value={`${Math.round(weather.main.temp)}°C`} 
+            sub={weather.weather[0].description}
+          />
+          <WeatherStat 
+            icon={<Droplets className="w-4 h-4" />} 
+            label="Humidity" 
+            value={`${weather.main.humidity}%`} 
+            sub="Relative"
+          />
+          <WeatherStat 
+            icon={<Wind className="w-4 h-4" />} 
+            label="Wind Velocity" 
+            value={`${Math.round(weather.wind.speed * 3.6)} km/h`} 
+            sub="Drift Risk"
+          />
+        </div>
+      )}
+
+      <div className="glass-panel rounded-[3rem] p-10 border border-white/10 relative overflow-hidden">
+        <div className="absolute top-0 right-0 p-10 opacity-[0.02] pointer-events-none">
+          <Zap className="w-96 h-96 -mr-20 -mt-20 rotate-12" />
+        </div>
+
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-8 mb-12 relative z-10">
+          <div className="space-y-3">
+            <div className="flex items-center gap-3">
+              <div className="w-2 h-2 rounded-full bg-emerald-500" />
+              <span className="text-[10px] font-mono text-emerald-500 font-bold uppercase tracking-[0.4em]">Strategic Intelligence</span>
+            </div>
+            <h2 className="text-5xl font-black text-white tracking-tighter font-display uppercase leading-none">
+              Climate <span className="text-emerald-500">Strategy.</span>
             </h2>
-            <p className="text-stone-500 text-sm font-medium mt-2 leading-relaxed">
-              Synthesizing IMD predictions and long-term trends into actionable field tactics.
+            <p className="text-white/40 text-sm font-medium leading-relaxed max-w-xl">
+              Synthesizing IMD predictions and long-term atmospheric trends into actionable field tactics for high-yield operations.
             </p>
           </div>
           
-          <div className="flex items-center gap-3 bg-stone-50 p-3 rounded-2xl border border-stone-100">
-            <LangIcon className="w-4 h-4 text-[#825500]" />
+          <div className="flex items-center gap-4 bg-white/5 p-4 rounded-2xl border border-white/10">
+            <LangIcon className="w-4 h-4 text-emerald-500" />
             <select 
               value={language}
               onChange={(e) => { setLanguage(e.target.value); localStorage.setItem('agri_language', e.target.value); }}
-              className="bg-transparent text-xs font-black text-stone-700 outline-none appearance-none cursor-pointer"
+              className="bg-transparent text-[10px] font-mono font-black text-white/60 outline-none appearance-none cursor-pointer uppercase tracking-widest"
             >
-               {LANGUAGES.map(l => <option key={l.name} value={l.name}>{l.label}</option>)}
+               {LANGUAGES.map(l => <option key={l.name} value={l.name} className="bg-[#0a0c10]">{l.label}</option>)}
             </select>
           </div>
         </div>
 
-        <form onSubmit={(e) => { e.preventDefault(); handlePlanning(); }} className="space-y-6 mb-12">
-          <div className="grid md:grid-cols-2 gap-4">
-            <div className="space-y-1">
-              <label className="text-[10px] font-black text-stone-400 ml-5 uppercase tracking-widest">District</label>
-              <div className="relative">
+        <form onSubmit={(e) => { e.preventDefault(); handlePlanning(); }} className="space-y-8 mb-16 relative z-10">
+          <div className="grid md:grid-cols-2 gap-6">
+            <div className="space-y-3">
+              <label className="text-[10px] font-mono font-black text-white/20 ml-6 uppercase tracking-[0.3em]">Operational District</label>
+              <div className="relative group">
                 <input 
-                  placeholder="Primary Farming District..." 
-                  className="w-full bg-stone-50 border border-stone-100 p-5 pl-14 rounded-[2rem] outline-none focus:ring-2 focus:ring-[#825500] transition-all font-black text-sm shadow-inner"
+                  placeholder="Primary Farming Coordinates..." 
+                  className="w-full bg-white/5 border border-white/10 p-6 pl-16 rounded-[2.5rem] outline-none focus:border-emerald-500/50 transition-all font-mono text-sm text-white shadow-inner placeholder:text-white/10"
                   value={location}
                   onChange={e => setLocation(e.target.value)}
                 />
-                <MapPin className="absolute left-5 top-1/2 -translate-y-1/2 text-[#825500] w-6 h-6" />
+                <MapPin className="absolute left-6 top-1/2 -translate-y-1/2 text-emerald-500 w-6 h-6 group-focus-within:scale-110 transition-transform" />
                 <button 
                   type="button"
                   onClick={detectLocation}
                   disabled={detecting}
-                  className="absolute right-4 top-1/2 -translate-y-1/2 p-2 hover:bg-stone-200 rounded-xl transition-colors text-stone-400"
+                  className="absolute right-6 top-1/2 -translate-y-1/2 p-3 hover:bg-white/10 rounded-xl transition-all text-white/20 hover:text-emerald-500 border border-transparent hover:border-white/10"
                 >
-                  {detecting ? <Loader2 className="w-4 h-4 animate-spin text-[#825500]" /> : <Navigation className="w-4 h-4" />}
+                  {detecting ? <Loader2 className="w-5 h-5 animate-spin text-emerald-500" /> : <Navigation className="w-5 h-5" />}
                 </button>
               </div>
             </div>
 
-            <div className="space-y-1">
-              <label className="text-[10px] font-black text-stone-400 ml-5 uppercase tracking-widest">Planting Window</label>
-              <div className="relative">
+            <div className="space-y-3">
+              <label className="text-[10px] font-mono font-black text-white/20 ml-6 uppercase tracking-[0.3em]">Deployment Window</label>
+              <div className="relative group">
                 <input 
                   type="date"
-                  className="w-full bg-stone-50 border border-stone-100 p-5 pl-14 rounded-[2rem] outline-none focus:ring-2 focus:ring-[#825500] transition-all font-black text-sm shadow-inner"
+                  className="w-full bg-white/5 border border-white/10 p-6 pl-16 rounded-[2.5rem] outline-none focus:border-emerald-500/50 transition-all font-mono text-sm text-white shadow-inner"
                   value={plantingDate}
                   onChange={e => setPlantingDate(e.target.value)}
                 />
-                <Clock className="absolute left-5 top-1/2 -translate-y-1/2 text-[#825500] w-6 h-6" />
+                <Clock className="absolute left-6 top-1/2 -translate-y-1/2 text-emerald-500 w-6 h-6 group-focus-within:scale-110 transition-transform" />
               </div>
             </div>
           </div>
@@ -309,49 +344,51 @@ const SeasonalPlanner: React.FC<SeasonalPlannerProps> = ({ language: initialLang
           <button 
             type="submit"
             disabled={loading || detecting}
-            className="w-full bg-stone-900 text-white font-black py-5 rounded-[2rem] flex items-center justify-center gap-3 shadow-xl active:scale-[0.98] transition-all disabled:opacity-50"
+            className="w-full bg-emerald-500 text-black font-black py-6 rounded-[2.5rem] flex items-center justify-center gap-4 shadow-2xl active:scale-[0.98] transition-all disabled:opacity-50 glow-emerald uppercase tracking-[0.2em] text-xs"
           >
-            {loading ? <Loader2 className="animate-spin w-5 h-5" /> : <Zap className="w-5 h-5 text-amber-400" />}
-            Refresh Climate Strategy
+            {loading ? <Loader2 className="animate-spin w-5 h-5" /> : <Zap className="w-5 h-5" />}
+            Initialize Climate Analysis
           </button>
         </form>
 
         {loading ? (
-          <div className="py-24 flex flex-col items-center justify-center space-y-6">
+          <div className="py-32 flex flex-col items-center justify-center space-y-8 relative z-10">
              <div className="relative">
-                <div className="w-24 h-24 border-8 border-amber-50 rounded-full shadow-inner opacity-20"></div>
-                <div className="absolute inset-0 w-24 h-24 border-8 border-[#825500] border-t-transparent rounded-full animate-spin"></div>
+                <div className="w-32 h-32 border-[12px] border-white/5 rounded-full shadow-inner opacity-20"></div>
+                <div className="absolute inset-0 w-32 h-32 border-[12px] border-emerald-500 border-t-transparent rounded-full animate-spin"></div>
                 <div className="absolute inset-0 flex items-center justify-center">
-                  <Waves className="w-8 h-8 text-[#825500] animate-pulse" />
+                  <Waves className="w-10 h-10 text-emerald-500 animate-pulse" />
                 </div>
             </div>
-            <div className="text-center">
-               <p className="font-black uppercase tracking-[0.4em] text-[10px] text-[#825500] animate-pulse">Modeling Weather Patterns...</p>
-               <p className="text-[9px] text-stone-400 font-bold mt-2 uppercase tracking-widest">Grounding in regional 6-month outlooks</p>
+            <div className="text-center space-y-3">
+               <p className="font-mono font-black uppercase tracking-[0.5em] text-[10px] text-emerald-500 animate-pulse">Modeling Atmospheric Patterns...</p>
+               <p className="text-[9px] text-white/20 font-mono font-bold uppercase tracking-widest">Grounding in regional 6-month outlooks v4.0</p>
             </div>
           </div>
         ) : report ? (
-          <div className="space-y-10 animate-in fade-in slide-in-from-bottom-4 duration-500">
+          <div className="space-y-16 animate-in fade-in slide-in-from-bottom-4 duration-500 relative z-10">
             {/* Recommended Crops Section */}
             {cropRecommendations.length > 0 && (
-              <div className="space-y-4">
-                 <h3 className="text-[10px] font-black text-stone-400 uppercase tracking-[0.25em] px-2 flex items-center gap-2">
-                    <Target className="w-4 h-4 text-[#825500]" /> AI Recommended Crops
-                 </h3>
-                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="space-y-6">
+                 <div className="flex items-center gap-4 px-2">
+                    <div className="w-1 h-4 bg-emerald-500 rounded-full" />
+                    <h3 className="text-[10px] font-mono font-black text-white/40 uppercase tracking-[0.4em]">Neural Crop Recommendations</h3>
+                 </div>
+                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     {cropRecommendations.map((crop, i) => (
-                      <div key={i} className="bg-stone-50 border border-stone-100 p-5 rounded-[1.75rem] flex items-start gap-4 shadow-sm hover:border-[#825500]/20 transition-all group">
-                         <div className={`p-3 rounded-2xl shrink-0 ${crop.suitability === 'High' ? 'bg-emerald-50 text-emerald-600' : 'bg-amber-50 text-amber-600'}`}>
-                            <Sprout className="w-5 h-5" />
+                      <div key={i} className="bg-white/5 border border-white/10 p-6 rounded-[2rem] flex items-start gap-5 shadow-sm hover:border-emerald-500/30 transition-all group relative overflow-hidden">
+                         <div className="absolute inset-0 bg-gradient-to-br from-emerald-500/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+                         <div className={`p-4 rounded-2xl shrink-0 relative z-10 ${crop.suitability === 'High' ? 'bg-emerald-500/10 text-emerald-500 border border-emerald-500/20' : 'bg-amber-500/10 text-amber-500 border border-amber-500/20'}`}>
+                            <Sprout className="w-6 h-6" />
                          </div>
-                         <div>
-                            <div className="flex items-center justify-between mb-1">
-                               <h4 className="font-black text-stone-900 text-sm">{crop.name}</h4>
-                               <span className={`text-[8px] font-black uppercase px-2 py-0.5 rounded-md ${crop.suitability === 'High' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>
+                         <div className="relative z-10 flex-1">
+                            <div className="flex items-center justify-between mb-2">
+                               <h4 className="font-black text-white text-lg tracking-tight uppercase font-display">{crop.name}</h4>
+                               <span className={`text-[8px] font-black uppercase px-2.5 py-1 rounded-full border ${crop.suitability === 'High' ? 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20' : 'bg-amber-500/10 text-amber-500 border-amber-500/20'}`}>
                                  {crop.suitability}
                                </span>
                             </div>
-                            <p className="text-[11px] text-stone-500 leading-relaxed font-medium italic">
+                            <p className="text-[11px] text-white/50 leading-relaxed font-medium italic font-mono">
                                {crop.reasoning}
                             </p>
                          </div>
@@ -363,12 +400,13 @@ const SeasonalPlanner: React.FC<SeasonalPlannerProps> = ({ language: initialLang
 
             {/* Seasonal Calendar Section */}
             {calendarEvents.length > 0 && (
-              <div className="space-y-4">
-                <h3 className="text-[10px] font-black text-stone-400 uppercase tracking-[0.25em] px-2 flex items-center gap-2">
-                  <Calendar className="w-4 h-4 text-[#825500]" /> Seasonal Field Calendar
-                </h3>
+              <div className="space-y-6">
+                <div className="flex items-center gap-4 px-2">
+                  <div className="w-1 h-4 bg-emerald-500 rounded-full" />
+                  <h3 className="text-[10px] font-mono font-black text-white/40 uppercase tracking-[0.4em]">Operational Field Calendar</h3>
+                </div>
                 <SeasonalCalendarView events={calendarEvents} />
-                <div className="flex flex-wrap gap-4 px-4">
+                <div className="flex flex-wrap gap-6 px-6 py-4 bg-black/20 rounded-2xl border border-white/5">
                   {[
                     { label: 'Planting', color: 'bg-emerald-500' },
                     { label: 'Harvest', color: 'bg-amber-500' },
@@ -376,9 +414,9 @@ const SeasonalPlanner: React.FC<SeasonalPlannerProps> = ({ language: initialLang
                     { label: 'Fertilizer', color: 'bg-purple-500' },
                     { label: 'Observation', color: 'bg-rose-500' }
                   ].map(legend => (
-                    <div key={legend.label} className="flex items-center gap-2">
-                      <div className={`w-2 h-2 rounded-full ${legend.color}`} />
-                      <span className="text-[9px] font-black text-stone-400 uppercase tracking-widest">{legend.label}</span>
+                    <div key={legend.label} className="flex items-center gap-3">
+                      <div className={`w-2 h-2 rounded-full ${legend.color} shadow-[0_0_8px_rgba(0,0,0,0.5)]`} />
+                      <span className="text-[9px] font-mono font-black text-white/30 uppercase tracking-widest">{legend.label}</span>
                     </div>
                   ))}
                 </div>
@@ -387,116 +425,142 @@ const SeasonalPlanner: React.FC<SeasonalPlannerProps> = ({ language: initialLang
 
             {/* Symbiotic Cultivation Section (Rotation & Intercropping) */}
             {rotationAdvice && (
-              <div className="space-y-6">
-                <h3 className="text-[10px] font-black text-stone-400 uppercase tracking-[0.25em] px-2 flex items-center gap-2">
-                  <ArrowRightLeft className="w-4 h-4 text-[#825500]" /> Symbiotic Cultivation Plan
-                </h3>
+              <div className="space-y-8">
+                <div className="flex items-center gap-4 px-2">
+                  <div className="w-1 h-4 bg-emerald-500 rounded-full" />
+                  <h3 className="text-[10px] font-mono font-black text-white/40 uppercase tracking-[0.4em]">Symbiotic Deployment Matrix</h3>
+                </div>
                 
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  <div className="bg-emerald-50 border border-emerald-100 p-6 rounded-[2rem] shadow-sm relative overflow-hidden group">
-                     <ArrowRightLeft className="absolute -right-4 -bottom-4 w-20 h-20 text-emerald-600/10 group-hover:scale-110 transition-transform" />
-                     <div className="relative z-10">
-                        <div className="bg-white p-2 rounded-xl w-fit mb-4 shadow-sm text-emerald-600"><ArrowRightLeft className="w-4 h-4" /></div>
-                        <h4 className="text-[10px] font-black text-emerald-800 uppercase tracking-widest mb-1">Crop Rotation</h4>
-                        <p className="text-xs font-bold text-emerald-900 leading-tight">Soil Vitality Protocols</p>
-                     </div>
-                  </div>
-                  <div className="bg-blue-50 border border-blue-100 p-6 rounded-[2rem] shadow-sm relative overflow-hidden group">
-                     <Users className="absolute -right-4 -bottom-4 w-20 h-20 text-blue-600/10 group-hover:scale-110 transition-transform" />
-                     <div className="relative z-10">
-                        <div className="bg-white p-2 rounded-xl w-fit mb-4 shadow-sm text-blue-600"><Users className="w-4 h-4" /></div>
-                        <h4 className="text-[10px] font-black text-blue-800 uppercase tracking-widest mb-1">Companion Planting</h4>
-                        <p className="text-xs font-bold text-blue-900 leading-tight">Natural Synergies</p>
-                     </div>
-                  </div>
-                  <div className="bg-amber-50 border border-amber-100 p-6 rounded-[2rem] shadow-sm relative overflow-hidden group">
-                     <LayersIcon className="absolute -right-4 -bottom-4 w-20 h-20 text-amber-600/10 group-hover:scale-110 transition-transform" />
-                     <div className="relative z-10">
-                        <div className="bg-white p-2 rounded-xl w-fit mb-4 shadow-sm text-amber-600"><LayersIcon className="w-4 h-4" /></div>
-                        <h4 className="text-[10px] font-black text-amber-800 uppercase tracking-widest mb-1">Intercropping</h4>
-                        <p className="text-xs font-bold text-amber-900 leading-tight">Spatial Optimization</p>
-                     </div>
-                  </div>
+                  {[
+                    { icon: ArrowRightLeft, title: 'Crop Rotation', sub: 'Soil Vitality Protocols', color: 'emerald' },
+                    { icon: Users, title: 'Companion Planting', sub: 'Natural Synergies', color: 'blue' },
+                    { icon: LayersIcon, title: 'Intercropping', sub: 'Spatial Optimization', color: 'amber' }
+                  ].map((item, i) => (
+                    <div key={i} className={`bg-${item.color}-500/5 border border-${item.color}-500/10 p-8 rounded-[2.5rem] shadow-sm relative overflow-hidden group hover:border-${item.color}-500/30 transition-all`}>
+                       <item.icon className={`absolute -right-6 -bottom-6 w-24 h-24 text-${item.color}-500/10 group-hover:scale-110 group-hover:rotate-12 transition-transform`} />
+                       <div className="relative z-10">
+                          <div className={`bg-${item.color}-500/10 p-3 rounded-2xl w-fit mb-6 border border-${item.color}-500/20 text-${item.color}-500`}><item.icon className="w-5 h-5" /></div>
+                          <h4 className={`text-[10px] font-mono font-black text-${item.color}-500/60 uppercase tracking-[0.3em] mb-2`}>{item.title}</h4>
+                          <p className="text-lg font-black text-white tracking-tight uppercase font-display">{item.sub}</p>
+                       </div>
+                    </div>
+                  ))}
                 </div>
 
-                <div className="bg-stone-900 p-8 rounded-[3rem] text-white shadow-2xl relative overflow-hidden">
-                   <div className="absolute top-0 right-0 p-8 opacity-5">
-                      <RefreshCw className="w-48 h-48" />
+                <div className="bg-[#11141b] p-10 rounded-[3rem] border border-white/10 shadow-2xl relative overflow-hidden group">
+                   <div className="absolute top-0 right-0 p-10 opacity-[0.02] group-hover:opacity-[0.05] transition-opacity">
+                      <RefreshCw className="w-64 h-64 -mr-10 -mt-10" />
                    </div>
-                   <div className="relative z-10">
-                      <div className="flex items-center gap-2 text-emerald-400 font-black text-[10px] uppercase tracking-[0.2em] mb-8 bg-white/5 w-fit px-4 py-1.5 rounded-full border border-white/10">
-                        <Zap className="w-4 h-4 text-amber-400" /> Strategic Rotation Intel
+                   <div className="relative z-10 space-y-8">
+                      <div className="flex items-center gap-3 text-emerald-500 bg-emerald-500/5 w-fit px-6 py-2 rounded-full border border-emerald-500/20 shadow-sm">
+                        <Zap className="w-4 h-4 text-amber-500" /> 
+                        <span className="text-[10px] font-mono font-black uppercase tracking-[0.4em]">Strategic Rotation Intelligence</span>
                       </div>
-                      <div className="prose prose-invert max-w-none text-sm font-medium text-stone-300 leading-relaxed italic">
-                        <Markdown>{rotationAdvice}</Markdown>
+                      <div className="prose prose-invert max-w-none">
+                        <div className="text-white/70 font-mono text-sm leading-relaxed italic">
+                          <Markdown>{rotationAdvice}</Markdown>
+                        </div>
                       </div>
                    </div>
                 </div>
               </div>
             )}
 
-            <div className="bg-[#fffcf9] border-2 border-[#ffddb3]/30 p-8 rounded-[3rem] shadow-inner relative overflow-hidden">
-               <div className="absolute top-0 right-0 p-8 opacity-5">
-                  <TrendingUp className="w-48 h-48" />
+            <div className="bg-emerald-500/5 border border-emerald-500/10 p-10 rounded-[3rem] shadow-inner relative overflow-hidden group">
+               <div className="absolute top-0 right-0 p-10 opacity-[0.02] group-hover:opacity-[0.05] transition-opacity">
+                  <TrendingUp className="w-64 h-64 -mr-10 -mt-10" />
                </div>
-               <div className="relative z-10">
-                  <div className="flex items-center gap-2 text-[#825500] font-black text-[10px] uppercase tracking-[0.2em] mb-8 bg-white/60 w-fit px-4 py-1.5 rounded-full border border-white/40 shadow-sm">
-                    <CheckCircle2 className="w-4 h-4" /> Synthesized Seasonal Directives
+               <div className="relative z-10 space-y-8">
+                  <div className="flex items-center gap-3 text-emerald-500 bg-emerald-500/5 w-fit px-6 py-2 rounded-full border border-emerald-500/20 shadow-sm">
+                    <CheckCircle2 className="w-4 h-4" /> 
+                    <span className="text-[10px] font-mono font-black uppercase tracking-[0.4em]">Synthesized Seasonal Directives</span>
                   </div>
-                  <div className="prose prose-stone max-w-none text-sm font-medium text-stone-700 leading-relaxed italic">
-                    <Markdown>{report.text || ''}</Markdown>
+                  <div className="prose prose-invert max-w-none">
+                    <div className="text-white/70 font-mono text-sm leading-relaxed italic">
+                      <Markdown>{report.text || ''}</Markdown>
+                    </div>
                   </div>
                </div>
             </div>
 
-            <div className="space-y-4">
-              <h3 className="text-[10px] font-black text-stone-400 uppercase tracking-[0.2em] px-2 flex items-center gap-2">
-                <Calendar className="w-4 h-4" /> Strategic Sources
-              </h3>
-              <div className="grid grid-cols-1 gap-3">
+            <div className="space-y-6">
+              <div className="flex items-center gap-4 px-2">
+                <div className="w-1 h-4 bg-emerald-500 rounded-full" />
+                <h3 className="text-[10px] font-mono font-black text-white/40 uppercase tracking-[0.4em]">Intelligence Sources</h3>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 {report.sources.map((src, i) => src.web && (
                   <a 
                     key={i} 
                     href={src.web.uri} 
                     target="_blank" 
                     rel="noopener noreferrer"
-                    className="flex items-center justify-between bg-white border border-stone-100 p-5 rounded-[1.5rem] hover:border-[#825500] hover:shadow-lg transition-all group"
+                    className="flex items-center justify-between bg-white/5 border border-white/10 p-6 rounded-[2rem] hover:border-emerald-500/30 hover:bg-white/[0.07] transition-all group relative overflow-hidden"
                   >
-                    <div className="flex-1 min-w-0 pr-4">
-                      <div className="font-black text-xs text-stone-800 truncate mb-1">{src.web.title}</div>
-                      <div className="text-[9px] font-bold text-stone-400 uppercase tracking-widest truncate">
+                    <div className="absolute inset-0 bg-gradient-to-r from-emerald-500/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+                    <div className="flex-1 min-w-0 pr-6 relative z-10">
+                      <div className="font-black text-sm text-white/90 truncate mb-1.5 font-display uppercase tracking-tight">{src.web.title}</div>
+                      <div className="text-[9px] font-mono font-bold text-white/20 uppercase tracking-widest truncate">
                         {new URL(src.web.uri).hostname}
                       </div>
                     </div>
-                    <ExternalLink className="w-4 h-4 text-stone-300 group-hover:text-[#825500] transition-colors" />
+                    <ExternalLink className="w-5 h-5 text-white/10 group-hover:text-emerald-500 transition-all relative z-10" />
                   </a>
                 ))}
               </div>
             </div>
 
-            <div className="bg-rose-50 border border-rose-100 p-6 rounded-[2.25rem] flex gap-4 items-start shadow-sm">
-               <div className="bg-white p-3 rounded-2xl text-rose-600 shadow-inner">
-                  <AlertCircle className="w-6 h-6" />
+            <div className="bg-rose-500/5 border border-rose-500/10 p-8 rounded-[2.5rem] flex gap-6 items-start shadow-sm group hover:border-rose-500/30 transition-all">
+               <div className="bg-rose-500/10 p-4 rounded-2xl text-rose-500 border border-rose-500/20 shadow-inner group-hover:scale-110 transition-transform">
+                  <AlertCircle className="w-7 h-7" />
                </div>
-               <div>
-                  <h4 className="text-sm font-black text-rose-900 uppercase tracking-widest mb-1">Mitigation Advisory</h4>
-                  <p className="text-[11px] text-rose-700 font-bold leading-relaxed">
-                     Seasonal planning is based on probabilistic climate models. Always monitor daily bulletins for sudden changes in monsoon speed or localized storm warnings.
+               <div className="space-y-2">
+                  <h4 className="text-[10px] font-mono font-black text-rose-500 uppercase tracking-[0.3em]">Operational Mitigation Advisory</h4>
+                  <p className="text-[11px] text-white/50 font-medium leading-relaxed font-mono italic">
+                     Seasonal planning is based on probabilistic neural climate models. Always monitor real-time telemetry bulletins for sudden anomalies in monsoon velocity or localized atmospheric disturbances.
                   </p>
                </div>
             </div>
           </div>
         ) : (
-          <div className="py-24 text-center text-stone-300 opacity-20 flex flex-col items-center">
-            <CloudSun className="w-20 h-20 mb-6" />
-            <p className="font-black text-xs uppercase tracking-[0.3em] leading-relaxed max-w-[240px]">
-              Awaiting Regional Coordinates for Seasonal Synthesis
+          <div className="py-32 text-center text-white/5 flex flex-col items-center relative z-10">
+            <CloudSun className="w-24 h-24 mb-8 opacity-20" />
+            <p className="font-mono font-black text-[10px] uppercase tracking-[0.5em] leading-relaxed max-w-xs opacity-40">
+              Awaiting Regional Coordinates for Seasonal Synthesis v4.0
             </p>
           </div>
         )}
       </div>
+
+      {/* Footer */}
+      <section className="px-6 mt-20 mb-10 text-center">
+        <div className="flex items-center justify-center gap-4 mb-4 opacity-10">
+          <div className="h-px w-12 bg-white" />
+          <span className="text-[8px] font-mono uppercase tracking-[0.5em]">End of Stream</span>
+          <div className="h-px w-12 bg-white" />
+        </div>
+        <p className="text-[8px] font-mono text-white/20 uppercase tracking-[0.3em]">
+          © {new Date().getFullYear()} BHARAT-KRISHI-SYSTEMS
+        </p>
+      </section>
     </div>
   );
 };
+
+const WeatherStat: React.FC<{ icon: React.ReactNode, label: string, value: string, sub: string }> = ({ icon, label, value, sub }) => (
+  <div className="bg-white/5 border border-white/10 p-6 rounded-[2rem] flex items-center gap-5 group hover:border-emerald-500/30 transition-all">
+    <div className="p-3 bg-emerald-500/10 text-emerald-500 rounded-xl border border-emerald-500/20 group-hover:scale-110 transition-transform">
+      {icon}
+    </div>
+    <div>
+      <p className="text-[9px] font-mono font-black text-white/30 uppercase tracking-widest mb-1">{label}</p>
+      <div className="flex items-baseline gap-2">
+        <span className="text-xl font-black text-white uppercase font-display">{value}</span>
+        <span className="text-[9px] font-mono font-bold text-white/20 uppercase">{sub}</span>
+      </div>
+    </div>
+  </div>
+);
 
 export default SeasonalPlanner;

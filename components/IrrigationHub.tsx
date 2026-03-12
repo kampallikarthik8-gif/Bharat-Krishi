@@ -40,8 +40,22 @@ const IrrigationHub: React.FC<IrrigationHubProps> = ({ language }) => {
   const [weather, setWeather] = React.useState<any>(null);
   const [zones, setZones] = React.useState<IrrigationZone[]>(() => {
     const saved = localStorage.getItem('agri_irrigation_zones');
-    return saved ? JSON.parse(saved) : [
-      { id: '1', name: 'North Orchard', cropType: 'Apple', soilType: 'Loamy' }
+    if (saved) return JSON.parse(saved);
+    
+    const mainCrops = JSON.parse(localStorage.getItem('agri_main_crops') || '[]');
+    const soilType = localStorage.getItem('agri_soil_type') || 'Loamy';
+    
+    if (mainCrops.length > 0) {
+      return mainCrops.map((crop: string, i: number) => ({
+        id: (i + 1).toString(),
+        name: `${crop} Field`,
+        cropType: crop,
+        soilType: soilType
+      }));
+    }
+    
+    return [
+      { id: '1', name: 'Primary Field', cropType: 'Paddy', soilType: 'Loamy' }
     ];
   });
   const [recommendations, setRecommendations] = React.useState<Record<string, string>>({});
@@ -88,11 +102,12 @@ const IrrigationHub: React.FC<IrrigationHubProps> = ({ language }) => {
   };
 
   const addZone = () => {
+    const soilType = localStorage.getItem('agri_soil_type') || 'Loamy';
     const newZone: IrrigationZone = {
       id: Date.now().toString(),
       name: 'New Zone',
       cropType: 'Corn',
-      soilType: 'Loamy'
+      soilType: soilType
     };
     setZones([...zones, newZone]);
     setActiveZone(newZone);

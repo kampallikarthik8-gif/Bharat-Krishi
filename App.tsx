@@ -38,6 +38,7 @@ import AgriAcademy from './components/AgriAcademy';
 import EquipmentMarket from './components/EquipmentMarket';
 import SmartAlerts from './components/SmartAlerts';
 import FeatureTour from './components/FeatureTour';
+import CropRotationAdvisor from './components/CropRotationAdvisor';
 
 const App: React.FC = () => {
   const [isLoggedIn, setIsLoggedIn] = React.useState<boolean>(() => {
@@ -169,6 +170,8 @@ const App: React.FC = () => {
         return <AgriAcademy />;
       case AppView.SMART_ALERTS:
         return <SmartAlerts />;
+      case AppView.CROP_ROTATION_ADVISOR:
+        return <CropRotationAdvisor language={language} />;
       default:
         return <Dashboard setView={navigateTo} />;
     }

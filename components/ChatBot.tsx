@@ -31,7 +31,22 @@ const ChatBot: React.FC<ChatBotProps> = ({ language }) => {
     setLoading(true);
 
     try {
-      const response = await chatWithExpert(userMsg, messages, language);
+      const profile = {
+        farmerName: localStorage.getItem('agri_farmer_name') || 'John Doe',
+        farmName: localStorage.getItem('agri_farm_name') || 'Sunrise Acres',
+        location: localStorage.getItem('agri_farm_location') || 'N/A',
+        state: localStorage.getItem('agri_state') || 'N/A',
+        district: localStorage.getItem('agri_district') || 'N/A',
+        farmSize: localStorage.getItem('agri_farm_size') || 'N/A',
+        sizeUnit: localStorage.getItem('agri_units') === 'Imperial' ? 'Acres' : 'Hectares',
+        mainCrops: JSON.parse(localStorage.getItem('agri_main_crops') || '[]'),
+        soilType: localStorage.getItem('agri_soil_type') || 'N/A',
+        irrigation: localStorage.getItem('agri_irrigation') || 'N/A',
+        terrain: localStorage.getItem('agri_terrain') || 'N/A',
+        cropHistory: JSON.parse(localStorage.getItem('agri_crop_history') || '[]'),
+        pastIssues: JSON.parse(localStorage.getItem('agri_past_issues') || '[]')
+      };
+      const response = await chatWithExpert(userMsg, messages, language, profile);
       setMessages(prev => [...prev, { role: 'bot', text: response || "I'm sorry, I couldn't process that." }]);
     } catch (err) {
       console.error(err);

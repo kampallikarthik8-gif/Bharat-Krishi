@@ -1,4 +1,6 @@
 import React from 'react';
+import { jsPDF } from 'jspdf';
+import 'jspdf-autotable';
 import { 
   User, 
   MapPin, 
@@ -22,7 +24,8 @@ import {
   Zap,
   Camera,
   Layers,
-  FileJson
+  FileJson,
+  FileText
 } from 'lucide-react';
 
 const WEATHER_API_KEY = "42d5aa17c7f2866670e62b4c77cb3d32";
@@ -122,6 +125,34 @@ const Settings: React.FC<SettingsProps> = ({ language, setLanguage }) => {
     setLanguage(val);
   };
 
+  const exportPDF = () => {
+    const doc = new jsPDF();
+    doc.setFontSize(20);
+    doc.text('Bharat Kisan - Farm Archive Report', 14, 22);
+    doc.setFontSize(11);
+    doc.setTextColor(100);
+    doc.text(`Generated on: ${new Date().toLocaleString()}`, 14, 30);
+
+    const data: [string, string][] = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (key?.startsWith('agri')) {
+        const val = localStorage.getItem(key) || '';
+        data.push([key.replace('agri_', '').replace(/_/g, ' ').toUpperCase(), val.length > 50 ? val.substring(0, 50) + '...' : val]);
+      }
+    }
+
+    (doc as any).autoTable({
+      startY: 40,
+      head: [['Setting/Data Key', 'Value (Preview)']],
+      body: data,
+      theme: 'striped',
+      headStyles: { fillColor: [45, 90, 39] }
+    });
+
+    doc.save(`BharatKisan_Full_Export_${new Date().toISOString().split('T')[0]}.pdf`);
+  };
+
   const exportData = () => {
     const data: Record<string, any> = {};
     for (let i = 0; i < localStorage.length; i++) {
@@ -154,9 +185,9 @@ const Settings: React.FC<SettingsProps> = ({ language, setLanguage }) => {
     <div className="space-y-6 pb-24 animate-in fade-in slide-in-from-bottom-6">
       <p className="px-4 text-[11px] font-bold text-stone-400 uppercase tracking-widest">Farm Identity</p>
       
-      <div className="bg-white rounded-[2rem] p-4 shadow-sm border border-stone-100 divide-y divide-stone-50">
+      <div className="bg-white rounded-[2rem] p-4 shadow-sm border border-slate-100 divide-y divide-slate-50">
         <SettingItem 
-          icon={<User className="text-[#825500]" />}
+          icon={<User className="text-emerald-600" />}
           label="Farm Name"
           value={settings.farmName}
           onClick={() => {
@@ -164,22 +195,22 @@ const Settings: React.FC<SettingsProps> = ({ language, setLanguage }) => {
             if (name) updateSetting('farmName', name);
           }}
         />
-        <div className="w-full flex items-center justify-between p-4 active:bg-stone-50 transition-colors group">
+        <div className="w-full flex items-center justify-between p-4 active:bg-slate-50 transition-colors group">
           <div className="flex items-center gap-4 text-left">
-            <div className="p-3 bg-stone-50 rounded-2xl group-hover:bg-[#ffddb3]/20 transition-colors shadow-inner">
-              <MapPin className="w-5 h-5 text-[#825500]" />
+            <div className="p-3 bg-slate-50 rounded-2xl group-hover:bg-emerald-50 transition-colors shadow-inner">
+              <MapPin className="w-5 h-5 text-emerald-600" />
             </div>
             <div>
-              <p className="text-sm font-bold text-stone-800">Primary Region</p>
+              <p className="text-sm font-bold text-slate-800">Primary Region</p>
               <div className="flex items-center gap-1.5 mt-0.5">
-                <span className={`w-1.5 h-1.5 rounded-full ${isLocating ? 'bg-amber-400 animate-pulse' : 'bg-emerald-50 shadow-[0_0_5px_rgba(16,185,129,0.5)]'}`} />
-                <p className="text-[10px] text-stone-400 font-black uppercase tracking-widest">{isLocating ? 'Syncing...' : 'Connected to GPS'}</p>
+                <span className={`w-1.5 h-1.5 rounded-full ${isLocating ? 'bg-emerald-400 animate-pulse' : 'bg-emerald-50 shadow-[0_0_5px_rgba(16,185,129,0.5)]'}`} />
+                <p className="text-[10px] text-slate-400 font-black uppercase tracking-widest">{isLocating ? 'Syncing...' : 'Connected to GPS'}</p>
               </div>
             </div>
           </div>
           <div className="flex items-center gap-3">
             <div className="flex flex-col items-end">
-              <span className="text-xs font-black text-[#825500] truncate max-w-[120px]">{location}</span>
+              <span className="text-xs font-black text-emerald-600 truncate max-w-[120px]">{location}</span>
               <button 
                 onClick={() => {
                   const loc = prompt("Enter Location Manually", location);
@@ -188,7 +219,7 @@ const Settings: React.FC<SettingsProps> = ({ language, setLanguage }) => {
                     localStorage.setItem('agri_farm_location', loc);
                   }
                 }}
-                className="text-[8px] font-black text-stone-400 uppercase tracking-widest mt-1 hover:text-amber-600"
+                className="text-[8px] font-black text-slate-400 uppercase tracking-widest mt-1 hover:text-emerald-600"
               >
                 Edit Manually
               </button>
@@ -196,7 +227,7 @@ const Settings: React.FC<SettingsProps> = ({ language, setLanguage }) => {
             <button 
               onClick={detectLocation}
               disabled={isLocating}
-              className="p-2 bg-stone-50 rounded-xl hover:bg-stone-100 text-[#825500] disabled:opacity-50"
+              className="p-2 bg-slate-50 rounded-xl hover:bg-slate-100 text-emerald-600 disabled:opacity-50"
             >
               {isLocating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Navigation className="w-4 h-4" />}
             </button>
@@ -205,21 +236,21 @@ const Settings: React.FC<SettingsProps> = ({ language, setLanguage }) => {
       </div>
 
       <p className="px-4 text-[11px] font-bold text-stone-400 uppercase tracking-widest mt-8">AI & Intelligence Tuning</p>
-      <div className="bg-white rounded-[2rem] p-4 shadow-sm border border-stone-100 divide-y divide-stone-50">
+      <div className="bg-white rounded-[2rem] p-4 shadow-sm border border-slate-100 divide-y divide-slate-50">
         <div className="flex items-center justify-between p-4">
           <div className="flex items-center gap-4">
-            <div className="p-3 bg-stone-50 rounded-2xl shadow-inner">
+            <div className="p-3 bg-slate-50 rounded-2xl shadow-inner">
               <Mic2 className="w-5 h-5 text-emerald-600" />
             </div>
             <div>
-              <p className="text-sm font-bold text-stone-800">AgriVoice Profile</p>
-              <p className="text-[10px] text-stone-400 font-medium italic">Gemini Voice Personality</p>
+              <p className="text-sm font-bold text-slate-800">AgriVoice Profile</p>
+              <p className="text-[10px] text-slate-400 font-medium italic">Gemini Voice Personality</p>
             </div>
           </div>
           <select 
             value={settings.aiVoice}
             onChange={(e) => updateSetting('aiVoice', e.target.value)}
-            className="bg-stone-50 border-none rounded-xl py-2 px-4 text-xs font-bold text-[#825500] outline-none shadow-inner"
+            className="bg-slate-50 border-none rounded-xl py-2 px-4 text-xs font-bold text-emerald-700 outline-none shadow-inner"
           >
             {AI_VOICES.map(voice => (
               <option key={voice.name} value={voice.name}>{voice.label}</option>
@@ -229,18 +260,18 @@ const Settings: React.FC<SettingsProps> = ({ language, setLanguage }) => {
 
         <div className="flex items-center justify-between p-4">
           <div className="flex items-center gap-4">
-            <div className="p-3 bg-stone-50 rounded-2xl shadow-inner">
+            <div className="p-3 bg-slate-50 rounded-2xl shadow-inner">
               <Cpu className="w-5 h-5 text-blue-600" />
             </div>
             <div>
-              <p className="text-sm font-bold text-stone-800">Intelligence Strategy</p>
-              <p className="text-[10px] text-stone-400 font-medium italic">Inference Depth vs Speed</p>
+              <p className="text-sm font-bold text-slate-800">Intelligence Strategy</p>
+              <p className="text-[10px] text-slate-400 font-medium italic">Inference Depth vs Speed</p>
             </div>
           </div>
           <select 
             value={settings.precisionMode}
             onChange={(e) => updateSetting('precisionMode', e.target.value)}
-            className="bg-stone-50 border-none rounded-xl py-2 px-4 text-xs font-bold text-[#825500] outline-none shadow-inner"
+            className="bg-slate-50 border-none rounded-xl py-2 px-4 text-xs font-bold text-emerald-700 outline-none shadow-inner"
           >
             <option>Standard</option>
             <option>Balanced</option>
@@ -289,16 +320,16 @@ const Settings: React.FC<SettingsProps> = ({ language, setLanguage }) => {
                 onClick={() => handleLanguageChange(lang.name)}
                 className={`flex flex-col items-start p-4 rounded-3xl border transition-all relative overflow-hidden group ${
                   isActive 
-                    ? 'bg-stone-950 border-stone-950 text-white shadow-xl scale-[1.02]' 
-                    : 'bg-white border-stone-100 text-stone-600 hover:border-amber-200'
+                    ? 'bg-slate-950 border-slate-950 text-white shadow-xl scale-[1.02]' 
+                    : 'bg-white border-slate-100 text-slate-600 hover:border-emerald-200'
                 }`}
               >
                 {isActive && (
                   <div className="absolute top-0 right-0 p-3">
-                    <div className="w-1.5 h-1.5 bg-amber-500 rounded-full animate-pulse" />
+                    <div className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse" />
                   </div>
                 )}
-                <span className={`text-[10px] font-black uppercase tracking-widest mb-1 ${isActive ? 'text-amber-400' : 'text-stone-400'}`}>
+                <span className={`text-[10px] font-black uppercase tracking-widest mb-1 ${isActive ? 'text-emerald-400' : 'text-slate-400'}`}>
                   {lang.name}
                 </span>
                 <span className="text-sm font-black tracking-tight">
@@ -306,8 +337,8 @@ const Settings: React.FC<SettingsProps> = ({ language, setLanguage }) => {
                 </span>
                 {isActive && (
                   <div className="mt-3 flex items-center gap-1.5">
-                    <div className="w-4 h-px bg-amber-500/50" />
-                    <span className="text-[8px] font-black uppercase tracking-tighter text-amber-500/80">Active Profile</span>
+                    <div className="w-4 h-px bg-emerald-500/50" />
+                    <span className="text-[8px] font-black uppercase tracking-tighter text-emerald-500/80">Active Profile</span>
                   </div>
                 )}
               </button>
@@ -320,18 +351,18 @@ const Settings: React.FC<SettingsProps> = ({ language, setLanguage }) => {
       <div className="bg-white rounded-[2rem] p-4 shadow-sm border border-stone-100 divide-y divide-stone-50">
         <div className="flex items-center justify-between p-4">
           <div className="flex items-center gap-4">
-            <div className="p-3 bg-stone-50 rounded-2xl shadow-inner">
-              <Globe className="w-5 h-5 text-stone-500" />
+            <div className="p-3 bg-slate-50 rounded-2xl shadow-inner">
+              <Globe className="w-5 h-5 text-slate-500" />
             </div>
             <div>
-              <p className="text-sm font-bold text-stone-800">Measurement Units</p>
-              <p className="text-[10px] text-stone-400 font-medium italic">Metric (C°, Ha) vs Imperial (F°, Ac)</p>
+              <p className="text-sm font-bold text-slate-800">Measurement Units</p>
+              <p className="text-[10px] text-slate-400 font-medium italic">Metric (C°, Ha) vs Imperial (F°, Ac)</p>
             </div>
           </div>
           <select 
             value={settings.units}
             onChange={(e) => updateSetting('units', e.target.value)}
-            className="bg-stone-50 border-none rounded-xl py-2 px-4 text-xs font-bold text-[#825500] outline-none shadow-inner"
+            className="bg-slate-50 border-none rounded-xl py-2 px-4 text-xs font-bold text-emerald-700 outline-none shadow-inner"
           >
             <option>Metric</option>
             <option>Imperial</option>
@@ -360,6 +391,22 @@ const Settings: React.FC<SettingsProps> = ({ language, setLanguage }) => {
 
       <p className="px-4 text-[11px] font-bold text-stone-400 uppercase tracking-widest mt-8">Data Management</p>
       <div className="bg-white rounded-[2rem] p-4 shadow-sm border border-stone-100 divide-y divide-stone-50">
+        <button 
+          onClick={exportPDF}
+          className="w-full flex items-center justify-between p-4 active:bg-stone-50 transition-colors group text-left"
+        >
+          <div className="flex items-center gap-4">
+            <div className="p-3 bg-stone-50 rounded-2xl group-hover:bg-emerald-50 transition-colors shadow-inner">
+              <FileText className="w-5 h-5 text-emerald-600" />
+            </div>
+            <div>
+              <p className="text-sm font-bold text-stone-800">Export Farm Report (PDF)</p>
+              <p className="text-[10px] text-stone-400 font-medium">Download professional PDF report</p>
+            </div>
+          </div>
+          <Download className="w-5 h-5 text-stone-300" />
+        </button>
+
         <button 
           onClick={exportData}
           className="w-full flex items-center justify-between p-4 active:bg-stone-50 transition-colors group text-left"
@@ -391,13 +438,13 @@ const Settings: React.FC<SettingsProps> = ({ language, setLanguage }) => {
       </div>
 
       <div className="text-center py-6">
-        <div className="inline-flex items-center gap-2 bg-[#ffddb3]/60 px-4 py-2 rounded-full border border-[#825500]/10">
-          <Database className="w-3 h-3 text-[#825500]" />
-          <span className="text-[10px] font-black uppercase text-[#825500] tracking-widest">
+        <div className="inline-flex items-center gap-2 bg-emerald-50 px-4 py-2 rounded-full border border-emerald-100">
+          <Database className="w-3 h-3 text-emerald-600" />
+          <span className="text-[10px] font-black uppercase text-emerald-600 tracking-widest">
             Cache: {(JSON.stringify(localStorage).length / 1024).toFixed(1)} KB Used
           </span>
         </div>
-        <p className="text-[9px] text-stone-400 mt-2 font-bold uppercase tracking-widest">Build Version: 2.5.2-Platinum</p>
+        <p className="text-[9px] text-slate-400 mt-2 font-bold uppercase tracking-widest">Build Version: 2.5.2-Platinum</p>
       </div>
     </div>
   );
@@ -406,20 +453,20 @@ const Settings: React.FC<SettingsProps> = ({ language, setLanguage }) => {
 const SettingItem: React.FC<{ icon: React.ReactNode, label: string, value?: string, sub?: string, onClick?: () => void }> = ({ icon, label, value, sub, onClick }) => (
   <button 
     onClick={onClick}
-    className="w-full flex items-center justify-between p-4 active:bg-stone-50 transition-colors group"
+    className="w-full flex items-center justify-between p-4 active:bg-slate-50 transition-colors group"
   >
     <div className="flex items-center gap-4 text-left">
-      <div className="p-3 bg-stone-50 rounded-2xl group-hover:bg-white transition-colors shadow-inner">
+      <div className="p-3 bg-slate-50 rounded-2xl group-hover:bg-white transition-colors shadow-inner">
         {React.cloneElement(icon as React.ReactElement<any>, { className: 'w-5 h-5' })}
       </div>
       <div>
-        <p className="text-sm font-bold text-stone-800">{label}</p>
-        {sub && <p className="text-[10px] text-stone-400 font-medium">{sub}</p>}
+        <p className="text-sm font-bold text-slate-800">{label}</p>
+        {sub && <p className="text-[10px] text-slate-400 font-medium">{sub}</p>}
       </div>
     </div>
     <div className="flex items-center gap-2">
-      {value && <span className="text-xs font-black text-[#825500] truncate max-w-[120px]">{value}</span>}
-      <ChevronRight className="w-4 h-4 text-stone-300" />
+      {value && <span className="text-xs font-black text-emerald-600 truncate max-w-[120px]">{value}</span>}
+      <ChevronRight className="w-4 h-4 text-slate-300" />
     </div>
   </button>
 );
@@ -427,14 +474,14 @@ const SettingItem: React.FC<{ icon: React.ReactNode, label: string, value?: stri
 const ToggleItem: React.FC<{ icon: React.ReactNode, label: string, enabled: boolean, onToggle: (val: boolean) => void }> = ({ icon, label, enabled, onToggle }) => (
   <div className="flex items-center justify-between p-4">
     <div className="flex items-center gap-4">
-      <div className="p-3 bg-stone-50 rounded-2xl shadow-inner">
+      <div className="p-3 bg-slate-50 rounded-2xl shadow-inner">
         {React.cloneElement(icon as React.ReactElement<any>, { className: 'w-5 h-5' })}
       </div>
-      <p className="text-sm font-bold text-stone-800">{label}</p>
+      <p className="text-sm font-bold text-slate-800">{label}</p>
     </div>
     <button 
       onClick={() => onToggle(!enabled)}
-      className={`w-12 h-6 rounded-full p-1 transition-colors duration-300 ${enabled ? 'bg-[#825500]' : 'bg-stone-200'}`}
+      className={`w-12 h-6 rounded-full p-1 transition-colors duration-300 ${enabled ? 'bg-emerald-600' : 'bg-slate-200'}`}
     >
       <div className={`w-4 h-4 bg-white rounded-full transition-transform duration-300 transform ${enabled ? 'translate-x-6' : 'translate-x-0'}`} />
     </button>

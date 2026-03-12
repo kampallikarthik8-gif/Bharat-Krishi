@@ -1,4 +1,6 @@
 import React from 'react';
+import { jsPDF } from 'jspdf';
+import 'jspdf-autotable';
 import { getCropAdvice, getFertilizerAdvice } from '../services/geminiService';
 import { FertilizerPlan } from '../types';
 import { 
@@ -30,7 +32,9 @@ import {
   TrendingUp,
   ClipboardList,
   AlertCircle,
-  GripVertical
+  GripVertical,
+  Sun,
+  Wind
 } from 'lucide-react';
 import Markdown from 'react-markdown';
 
@@ -73,12 +77,13 @@ interface CropAdvisorProps {
 const CropAdvisor: React.FC<CropAdvisorProps> = ({ language: initialLanguage }) => {
   const [formData, setFormData] = React.useState({
     crop: '',
-    location: '',
-    soil: ''
+    location: localStorage.getItem('agri_farm_location') || '',
+    soil: localStorage.getItem('agri_soil_type') || ''
   });
   const [language, setLanguage] = React.useState(initialLanguage);
   const [advice, setAdvice] = React.useState('');
   const [fertilizerPlan, setFertilizerPlan] = React.useState<FertilizerPlan | null>(null);
+  const [weatherData, setWeatherData] = React.useState<any>(null);
   const [loading, setLoading] = React.useState(false);
   const [detecting, setDetecting] = React.useState(false);
   const [saveStatus, setSaveStatus] = React.useState<'idle' | 'saved'>('idle');
@@ -98,6 +103,7 @@ const CropAdvisor: React.FC<CropAdvisorProps> = ({ language: initialLanguage }) 
           );
           const data = await res.json();
           setFormData(prev => ({ ...prev, location: data.name ? `${data.name}, ${data.sys.country}` : 'Current Region' }));
+          setWeatherData(data);
         } catch (err) { console.error(err); }
         finally { setDetecting(false); }
       },
@@ -109,10 +115,13 @@ const CropAdvisor: React.FC<CropAdvisorProps> = ({ language: initialLanguage }) 
     if (!formData.crop) return;
     setLoading(true);
     setSaveStatus('idle');
+    const weatherContext = weatherData ? 
+      `${weatherData.main.temp}°C, Humidity: ${weatherData.main.humidity}%, ${weatherData.weather[0].description}` : 
+      '';
     try {
       const [adviceRes, fertRes] = await Promise.all([
-        getCropAdvice(formData.crop, formData.location, formData.soil, targetLanguage),
-        getFertilizerAdvice(formData.crop, formData.location, formData.soil, targetLanguage)
+        getCropAdvice(formData.crop, formData.location, formData.soil, targetLanguage, weatherContext),
+        getFertilizerAdvice(formData.crop, formData.location, formData.soil, targetLanguage, weatherContext)
       ]);
       setAdvice(adviceRes || '');
       setFertilizerPlan(fertRes);
@@ -173,74 +182,171 @@ const CropAdvisor: React.FC<CropAdvisorProps> = ({ language: initialLanguage }) 
   const downloadReport = () => {
     if (!advice && !fertilizerPlan) return;
 
+    const doc = new jsPDF();
     const farmName = localStorage.getItem('agri_farm_name') || 'Unnamed Farm';
     const farmerName = localStorage.getItem('agri_farmer_name') || 'Valued Farmer';
+    const timestamp = new Date().toLocaleString();
 
-    let report = `--------------------------------------------------\n`;
-    report += `      AGRIASSIST - STRATEGIC FARMING REPORT       \n`;
-    report += `--------------------------------------------------\n`;
-    report += `Generated: ${new Date().toLocaleString()}\n`;
-    report += `Farmer:    ${farmerName}\n`;
-    report += `Farm Unit: ${farmName}\n`;
-    report += `Language:  ${language}\n`;
-    report += `--------------------------------------------------\n`;
-    report += `Crop:      ${formData.crop}\n`;
-    report += `Location:  ${formData.location || 'N/A'}\n`;
-    report += `Soil Type: ${formData.soil || 'N/A'}\n`;
-    report += `--------------------------------------------------\n\n`;
+    // Header
+    doc.setFillColor(24, 24, 24);
+    doc.rect(0, 0, 210, 40, 'F');
+    doc.setTextColor(255, 255, 255);
+    doc.setFontSize(22);
+    doc.setFont('helvetica', 'bold');
+    doc.text('AGRIASSIST STRATEGIC REPORT', 20, 25);
     
-    report += `[1] STRATEGIC ADVISORY\n`;
-    report += `----------------------\n`;
+    doc.setFontSize(10);
+    doc.setFont('helvetica', 'normal');
+    doc.text(`Generated: ${timestamp}`, 20, 33);
+
+    // Metadata Section
+    doc.setTextColor(40, 40, 40);
+    doc.setFontSize(12);
+    doc.setFont('helvetica', 'bold');
+    doc.text('FARMER INFORMATION', 20, 55);
+    doc.setDrawColor(200, 200, 200);
+    doc.line(20, 58, 190, 58);
+
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(10);
+    doc.text(`Farmer Name: ${farmerName}`, 20, 65);
+    doc.text(`Farm Unit:   ${farmName}`, 20, 72);
+    doc.text(`Language:    ${language}`, 20, 79);
+
+    doc.setFont('helvetica', 'bold');
+    doc.text('FIELD PARAMETERS', 110, 55);
+    doc.setFont('helvetica', 'normal');
+    doc.text(`Target Crop: ${formData.crop}`, 110, 65);
+    doc.text(`Location:    ${formData.location || 'N/A'}`, 110, 72);
+    doc.text(`Soil Type:   ${formData.soil || 'N/A'}`, 110, 79);
+
+    // Strategic Advisory
+    doc.setFontSize(12);
+    doc.setFont('helvetica', 'bold');
+    doc.text('[1] STRATEGIC ADVISORY', 20, 95);
+    doc.line(20, 98, 190, 98);
+
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(9);
     const cleanAdvice = advice
       .replace(/#{1,6}\s/g, '')
       .replace(/\*\*/g, '')
-      .replace(/\*\*/g, '')
       .replace(/\*/g, '-');
-    report += `${cleanAdvice}\n\n`;
+    
+    const splitAdvice = doc.splitTextToSize(cleanAdvice, 170);
+    doc.text(splitAdvice, 20, 105);
+
+    let currentY = 105 + (splitAdvice.length * 5) + 10;
 
     if (fertilizerPlan) {
-      report += `[2] FERTILIZATION & NUTRIENT PLAN\n`;
-      report += `---------------------------------\n`;
-      report += `Crop Requirements: ${fertilizerPlan.cropRequirements}\n`;
-      report += `Soil Adjustments:  ${fertilizerPlan.soilAdjustments}\n\n`;
-      
-      report += `RECOMMENDED MIXES:\n`;
-      fertilizerPlan.fertilizers.forEach(f => {
-        report += `- ${f.name} (NPK: ${f.npk})\n  Type: ${f.isOrganic ? 'Organic' : 'Synthetic'}\n  Detail: ${f.description}\n`;
-      });
-      report += `\n`;
-
-      report += `APPLICATION TIMELINE:\n`;
-      fertilizerPlan.schedule.forEach((s, i) => {
-        report += `${i + 1}. Stage:  ${s.stage}\n`;
-        report += `   Timing: ${s.timing}\n`;
-        report += `   Dosage: ${s.dosage}\n`;
-        report += `   Method: ${s.method}\n\n`;
-      });
-
-      if (fertilizerPlan.micronutrients && fertilizerPlan.micronutrients.length > 0) {
-        report += `ESSENTIAL MICRONUTRIENTS:\n`;
-        report += `${fertilizerPlan.micronutrients.join(', ')}\n\n`;
+      if (currentY > 250) {
+        doc.addPage();
+        currentY = 20;
       }
 
-      report += `EXPERT MANAGEMENT TIPS:\n`;
-      fertilizerPlan.tips.forEach(t => report += `- ${t}\n`);
+      doc.setFontSize(12);
+      doc.setFont('helvetica', 'bold');
+      doc.text('[2] FERTILIZATION & NUTRIENT PLAN', 20, currentY);
+      doc.line(20, currentY + 3, 190, currentY + 3);
+      currentY += 10;
+
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(9);
+      const reqText = doc.splitTextToSize(`Crop Requirements: ${fertilizerPlan.cropRequirements}`, 170);
+      doc.text(reqText, 20, currentY);
+      currentY += (reqText.length * 5) + 5;
+
+      const adjText = doc.splitTextToSize(`Soil Adjustments: ${fertilizerPlan.soilAdjustments}`, 170);
+      doc.text(adjText, 20, currentY);
+      currentY += (adjText.length * 5) + 10;
+
+      // Fertilizer Table
+      doc.setFont('helvetica', 'bold');
+      doc.text('RECOMMENDED FERTILIZERS', 20, currentY);
+      currentY += 5;
+
+      const fertData = fertilizerPlan.fertilizers.map(f => [
+        f.name,
+        f.npk,
+        f.isOrganic ? 'Organic' : 'Synthetic',
+        f.description
+      ]);
+
+      (doc as any).autoTable({
+        startY: currentY,
+        head: [['Name', 'NPK', 'Type', 'Description']],
+        body: fertData,
+        theme: 'striped',
+        headStyles: { fillColor: [130, 85, 0] },
+        styles: { fontSize: 8 },
+        margin: { left: 20, right: 20 }
+      });
+
+      currentY = (doc as any).lastAutoTable.finalY + 15;
+
+      if (currentY > 250) {
+        doc.addPage();
+        currentY = 20;
+      }
+
+      // Schedule Table
+      doc.setFont('helvetica', 'bold');
+      doc.text('APPLICATION SCHEDULE', 20, currentY);
+      currentY += 5;
+
+      const scheduleData = fertilizerPlan.schedule.map(s => [
+        s.stage,
+        s.timing,
+        s.dosage,
+        s.method
+      ]);
+
+      (doc as any).autoTable({
+        startY: currentY,
+        head: [['Stage', 'Timing', 'Dosage', 'Method']],
+        body: scheduleData,
+        theme: 'grid',
+        headStyles: { fillColor: [16, 185, 129] },
+        styles: { fontSize: 8 },
+        margin: { left: 20, right: 20 }
+      });
+
+      currentY = (doc as any).lastAutoTable.finalY + 15;
+
+      if (currentY > 250) {
+        doc.addPage();
+        currentY = 20;
+      }
+
+      if (fertilizerPlan.micronutrients && fertilizerPlan.micronutrients.length > 0) {
+        doc.setFont('helvetica', 'bold');
+        doc.text('MICRONUTRIENTS', 20, currentY);
+        currentY += 5;
+        doc.setFont('helvetica', 'normal');
+        doc.text(fertilizerPlan.micronutrients.join(', '), 20, currentY);
+        currentY += 10;
+      }
+
+      doc.setFont('helvetica', 'bold');
+      doc.text('EXPERT TIPS', 20, currentY);
+      currentY += 5;
+      doc.setFont('helvetica', 'normal');
+      const tipsText = fertilizerPlan.tips.map(t => `- ${t}`).join('\n');
+      const splitTips = doc.splitTextToSize(tipsText, 170);
+      doc.text(splitTips, 20, currentY);
     }
 
-    report += `\n--------------------------------------------------\n`;
-    report += `Disclaimer: AI recommendations should be verified \n`;
-    report += `with local agricultural officers before execution.\n`;
-    report += `--------------------------------------------------\n`;
+    // Footer on last page
+    const pageCount = (doc as any).internal.getNumberOfPages();
+    for (let i = 1; i <= pageCount; i++) {
+      doc.setPage(i);
+      doc.setFontSize(8);
+      doc.setTextColor(150, 150, 150);
+      doc.text(`Page ${i} of ${pageCount}`, 105, 285, { align: 'center' });
+      doc.text('Disclaimer: AI recommendations should be verified with local agricultural officers.', 105, 290, { align: 'center' });
+    }
 
-    const blob = new Blob([report], { type: 'text/plain' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `AgriAssist_Plan_${formData.crop.replace(/\s+/g, '_')}.txt`;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(url);
+    doc.save(`AgriAssist_Plan_${formData.crop.replace(/\s+/g, '_')}.pdf`);
   };
 
   return (
@@ -293,6 +399,24 @@ const CropAdvisor: React.FC<CropAdvisorProps> = ({ language: initialLanguage }) 
                   <Navigation className={`w-4 h-4 ${detecting ? 'animate-spin' : ''}`} />
                 </button>
               </div>
+              {weatherData && (
+                <div className="flex items-center gap-4 mt-3 px-4 py-2 bg-stone-50 rounded-2xl border border-stone-100 w-fit animate-in fade-in slide-in-from-left-4">
+                  <div className="flex items-center gap-2">
+                    <Sun className="w-4 h-4 text-amber-500" />
+                    <span className="text-[10px] font-black text-stone-600 uppercase tracking-widest">{weatherData.main.temp}°C</span>
+                  </div>
+                  <div className="w-px h-3 bg-stone-200" />
+                  <div className="flex items-center gap-2">
+                    <Droplets className="w-4 h-4 text-blue-500" />
+                    <span className="text-[10px] font-black text-stone-600 uppercase tracking-widest">{weatherData.main.humidity}%</span>
+                  </div>
+                  <div className="w-px h-3 bg-stone-200" />
+                  <div className="flex items-center gap-2">
+                    <Wind className="w-4 h-4 text-stone-400" />
+                    <span className="text-[10px] font-black text-stone-600 uppercase tracking-widest">{Math.round(weatherData.wind.speed * 3.6)} km/h</span>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
 

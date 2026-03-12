@@ -1,6 +1,8 @@
 
 import React from 'react';
 import { Transaction } from '../types';
+import { jsPDF } from 'jspdf';
+import 'jspdf-autotable';
 import { 
   Wallet, 
   Plus, 
@@ -14,7 +16,8 @@ import {
   X,
   CreditCard,
   PieChart,
-  DollarSign
+  DollarSign,
+  Download
 } from 'lucide-react';
 
 const FinanceLedger: React.FC = () => {
@@ -36,6 +39,45 @@ const FinanceLedger: React.FC = () => {
   React.useEffect(() => {
     localStorage.setItem('agri_finances', JSON.stringify(transactions));
   }, [transactions]);
+
+  const exportPDF = () => {
+    const doc = new jsPDF();
+    doc.setFontSize(20);
+    doc.text('Bharat Kisan - Finance Ledger Report', 14, 22);
+    doc.setFontSize(11);
+    doc.setTextColor(100);
+    doc.text(`Generated on: ${new Date().toLocaleString()}`, 14, 30);
+
+    const tableData = transactions.map(tx => [
+      tx.date,
+      tx.type,
+      tx.category,
+      tx.note || '-',
+      `INR ${tx.amount.toLocaleString()}`
+    ]);
+
+    (doc as any).autoTable({
+      startY: 40,
+      head: [['Date', 'Type', 'Category', 'Note', 'Amount']],
+      body: tableData,
+      theme: 'striped',
+      headStyles: { fillColor: [45, 90, 39] }
+    });
+
+    const totals = transactions.reduce((acc, tx) => {
+      if (tx.type === 'Income') acc.income += tx.amount;
+      else acc.expense += tx.amount;
+      return acc;
+    }, { income: 0, expense: 0 });
+
+    const finalY = (doc as any).lastAutoTable.finalY + 10;
+    doc.text(`Total Income: INR ${totals.income.toLocaleString()}`, 14, finalY);
+    doc.text(`Total Expense: INR ${totals.expense.toLocaleString()}`, 14, finalY + 7);
+    doc.setFontSize(14);
+    doc.text(`Net Balance: INR ${(totals.income - totals.expense).toLocaleString()}`, 14, finalY + 17);
+
+    doc.save(`BharatKisan_Finance_Report_${new Date().toISOString().split('T')[0]}.pdf`);
+  };
 
   const addTx = (e: React.FormEvent) => {
     e.preventDefault();
@@ -77,12 +119,21 @@ const FinanceLedger: React.FC = () => {
           </h2>
           <p className="text-[10px] text-stone-400 font-black uppercase tracking-widest mt-1">Cashflow & P&L Tracker</p>
         </div>
-        <button 
-          onClick={() => setShowAdd(true)}
-          className="bg-emerald-600 text-white p-3 rounded-2xl shadow-xl active:scale-90 transition-transform"
-        >
-          <Plus className="w-6 h-6" />
-        </button>
+        <div className="flex items-center gap-2">
+          <button 
+            onClick={exportPDF}
+            className="bg-stone-100 text-stone-600 p-3 rounded-2xl hover:bg-stone-200 transition-colors"
+            title="Export PDF"
+          >
+            <Download className="w-6 h-6" />
+          </button>
+          <button 
+            onClick={() => setShowAdd(true)}
+            className="bg-emerald-600 text-white p-3 rounded-2xl shadow-xl active:scale-90 transition-transform"
+          >
+            <Plus className="w-6 h-6" />
+          </button>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 gap-4 px-2">
