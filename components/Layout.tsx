@@ -9,8 +9,13 @@ import {
   ChevronLeft,
   Code,
   Settings as SettingsIcon,
-  LogOut
+  LogOut,
+  Shield
 } from 'lucide-react';
+import { useFirebase } from '../src/components/FirebaseProvider';
+import { triggerHaptic, triggerSelectionHaptic } from '../src/utils/haptics';
+import { StatusBar, Style } from '@capacitor/status-bar';
+import { Capacitor } from '@capacitor/core';
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -29,53 +34,94 @@ const Layout: React.FC<LayoutProps> = ({
   onBack,
   canGoBack 
 }) => {
+  const { profile } = useFirebase();
   const [drawerOpen, setDrawerOpen] = React.useState(false);
+  const tapCountRef = React.useRef(0);
+  const tapTimeoutRef = React.useRef<NodeJS.Timeout | null>(null);
+
+  const handleVersionTap = () => {
+    if (tapTimeoutRef.current) {
+      clearTimeout(tapTimeoutRef.current);
+    }
+
+    tapCountRef.current += 1;
+    
+    if (tapCountRef.current >= 5) {
+      triggerHaptic();
+      setView(AppView.ADMIN_PANEL);
+      setDrawerOpen(false);
+      tapCountRef.current = 0;
+    } else {
+      tapTimeoutRef.current = setTimeout(() => {
+        tapCountRef.current = 0;
+      }, 2000);
+    }
+  };
+
+  React.useEffect(() => {
+    if (Capacitor.isNativePlatform()) {
+      StatusBar.setStyle({ style: Style.Light });
+      StatusBar.setBackgroundColor({ color: '#fbfdf8' });
+    }
+  }, []);
 
   const getViewTitle = () => {
-    if (currentView === AppView.DASHBOARD) return 'Home';
+    if (currentView === AppView.DASHBOARD) return 'Bharat Kisan';
     if (currentView === AppView.TOOLS_HUB) return 'Tools';
     if (currentView === AppView.PROFILE) return 'Profile';
     if (currentView === AppView.SETTINGS) return 'Settings';
+    if (currentView === AppView.ADMIN_PANEL) return 'Admin Panel';
     return currentView.split('_').map(w => w.charAt(0) + w.slice(1).toLowerCase()).join(' ');
   };
 
+  const isMainView = [AppView.DASHBOARD, AppView.TOOLS_HUB, AppView.PROFILE, AppView.SETTINGS].includes(currentView);
+
+  const handleNavClick = (view: AppView) => {
+    triggerSelectionHaptic();
+    setView(view);
+  };
+
+  const handleBackClick = () => {
+    triggerHaptic();
+    if (onBack) onBack();
+  };
+
+  const handleMenuClick = () => {
+    triggerHaptic();
+    setDrawerOpen(true);
+  };
+
   return (
-    <div className="flex flex-col h-screen w-full bg-[#fdfcf8] relative overflow-hidden organic-grid mobile-container">
-      {/* Header */}
-      <header className="flex items-center justify-between px-6 py-4 sticky top-0 z-40 bg-white/80 backdrop-blur-md border-b border-stone-200 pt-safe">
-        <div className="flex items-center gap-4">
-          {canGoBack ? (
+    <div className="flex flex-col h-screen w-full bg-[var(--m3-background)] relative overflow-hidden mobile-container">
+      {/* Top App Bar */}
+      <header className="flex items-center justify-between px-4 py-3 sticky top-0 z-40 bg-[var(--m3-background)]/80 backdrop-blur-md pt-safe">
+        <div className="flex items-center gap-2">
+          {canGoBack && !isMainView ? (
             <button 
-              onClick={onBack}
-              className="w-10 h-10 bg-stone-100 rounded-2xl active:scale-95 transition-all flex items-center justify-center border border-stone-200 hover:border-emerald-600/50"
+              onClick={handleBackClick}
+              className="w-12 h-12 rounded-full active:bg-[var(--m3-surface-container-high)] transition-all flex items-center justify-center"
             >
-              <ChevronLeft className="w-5 h-5 text-emerald-800" />
+              <ChevronLeft className="w-6 h-6 text-[var(--m3-on-surface)]" />
             </button>
           ) : (
             <button 
-              onClick={() => setDrawerOpen(true)}
-              className="w-10 h-10 bg-stone-100 rounded-2xl active:scale-95 transition-all flex items-center justify-center border border-stone-200 hover:border-emerald-600/50"
+              onClick={handleMenuClick}
+              className="w-12 h-12 rounded-full active:bg-[var(--m3-surface-container-high)] transition-all flex items-center justify-center"
             >
-              <Menu className="w-5 h-5 text-emerald-800" />
+              <Menu className="w-6 h-6 text-[var(--m3-on-surface)]" />
             </button>
           )}
-          <div className="flex flex-col">
-            <h1 className="text-xl font-bold text-stone-900 leading-none font-serif tracking-tight">
-              {getViewTitle()}
-            </h1>
-            <div className="flex items-center gap-2 mt-1">
-              <div className="w-1.5 h-1.5 rounded-full bg-emerald-600" />
-              <span className="text-[10px] font-medium text-emerald-700/70 uppercase tracking-widest">Connected</span>
-            </div>
-          </div>
+          <h1 className="text-xl font-medium text-[var(--m3-on-surface)] m3-title-large">
+            {getViewTitle()}
+          </h1>
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-1">
           <button 
-            onClick={() => setView(AppView.PROFILE)}
-            className={`w-10 h-10 rounded-2xl flex items-center justify-center transition-all overflow-hidden border-2 ${currentView === AppView.PROFILE ? 'border-emerald-600 bg-emerald-50' : 'border-stone-200 bg-stone-100'}`}
+            onClick={() => handleNavClick(AppView.PROFILE)}
+            className="w-12 h-12 rounded-full flex items-center justify-center active:bg-[var(--m3-surface-container-high)] transition-all overflow-hidden"
           >
-            <User className={`w-5 h-5 ${currentView === AppView.PROFILE ? 'text-emerald-700' : 'text-stone-400'}`} />
+            <User className="w-6 h-6 text-[var(--m3-on-surface-variant)]" />
           </button>
         </div>
       </header>
@@ -85,10 +131,10 @@ const Layout: React.FC<LayoutProps> = ({
         <AnimatePresence mode="wait">
           <motion.div
             key={currentView}
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -10 }}
-            transition={{ duration: 0.4, ease: [0.23, 1, 0.32, 1] }}
+            initial={{ opacity: 0, scale: 0.98 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 1.02 }}
+            transition={{ duration: 0.3, ease: [0.2, 0, 0, 1] }}
             className="w-full h-full"
           >
              {children}
@@ -96,91 +142,86 @@ const Layout: React.FC<LayoutProps> = ({
         </AnimatePresence>
       </main>
 
-      {/* Bottom Navigation */}
-      <nav className="fixed bottom-0 left-0 right-0 bg-white/90 backdrop-blur-xl border-t border-stone-200 px-6 py-3 pb-safe z-50 flex items-center justify-between max-w-[480px] mx-auto">
+      {/* Bottom Navigation Bar (M3) */}
+      <nav className="fixed bottom-0 left-0 right-0 bg-[var(--m3-surface-container)] px-2 py-3 pb-safe z-50 flex items-center justify-around max-w-[480px] mx-auto">
         <NavButton 
           icon={Home} 
           label="Home" 
           active={currentView === AppView.DASHBOARD} 
-          onClick={() => setView(AppView.DASHBOARD)} 
+          onClick={() => handleNavClick(AppView.DASHBOARD)} 
         />
         <NavButton 
           icon={LayoutGrid} 
           label="Tools" 
           active={currentView === AppView.TOOLS_HUB} 
-          onClick={() => setView(AppView.TOOLS_HUB)} 
+          onClick={() => handleNavClick(AppView.TOOLS_HUB)} 
         />
         <NavButton 
           icon={User} 
           label="Profile" 
           active={currentView === AppView.PROFILE} 
-          onClick={() => setView(AppView.PROFILE)} 
+          onClick={() => handleNavClick(AppView.PROFILE)} 
         />
         <NavButton 
           icon={SettingsIcon} 
           label="Settings" 
           active={currentView === AppView.SETTINGS} 
-          onClick={() => setView(AppView.SETTINGS)} 
+          onClick={() => handleNavClick(AppView.SETTINGS)} 
         />
       </nav>
 
-      {/* Side Drawer */}
-      <div className={`fixed inset-0 z-[60] transition-all duration-500 max-w-[480px] mx-auto ${drawerOpen ? 'opacity-100 visible' : 'opacity-0 invisible pointer-events-none'}`}>
-        <div className="absolute inset-0 bg-stone-900/40 backdrop-blur-sm" onClick={() => setDrawerOpen(false)} />
+      {/* Navigation Drawer (M3) */}
+      <div className={`fixed inset-0 z-[60] transition-all duration-300 max-w-[480px] mx-auto ${drawerOpen ? 'opacity-100 visible' : 'opacity-0 invisible pointer-events-none'}`}>
+        <div className="absolute inset-0 bg-black/30" onClick={() => setDrawerOpen(false)} />
         <aside className={`
-          absolute top-0 left-0 bottom-0 w-[85%] max-w-[320px] bg-white shadow-2xl transition-transform duration-500 cubic-bezier(0.16, 1, 0.3, 1) flex flex-col overflow-hidden
+          absolute top-0 left-0 bottom-0 w-[85%] max-w-[360px] bg-[var(--m3-surface-container-low)] transition-transform duration-300 ease-[0.2,0,0,1] flex flex-col overflow-hidden rounded-r-3xl
           ${drawerOpen ? 'translate-x-0' : '-translate-x-full'}
         `}>
-          <div className="p-10 bg-emerald-50 border-b border-emerald-100 relative overflow-hidden shrink-0">
-            <div className="absolute -top-20 -right-20 w-64 h-64 bg-emerald-200/20 rounded-full blur-[80px]"></div>
-            <div className="w-20 h-20 bg-white rounded-[2rem] shadow-sm flex items-center justify-center mb-6 border border-emerald-100 relative z-10">
-              <User className="w-10 h-10 text-emerald-700" />
+          <div className="p-6 pt-12">
+            <div className="w-16 h-16 bg-[var(--m3-primary-container)] rounded-2xl flex items-center justify-center mb-6 overflow-hidden">
+              <img 
+                src="https://image2url.com/r2/default/images/1773645978799-968d61a0-3ceb-48da-814f-71deb5b97303.png" 
+                alt="Logo" 
+                className="w-full h-full object-cover"
+                referrerPolicy="no-referrer"
+              />
             </div>
-            <h2 className="text-2xl font-bold text-stone-900 leading-tight mb-1 font-serif relative z-10">
-              {localStorage.getItem('agri_farmer_name') || 'Farmer Profile'}
+            <h2 className="text-xl font-medium text-[var(--m3-on-surface)] mb-1">
+              {profile?.name || 'Farmer Profile'}
             </h2>
-            <div className="flex items-center gap-2 relative z-10">
-              <div className="w-2 h-2 rounded-full bg-emerald-600" />
-              <p className="text-xs text-emerald-800 font-medium">
-                {localStorage.getItem('agri_farm_name') || 'My Farm'}
-              </p>
-            </div>
+            <p className="text-sm text-[var(--m3-on-surface-variant)]">
+              {profile?.farmName || 'My Farm'}
+            </p>
           </div>
           
-          <div className="p-8 space-y-2 flex-1 overflow-y-auto no-scrollbar">
-            <div className="text-[10px] font-bold text-stone-400 uppercase tracking-[0.2em] mb-4 ml-4">Menu</div>
-            <DrawerItem icon={Home} label="Home" onClick={() => { setView(AppView.DASHBOARD); setDrawerOpen(false); }} active={currentView === AppView.DASHBOARD} />
-            <DrawerItem icon={LayoutGrid} label="Tools" onClick={() => { setView(AppView.TOOLS_HUB); setDrawerOpen(false); }} active={currentView === AppView.TOOLS_HUB} />
-            <DrawerItem icon={User} label="My Profile" onClick={() => { setView(AppView.PROFILE); setDrawerOpen(false); }} active={currentView === AppView.PROFILE} />
-            <DrawerItem icon={SettingsIcon} label="Settings" onClick={() => { setView(AppView.SETTINGS); setDrawerOpen(false); }} active={currentView === AppView.SETTINGS} />
+          <div className="px-3 py-4 space-y-1 flex-1 overflow-y-auto no-scrollbar">
+            <DrawerItem icon={Home} label="Home" onClick={() => { handleNavClick(AppView.DASHBOARD); setDrawerOpen(false); }} active={currentView === AppView.DASHBOARD} />
+            <DrawerItem icon={LayoutGrid} label="Tools" onClick={() => { handleNavClick(AppView.TOOLS_HUB); setDrawerOpen(false); }} active={currentView === AppView.TOOLS_HUB} />
+            <DrawerItem icon={User} label="My Profile" onClick={() => { handleNavClick(AppView.PROFILE); setDrawerOpen(false); }} active={currentView === AppView.PROFILE} />
+            <DrawerItem icon={SettingsIcon} label="Settings" onClick={() => { handleNavClick(AppView.SETTINGS); setDrawerOpen(false); }} active={currentView === AppView.SETTINGS} />
             
-            <div className="my-8 h-px bg-stone-100 mx-4" />
+            {profile?.role === 'admin' && (
+              <DrawerItem icon={Shield} label="Admin Panel" onClick={() => { handleNavClick(AppView.ADMIN_PANEL); setDrawerOpen(false); }} active={currentView === AppView.ADMIN_PANEL} />
+            )}
+            
+            <div className="my-4 h-px bg-[var(--m3-outline-variant)] mx-4" />
             
             <button 
-              onClick={() => { onLogout(); setDrawerOpen(false); }}
-              className="w-full flex items-center gap-4 px-6 py-4 text-stone-500 font-medium text-sm rounded-2xl hover:bg-rose-50 hover:text-rose-600 transition-all group"
+              onClick={() => { triggerHaptic(); onLogout(); setDrawerOpen(false); }}
+              className="w-full flex items-center gap-3 px-4 py-3 text-[var(--m3-on-surface-variant)] font-medium text-sm rounded-full hover:bg-[var(--m3-surface-container-high)] transition-all"
             >
-              <LogOut className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
+              <LogOut className="w-6 h-6" />
               <span>Logout</span>
             </button>
           </div>
 
-          <div className="p-8 bg-stone-50 border-t border-stone-100 shrink-0">
-            <div className="flex items-center gap-4">
-              <div className="p-3 bg-white rounded-xl border border-stone-200 shadow-sm">
-                <Code className="w-4 h-4 text-emerald-700" />
-              </div>
-              <div>
-                <p className="text-[8px] font-bold text-stone-400 uppercase tracking-[0.2em]">Application</p>
-                <p className="text-[10px] font-bold text-stone-600 font-mono">BHARAT-KISAN v2.5</p>
-              </div>
-            </div>
-            <div className="mt-6 pt-4 border-t border-stone-200/50">
-              <p className="text-[7px] font-bold text-stone-400 uppercase tracking-[0.2em] text-center leading-relaxed">
-                App Designed and Developed by<br/>
-                <span className="text-emerald-700/60">Nexus Creative Studio</span>
-              </p>
-            </div>
+          <div className="p-6 text-center">
+            <p 
+              onClick={handleVersionTap}
+              className="text-[10px] font-medium text-[var(--m3-on-surface-variant)] uppercase tracking-widest opacity-60 cursor-pointer select-none"
+            >
+              Bharat Kisan v2.5
+            </p>
           </div>
         </aside>
       </div>
@@ -190,36 +231,29 @@ const Layout: React.FC<LayoutProps> = ({
 
 const DrawerItem: React.FC<{ icon: any, label: string, onClick: () => void, active: boolean }> = ({ icon: Icon, label, onClick, active }) => (
   <button
-    onClick={onClick}
-    className={`w-full flex items-center gap-4 px-6 py-4 rounded-2xl transition-all group ${active ? 'bg-emerald-600 text-white shadow-md shadow-emerald-200' : 'text-stone-600 hover:bg-emerald-50 hover:text-emerald-700'}`}
+    onClick={() => { triggerHaptic(); onClick(); }}
+    className={`w-full flex items-center gap-3 px-4 py-3 rounded-full transition-all ${active ? 'bg-[var(--m3-secondary-container)] text-[var(--m3-on-secondary-container)]' : 'text-[var(--m3-on-surface-variant)] hover:bg-[var(--m3-surface-container-high)]'}`}
   >
-    <Icon className={`w-5 h-5 ${active ? 'text-white' : 'text-stone-400 group-hover:text-emerald-600'}`} />
-    <span className="font-bold text-sm">{label}</span>
+    <Icon className="w-6 h-6" />
+    <span className="font-medium text-sm">{label}</span>
   </button>
 );
 
 const NavButton: React.FC<{ icon: any, label: string, active: boolean, onClick: () => void }> = ({ icon: Icon, label, active, onClick }) => (
-  <motion.button 
-    whileTap={{ scale: 0.9 }}
-    onClick={onClick}
-    className="flex flex-col items-center gap-1 relative group py-1 px-3 outline-none"
+  <button 
+    onClick={() => { triggerHaptic(); onClick(); }}
+    className="flex flex-col items-center gap-1 min-w-[64px] group"
   >
     <div className={`
-      p-2 rounded-xl transition-all duration-300
-      ${active ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-200 -translate-y-1' : 'text-stone-400 group-hover:text-emerald-600'}
+      relative px-5 py-1 rounded-full transition-all duration-200 flex items-center justify-center
+      ${active ? 'bg-[var(--m3-secondary-container)] text-[var(--m3-on-secondary-container)]' : 'text-[var(--m3-on-surface-variant)] hover:bg-[var(--m3-surface-container-high)]'}
     `}>
-      <Icon className="w-5 h-5" />
+      <Icon className="w-6 h-6" />
     </div>
-    <span className={`text-[9px] font-bold uppercase tracking-widest transition-colors ${active ? 'text-emerald-700' : 'text-stone-400'}`}>
+    <span className={`text-[11px] font-medium transition-colors ${active ? 'text-[var(--m3-on-surface)]' : 'text-[var(--m3-on-surface-variant)]'}`}>
       {label}
     </span>
-    {active && (
-      <motion.div 
-        layoutId="nav-indicator"
-        className="absolute -bottom-1 w-1 h-1 bg-emerald-600 rounded-full"
-      />
-    )}
-  </motion.button>
+  </button>
 );
 
 export default Layout;

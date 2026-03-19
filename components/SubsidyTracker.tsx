@@ -17,7 +17,7 @@ import {
 } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 
-const WEATHER_API_KEY = "42d5aa17c7f2866670e62b4c77cb3d32";
+const WEATHER_API_KEY = import.meta.env.VITE_WEATHER_API_KEY;
 
 // Fixed error: Added SubsidyTrackerProps and used language from props
 interface SubsidyTrackerProps {

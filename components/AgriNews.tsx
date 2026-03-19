@@ -3,7 +3,7 @@ import { fetchAgriNews } from '../services/geminiService';
 import { Newspaper, MapPin, Search, Loader2, ExternalLink, AlertCircle, Sunrise, Navigation, Radio, Wifi, Globe, Languages as LangIcon, CheckCircle2, Star, Thermometer, Droplets, CloudSun, Wind } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 
-const WEATHER_API_KEY = "42d5aa17c7f2866670e62b4c77cb3d32";
+const WEATHER_API_KEY = import.meta.env.VITE_WEATHER_API_KEY;
 
 const LANGUAGES = [
   { name: "English", label: "English" },

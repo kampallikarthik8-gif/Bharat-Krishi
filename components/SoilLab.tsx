@@ -102,11 +102,14 @@ const SoilLab: React.FC<SoilLabProps> = ({ language }) => {
   const canvasRef = React.useRef<HTMLCanvasElement>(null);
   const streamRef = React.useRef<MediaStream | null>(null);
 
-  React.useEffect(() => {
-    if (showCamera && videoRef.current && streamRef.current) {
-      videoRef.current.srcObject = streamRef.current;
+  // Use a callback ref to handle video element mounting
+  const setVideoRef = React.useCallback((node: HTMLVideoElement | null) => {
+    if (node && streamRef.current) {
+      node.srcObject = streamRef.current;
     }
-  }, [showCamera]);
+    // @ts-ignore
+    videoRef.current = node;
+  }, []);
 
   const startCamera = async () => {
     try {
@@ -139,6 +142,15 @@ const SoilLab: React.FC<SoilLabProps> = ({ language }) => {
     if (videoRef.current && canvasRef.current) {
       const video = videoRef.current;
       const canvas = canvasRef.current;
+      
+      // Ensure video is ready
+      if (video.videoWidth === 0 || video.videoHeight === 0) {
+        console.warn("Video not ready for capture");
+        // Try again in 100ms
+        setTimeout(capturePhoto, 100);
+        return;
+      }
+
       canvas.width = video.videoWidth;
       canvas.height = video.videoHeight;
       const ctx = canvas.getContext('2d');
@@ -415,7 +427,7 @@ const SoilLab: React.FC<SoilLabProps> = ({ language }) => {
             <div className="absolute bottom-0 left-0 w-16 h-16 border-b-4 border-l-4 border-orange-500 rounded-bl-[3rem]"></div>
             <div className="absolute bottom-0 right-0 w-16 h-16 border-b-4 border-r-4 border-orange-500 rounded-br-[3rem]"></div>
             
-            <video ref={videoRef} autoPlay playsInline muted className="w-full h-full object-cover rounded-[2.5rem]" />
+            <video ref={setVideoRef} autoPlay playsInline muted className="w-full h-full object-cover rounded-[2.5rem]" />
             
             {/* Scanning Line Animation */}
             <div className="absolute left-8 right-8 h-1 bg-orange-500/50 shadow-[0_0_15px_rgba(249,115,22,0.5)] animate-[scan_3s_ease-in-out_infinite] z-10"></div>

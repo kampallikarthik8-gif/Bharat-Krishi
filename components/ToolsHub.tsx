@@ -39,8 +39,12 @@ import {
   Settings as SettingsIcon,
   HelpCircle,
   Map as MapIcon,
+  Leaf,
   ArrowRightLeft
 } from 'lucide-react';
+
+import { triggerSelectionHaptic } from '../src/utils/haptics';
+import { useFirebase } from '../src/components/FirebaseProvider';
 
 interface ToolsHubProps {
   setView: (view: AppView) => void;
@@ -48,6 +52,11 @@ interface ToolsHubProps {
 
 const ToolsHub: React.FC<ToolsHubProps> = ({ setView }) => {
   const [searchQuery, setSearchQuery] = React.useState('');
+
+  const handleSetView = (view: AppView) => {
+    triggerSelectionHaptic();
+    setView(view);
+  };
 
   return (
     <div className="w-full flex flex-col pb-40 bg-transparent min-h-screen">
@@ -94,17 +103,10 @@ const ToolsHub: React.FC<ToolsHubProps> = ({ setView }) => {
           </div>
           
           <div className="grid grid-cols-1 gap-6">
-            <FeaturedTool 
-              icon={<Maximize />} 
-              title="Acreage Mapping" 
-              desc="High-precision GPS boundary mapping and geospatial land analysis."
-              onClick={() => setView(AppView.LAND_MARKER)}
-              color="bg-stone-900"
-              accent="text-emerald-400"
-            />
-            <div className="grid grid-cols-2 gap-6">
-              <ToolCard icon={<Camera />} label="Disease Scan" onClick={() => setView(AppView.DISEASE_SCANNER)} theme="emerald" />
-              <ToolCard icon={<MapIcon />} label="Field Registry" onClick={() => setView(AppView.FIELD_MAP)} theme="blue" />
+            <div className="grid grid-cols-3 gap-6">
+              <ToolCard icon={<Camera />} label="Disease Scan" onClick={() => handleSetView(AppView.DISEASE_SCANNER)} theme="emerald" />
+              <ToolCard icon={<Activity />} label="Crop Health" onClick={() => handleSetView(AppView.CROP_HEALTH_MONITOR)} theme="orange" />
+              <ToolCard icon={<MapIcon />} label="Field Registry" onClick={() => handleSetView(AppView.FIELD_MAP)} theme="blue" />
             </div>
           </div>
         </section>
@@ -124,13 +126,13 @@ const ToolsHub: React.FC<ToolsHubProps> = ({ setView }) => {
               icon={<Wallet />} 
               title="Finance Ledger" 
               desc="Real-time P&L monitoring, automated expense tracking, and fiscal audits."
-              onClick={() => setView(AppView.FINANCE_LEDGER)}
+              onClick={() => handleSetView(AppView.FINANCE_LEDGER)}
               color="bg-emerald-50"
               accent="text-emerald-800"
             />
             <div className="grid grid-cols-2 gap-6">
-              <ToolCard icon={<TrendingUp />} label="Mandi Prices" onClick={() => setView(AppView.MARKET_PRICES)} theme="emerald" />
-              <ToolCard icon={<ShoppingCart />} label="Input Advisor" onClick={() => setView(AppView.INPUT_ADVISOR)} theme="blue" />
+              <ToolCard icon={<TrendingUp />} label="Mandi Prices" onClick={() => handleSetView(AppView.MARKET_PRICES)} theme="emerald" />
+              <ToolCard icon={<ShoppingCart />} label="Input Advisor" onClick={() => handleSetView(AppView.INPUT_ADVISOR)} theme="blue" />
             </div>
           </div>
         </section>
@@ -146,15 +148,15 @@ const ToolsHub: React.FC<ToolsHubProps> = ({ setView }) => {
           </div>
           
           <div className="grid grid-cols-3 gap-4">
-            <ToolCard icon={<Lightbulb />} label="Advisor" onClick={() => setView(AppView.CROP_ADVISOR)} theme="emerald" compact />
-            <ToolCard icon={<ArrowRightLeft />} label="Rotation" onClick={() => setView(AppView.CROP_ROTATION_ADVISOR)} theme="blue" compact />
-            <ToolCard icon={<Beaker />} label="Spraying" onClick={() => setView(AppView.SPRAYING_ADVISOR)} theme="blue" compact />
-            <ToolCard icon={<Droplets />} label="Irrigation" onClick={() => setView(AppView.IRRIGATION_HUB)} theme="emerald" compact />
-            <ToolCard icon={<Calendar />} label="Harvest" onClick={() => setView(AppView.HARVEST_SCHEDULER)} theme="blue" compact />
-            <ToolCard icon={<Calculator />} label="Yield" onClick={() => setView(AppView.YIELD_PREDICTOR)} theme="emerald" compact />
-            <ToolCard icon={<CloudSun />} label="Weather" onClick={() => setView(AppView.WEATHER_HUB)} theme="blue" compact />
-            <ToolCard icon={<Microscope />} label="Soil Lab" onClick={() => setView(AppView.SOIL_LAB)} theme="emerald" compact />
-            <ToolCard icon={<Bug />} label="Pest ID" onClick={() => setView(AppView.PEST_LIBRARY)} theme="blue" compact />
+            <ToolCard icon={<Lightbulb />} label="Advisor" onClick={() => handleSetView(AppView.CROP_ADVISOR)} theme="emerald" compact />
+            <ToolCard icon={<ArrowRightLeft />} label="Rotation" onClick={() => handleSetView(AppView.CROP_ROTATION_ADVISOR)} theme="blue" compact />
+            <ToolCard icon={<Beaker />} label="Spraying" onClick={() => handleSetView(AppView.SPRAYING_ADVISOR)} theme="blue" compact />
+            <ToolCard icon={<Droplets />} label="Irrigation" onClick={() => handleSetView(AppView.IRRIGATION_HUB)} theme="emerald" compact />
+            <ToolCard icon={<Calendar />} label="Harvest" onClick={() => handleSetView(AppView.HARVEST_SCHEDULER)} theme="blue" compact />
+            <ToolCard icon={<Calculator />} label="Yield" onClick={() => handleSetView(AppView.YIELD_PREDICTOR)} theme="emerald" compact />
+            <ToolCard icon={<CloudSun />} label="Weather" onClick={() => handleSetView(AppView.WEATHER_HUB)} theme="blue" compact />
+            <ToolCard icon={<Microscope />} label="Soil Lab" onClick={() => handleSetView(AppView.SOIL_LAB)} theme="emerald" compact />
+            <ToolCard icon={<Bug />} label="Pest ID" onClick={() => handleSetView(AppView.PEST_LIBRARY)} theme="blue" compact />
           </div>
         </section>
 
@@ -163,17 +165,42 @@ const ToolsHub: React.FC<ToolsHubProps> = ({ setView }) => {
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-4">
               <div className="w-1.5 h-5 bg-emerald-600 rounded-full" />
-              <h3 className="text-[10px] font-bold text-stone-400 uppercase tracking-[0.3em]">Learning & News</h3>
+              <h3 className="text-[10px] font-bold text-stone-400 uppercase tracking-[0.3em]">Learning & Sustainability</h3>
             </div>
             <div className="h-px flex-1 bg-stone-100 ml-6" />
           </div>
           <div className="grid grid-cols-1 gap-4">
-            <SecondaryTool icon={<BookOpen />} label="Agri Academy" onClick={() => setView(AppView.AGRI_ACADEMY)} />
-            <SecondaryTool icon={<Newspaper />} label="Agri News" onClick={() => setView(AppView.AGRI_NEWS)} />
-            <SecondaryTool icon={<Beef />} label="Livestock Assistant" onClick={() => setView(AppView.LIVESTOCK_ASSISTANT)} />
-            <SecondaryTool icon={<ShieldCheck />} label="Sustainability Hub" onClick={() => setView(AppView.SUSTAINABILITY_HUB)} />
+            <SecondaryTool icon={<Leaf />} label="Carbon Credit Tracker" onClick={() => handleSetView(AppView.CARBON_CREDIT_TRACKER)} />
+            <SecondaryTool icon={<Truck />} label="Equipment Rental" onClick={() => handleSetView(AppView.EQUIPMENT_RENTAL)} />
+            <SecondaryTool icon={<BookOpen />} label="Agri Academy" onClick={() => handleSetView(AppView.AGRI_ACADEMY)} />
+            <SecondaryTool icon={<Newspaper />} label="Agri News" onClick={() => handleSetView(AppView.AGRI_NEWS)} />
+            <SecondaryTool icon={<Beef />} label="Livestock Assistant" onClick={() => handleSetView(AppView.LIVESTOCK_ASSISTANT)} />
+            <SecondaryTool icon={<ShieldCheck />} label="Sustainability Hub" onClick={() => handleSetView(AppView.SUSTAINABILITY_HUB)} />
           </div>
         </section>
+
+        {/* Admin Tools (Hidden for non-admins) */}
+        {useFirebase().profile?.role === 'admin' && (
+          <section className="space-y-8">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-4">
+                <div className="w-1.5 h-5 bg-rose-600 rounded-full" />
+                <h3 className="text-[10px] font-bold text-stone-400 uppercase tracking-[0.3em]">System Administration</h3>
+              </div>
+              <div className="h-px flex-1 bg-stone-100 ml-6" />
+            </div>
+            <div className="grid grid-cols-1 gap-4">
+              <FeaturedTool 
+                icon={<ShieldCheck />} 
+                title="Admin Control" 
+                desc="System metrics, node logs, and global broadcast protocols."
+                onClick={() => handleSetView(AppView.ADMIN_PANEL)}
+                color="bg-stone-900"
+                accent="text-rose-500"
+              />
+            </div>
+          </section>
+        )}
       </div>
 
       {/* Footer */}

@@ -17,6 +17,10 @@ import {
   Loader2
 } from 'lucide-react';
 import { suggestTasks } from '../services/geminiService';
+import { db, auth } from '../src/firebase';
+import { collection, query, onSnapshot, addDoc, updateDoc, deleteDoc, doc, orderBy } from 'firebase/firestore';
+import { handleFirestoreError, OperationType } from '../src/utils/firestoreErrorHandler';
+import { useFirebase } from '../src/components/FirebaseProvider';
 
 const CATEGORIES = ['General', 'Irrigation', 'Pest Control', 'Fertilizing', 'Harvesting', 'Repairs', 'Livestock'];
 
@@ -25,10 +29,9 @@ interface TaskManagerProps {
 }
 
 const TaskManager: React.FC<TaskManagerProps> = ({ language }) => {
-  const [tasks, setTasks] = React.useState<Task[]>(() => {
-    const saved = localStorage.getItem('agri_tasks');
-    return saved ? JSON.parse(saved) : [];
-  });
+  const { activeFarmId } = useFirebase();
+  const [tasks, setTasks] = React.useState<Task[]>([]);
+  const [loading, setLoading] = React.useState(true);
   
   const [showAdd, setShowAdd] = React.useState(false);
   const [suggesting, setSuggesting] = React.useState(false);
@@ -41,16 +44,34 @@ const TaskManager: React.FC<TaskManagerProps> = ({ language }) => {
   });
 
   React.useEffect(() => {
-    localStorage.setItem('agri_tasks', JSON.stringify(tasks));
-  }, [tasks]);
+    if (!activeFarmId) return;
 
-  const addTask = (e?: React.FormEvent, customTask?: Partial<Task>) => {
+    const path = `users/${activeFarmId}/tasks`;
+    const q = query(collection(db, path), orderBy('createdAt', 'desc'));
+    
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const taskList: Task[] = [];
+      snapshot.forEach((doc) => {
+        taskList.push({ id: doc.id, ...doc.data() } as Task);
+      });
+      setTasks(taskList);
+      setLoading(false);
+    }, (error) => {
+      handleFirestoreError(error, OperationType.LIST, path);
+    });
+
+    return () => unsubscribe();
+  }, []);
+
+  const addTask = async (e?: React.FormEvent, customTask?: Partial<Task>) => {
     if (e) e.preventDefault();
+    if (!activeFarmId) return;
+
     const taskToUse = customTask || newTask;
     if (!taskToUse.title) return;
     
-    const task: Task = {
-      id: Date.now().toString() + Math.random().toString(36).substr(2, 5),
+    const path = `users/${activeFarmId}/tasks`;
+    const taskData = {
       title: taskToUse.title,
       description: taskToUse.description || '',
       priority: taskToUse.priority as Task['priority'],
@@ -59,10 +80,14 @@ const TaskManager: React.FC<TaskManagerProps> = ({ language }) => {
       createdAt: new Date().toISOString()
     };
     
-    setTasks([task, ...tasks]);
-    if (!customTask) {
-      setShowAdd(false);
-      setNewTask({ priority: 'Medium', category: 'General', status: 'Pending' });
+    try {
+      await addDoc(collection(db, path), taskData);
+      if (!customTask) {
+        setShowAdd(false);
+        setNewTask({ priority: 'Medium', category: 'General', status: 'Pending' });
+      }
+    } catch (error) {
+      handleFirestoreError(error, OperationType.CREATE, path);
     }
   };
 
@@ -70,7 +95,7 @@ const TaskManager: React.FC<TaskManagerProps> = ({ language }) => {
     setSuggesting(true);
     setSuggestions(null);
     try {
-      const weatherText = "Sunny, 24C, 60% Humidity"; // Placeholder or from context
+      const weatherText = "Sunny, 24C, 60% Humidity"; // Placeholder
       const crops = JSON.parse(localStorage.getItem('agri_main_crops') || '["Corn", "Wheat"]');
       const date = new Date().toLocaleDateString();
       
@@ -83,20 +108,40 @@ const TaskManager: React.FC<TaskManagerProps> = ({ language }) => {
     }
   };
 
-  const toggleTask = (id: string) => {
-    setTasks(tasks.map(t => 
-      t.id === id ? { ...t, status: t.status === 'Pending' ? 'Completed' : 'Pending' } : t
-    ));
+  const toggleTask = async (id: string, currentStatus: string) => {
+    if (!activeFarmId) return;
+    const path = `users/${activeFarmId}/tasks/${id}`;
+    try {
+      await updateDoc(doc(db, path), {
+        status: currentStatus === 'Pending' ? 'Completed' : 'Pending'
+      });
+    } catch (error) {
+      handleFirestoreError(error, OperationType.UPDATE, path);
+    }
   };
 
-  const deleteTask = (id: string) => {
-    setTasks(tasks.filter(t => t.id !== id));
+  const deleteTask = async (id: string) => {
+    if (!activeFarmId) return;
+    const path = `users/${activeFarmId}/tasks/${id}`;
+    try {
+      await deleteDoc(doc(db, path));
+    } catch (error) {
+      handleFirestoreError(error, OperationType.DELETE, path);
+    }
   };
 
   const filteredTasks = tasks.filter(t => {
     if (filter === 'All') return true;
     return t.status === filter;
   });
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-20">
+        <Loader2 className="w-8 h-8 animate-spin text-emerald-600" />
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6 pb-12 animate-in fade-in slide-in-from-bottom-6">
@@ -186,7 +231,7 @@ const TaskManager: React.FC<TaskManagerProps> = ({ language }) => {
               }`}
             >
               <button 
-                onClick={() => toggleTask(task.id)}
+                onClick={() => toggleTask(task.id, task.status)}
                 className={`w-10 h-10 rounded-2xl flex items-center justify-center shrink-0 border-2 transition-all ${
                   task.status === 'Completed' 
                     ? 'bg-emerald-500 border-emerald-500 text-white' 

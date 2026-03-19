@@ -17,19 +17,20 @@ import {
   Zap,
   Sprout,
   X,
-  Search
+  Search,
+  Loader2
 } from 'lucide-react';
+import { db, auth } from '../src/firebase';
+import { collection, addDoc, deleteDoc, doc, onSnapshot, query, orderBy } from 'firebase/firestore';
+import { handleFirestoreError, OperationType } from '../src/utils/firestoreErrorHandler';
+import { useFirebase } from '../src/components/FirebaseProvider';
 
 const CATEGORIES = ['Seeds', 'Fertilizer', 'Pesticide', 'Tools', 'Fuel', 'Other'];
 
 const InventoryHub: React.FC = () => {
-  const [items, setItems] = React.useState<InventoryItem[]>(() => {
-    const saved = localStorage.getItem('agri_inventory');
-    return saved ? JSON.parse(saved) : [
-      { id: '1', name: 'Urea Fertilizer', category: 'Fertilizer', quantity: 50, unit: 'kg', minThreshold: 100 },
-      { id: '2', name: 'Paddy Seeds (Basmati)', category: 'Seeds', quantity: 200, unit: 'kg', minThreshold: 50 }
-    ];
-  });
+  const { activeFarmId } = useFirebase();
+  const [items, setItems] = React.useState<InventoryItem[]>([]);
+  const [loading, setLoading] = React.useState(true);
   
   const [showAdd, setShowAdd] = React.useState(false);
   const [newItem, setNewItem] = React.useState<Partial<InventoryItem>>({
@@ -39,33 +40,68 @@ const InventoryHub: React.FC = () => {
   });
 
   React.useEffect(() => {
-    localStorage.setItem('agri_inventory', JSON.stringify(items));
-  }, [items]);
+    if (!activeFarmId) return;
 
-  const addItem = (e: React.FormEvent) => {
+    const path = `users/${activeFarmId}/inventory`;
+    const q = query(collection(db, path), orderBy('name', 'asc'));
+
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const inventoryData: InventoryItem[] = [];
+      snapshot.forEach((doc) => {
+        inventoryData.push({ id: doc.id, ...doc.data() } as InventoryItem);
+      });
+      setItems(inventoryData);
+      setLoading(false);
+    }, (error) => {
+      handleFirestoreError(error, OperationType.LIST, path);
+      setLoading(false);
+    });
+
+    return () => unsubscribe();
+  }, []);
+
+  const addItem = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newItem.name || newItem.quantity === undefined) return;
+    if (!newItem.name || newItem.quantity === undefined || !activeFarmId) return;
     
-    const item: InventoryItem = {
-      id: Date.now().toString(),
+    const path = `users/${activeFarmId}/inventory`;
+    const itemData = {
       name: newItem.name,
       category: newItem.category as any,
       quantity: newItem.quantity,
       unit: newItem.unit || 'kg',
       minThreshold: newItem.minThreshold || 0,
-      expiryDate: newItem.expiryDate
+      expiryDate: newItem.expiryDate || null
     };
     
-    setItems([...items, item]);
-    setShowAdd(false);
-    setNewItem({ category: 'Seeds', quantity: 0, minThreshold: 10 });
+    try {
+      await addDoc(collection(db, path), itemData);
+      setShowAdd(false);
+      setNewItem({ category: 'Seeds', quantity: 0, minThreshold: 10 });
+    } catch (error) {
+      handleFirestoreError(error, OperationType.CREATE, path);
+    }
   };
 
-  const deleteItem = (id: string) => {
-    setItems(items.filter(i => i.id !== id));
+  const deleteItem = async (id: string) => {
+    if (!activeFarmId) return;
+    const path = `users/${activeFarmId}/inventory/${id}`;
+    try {
+      await deleteDoc(doc(db, path));
+    } catch (error) {
+      handleFirestoreError(error, OperationType.DELETE, path);
+    }
   };
 
   const lowStockItems = items.filter(i => i.quantity <= i.minThreshold);
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-stone-50 flex items-center justify-center">
+        <Loader2 className="w-12 h-12 animate-spin text-blue-500" />
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6 pb-12 animate-in fade-in slide-in-from-bottom-6 duration-700">

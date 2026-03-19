@@ -37,11 +37,14 @@ const LivestockAssistant = ({ language }: LivestockAssistantProps) => {
   const canvasRef = React.useRef<HTMLCanvasElement>(null);
   const streamRef = React.useRef<MediaStream | null>(null);
 
-  React.useEffect(() => {
-    if (showCamera && videoRef.current && streamRef.current) {
-      videoRef.current.srcObject = streamRef.current;
+  // Use a callback ref to handle video element mounting
+  const setVideoRef = React.useCallback((node: HTMLVideoElement | null) => {
+    if (node && streamRef.current) {
+      node.srcObject = streamRef.current;
     }
-  }, [showCamera]);
+    // @ts-ignore
+    videoRef.current = node;
+  }, []);
 
   const startCamera = async () => {
     try {
@@ -76,6 +79,15 @@ const LivestockAssistant = ({ language }: LivestockAssistantProps) => {
     if (videoRef.current && canvasRef.current) {
       const video = videoRef.current;
       const canvas = canvasRef.current;
+      
+      // Ensure video is ready
+      if (video.videoWidth === 0 || video.videoHeight === 0) {
+        console.warn("Video not ready for capture");
+        // Try again in 100ms
+        setTimeout(capturePhoto, 100);
+        return;
+      }
+
       canvas.width = video.videoWidth;
       canvas.height = video.videoHeight;
       const ctx = canvas.getContext('2d');
@@ -246,7 +258,7 @@ const LivestockAssistant = ({ language }: LivestockAssistantProps) => {
           </div>
 
           <video 
-            ref={videoRef} 
+            ref={setVideoRef} 
             autoPlay 
             playsInline 
             muted

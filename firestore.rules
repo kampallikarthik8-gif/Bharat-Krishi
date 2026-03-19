@@ -1,0 +1,213 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // ===============================================================
+    // Assumed Data Model
+    // ===============================================================
+    //
+    // Collection: users
+    // Document ID: userId (Firebase Auth UID)
+    // Fields:
+    //   - name: string (required)
+    //   - farmName: string (required)
+    //   - phone: string (optional)
+    //   - language: string (optional)
+    //   - state: string (optional)
+    //   - district: string (optional)
+    //   - mandal: string (optional)
+    //   - revenueVillage: string (optional)
+    //   - soilType: string (optional)
+    //   - units: string (optional)
+    //   - location: string (optional)
+    //   - notifications: bool (optional)
+    //   - weatherAlerts: bool (optional)
+    //   - autoNightMode: bool (optional)
+    //   - aiVoice: string (optional)
+    //   - precisionMode: string (optional)
+    //   - scannerHD: bool (optional)
+    //   - kccId: string (optional)
+    //   - pmKisanId: string (optional)
+    //   - onboardingComplete: bool (required)
+    //   - role: string (required, ['admin', 'farmer'])
+    //   - createdAt: string (optional, ISO 8601)
+    //
+    // Collection: /users/{userId}/fields/{fieldId}
+    // Fields:
+    //   - name: string (required)
+    //   - points: list (required)
+    //   - area: number (required)
+    //   - status: string (required, ['Active', 'Fallow', 'Harvested', 'Prepping'])
+    //
+    // [Other collections follow similar patterns of ownership]
+    //
+    // ===============================================================
+
+    // ===============================================================
+    // Helper Functions
+    // ===============================================================
+    
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    function isAdmin() {
+      return isAuthenticated() &&
+        (
+          (request.auth.token.email == "kampallikarthik8@gmail.com") ||
+          (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
+           get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin')
+        );
+    }
+
+    function getMemberRole(farmerId) {
+      return get(/databases/$(database)/documents/users/$(farmerId)/team/$(request.auth.uid)).data.role;
+    }
+
+    function isManager(farmerId) {
+      return isAuthenticated() && exists(/databases/$(database)/documents/users/$(farmerId)/team/$(request.auth.uid)) && getMemberRole(farmerId) == 'Manager';
+    }
+
+    function isWorker(farmerId) {
+      return isAuthenticated() && exists(/databases/$(database)/documents/users/$(farmerId)/team/$(request.auth.uid)) && getMemberRole(farmerId) == 'Worker';
+    }
+
+    function isTeamMember(farmerId) {
+      return isAuthenticated() && exists(/databases/$(database)/documents/users/$(farmerId)/team/$(request.auth.uid));
+    }
+
+    function hasOnlyAllowedFields(fields) {
+      return request.resource.data.keys().hasOnly(fields);
+    }
+
+    function isValidEmail(email) {
+      return email is string && email.matches("^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$");
+    }
+
+    // ===============================================================
+    // Domain Validators
+    // ===============================================================
+
+    function isValidUser(data) {
+      let allowedFields = [
+        'name', 'farmName', 'phone', 'email', 'language', 'state', 'district', 
+        'mandal', 'revenueVillage', 'farmSize', 'soilType', 'units', 'location', 
+        'notifications', 'weatherAlerts', 'autoNightMode', 'aiVoice', 'precisionMode', 
+        'scannerHD', 'kccId', 'pmKisanId', 'onboardingComplete', 'role', 'createdAt', 
+        'mainCrops', 'cropHistory', 'pastIssues', 'irrigation', 'terrain', 'sizeUnit', 'farmSizeUnit',
+        'updatedAt', 'lastLogin', 'uid', 'photoURL', 'displayName'
+      ];
+      return hasOnlyAllowedFields(allowedFields) &&
+             (!('name' in data) || (data.name is string && data.name.size() < 100)) &&
+             (!('farmName' in data) || (data.farmName is string && data.farmName.size() < 100)) &&
+             (!('email' in data) || (data.email == null || data.email == "" || isValidEmail(data.email))) &&
+             (!('farmSize' in data) || (data.farmSize == null || data.farmSize is number)) &&
+             (!('onboardingComplete' in data) || (data.onboardingComplete is bool)) &&
+             (!('role' in data) || (data.role in ['admin', 'farmer'])) &&
+             (!('mainCrops' in data) || (data.mainCrops is list)) &&
+             (!('cropHistory' in data) || (data.cropHistory is list)) &&
+             (!('pastIssues' in data) || (data.pastIssues is list));
+    }
+
+    function isValidField(data) {
+      return hasOnlyAllowedFields(['name', 'cropType', 'season', 'points', 'area', 'perimeter', 'color', 'status', 'notes', 'markers', 'zones', 'createdAt']) &&
+             data.name is string && data.name.size() > 0 && data.name.size() < 100 &&
+             data.points is list && data.points.size() >= 3 &&
+             data.area is number && data.area >= 0;
+    }
+
+    function isValidTask(data) {
+      return hasOnlyAllowedFields(['title', 'description', 'priority', 'status', 'category', 'createdAt']) &&
+             data.title is string && data.title.size() > 0 && data.title.size() < 200 &&
+             data.priority in ['Low', 'Medium', 'High'] &&
+             data.status in ['Pending', 'Completed'];
+    }
+
+    function isValidInventoryItem(data) {
+      return hasOnlyAllowedFields(['name', 'category', 'quantity', 'unit', 'minThreshold', 'expiryDate']) &&
+             data.name is string && data.name.size() > 0 && data.name.size() < 100 &&
+             data.category in ['Seeds', 'Fertilizer', 'Pesticide', 'Tools', 'Fuel', 'Other'] &&
+             data.quantity is number && data.quantity >= 0;
+    }
+
+    function isValidTransaction(data) {
+      return hasOnlyAllowedFields(['type', 'category', 'amount', 'date', 'note']) &&
+             data.type in ['Income', 'Expense'] &&
+             data.amount is number && data.amount >= 0;
+    }
+
+    function isValidJournalEntry(data) {
+      return hasOnlyAllowedFields(['date', 'category', 'notes', 'crop']) &&
+             data.category in ['Planting', 'Irrigation', 'Fertilizer', 'Pest Control', 'Harvest'] &&
+             data.notes is string && data.notes.size() > 0;
+    }
+
+    // ===============================================================
+    // Match Rules
+    // ===============================================================
+
+    match /users/{userId} {
+      allow read: if isAuthenticated();
+      allow create: if isOwner(userId) && isValidUser(request.resource.data) && (request.resource.data.role == 'farmer' || isAdmin());
+      allow update: if isOwner(userId) && isValidUser(request.resource.data) && (request.resource.data.role == resource.data.role || isAdmin());
+      allow delete: if isAdmin();
+
+      match /{document=**} {
+        allow read: if isAuthenticated();
+      }
+
+      match /memberships/{membershipId} {
+        allow write: if isAdmin();
+      }
+
+      match /fields/{fieldId} {
+        allow create: if isOwner(userId) || isManager(userId);
+        allow update: if isOwner(userId) || isManager(userId);
+        allow delete: if isOwner(userId) || isAdmin();
+      }
+
+      match /tasks/{taskId} {
+        allow create: if isOwner(userId) || isTeamMember(userId);
+        allow update: if isOwner(userId) || isTeamMember(userId);
+        allow delete: if isOwner(userId) || isManager(userId) || isAdmin();
+      }
+
+      match /inventory/{itemId} {
+        allow create: if isOwner(userId) || isTeamMember(userId);
+        allow update: if isOwner(userId) || isTeamMember(userId);
+        allow delete: if isOwner(userId) || isManager(userId) || isAdmin();
+      }
+
+      match /transactions/{transactionId} {
+        allow create: if isOwner(userId) || isManager(userId);
+        allow update: if isOwner(userId) || isManager(userId);
+        allow delete: if isOwner(userId) || isAdmin();
+      }
+
+      match /journal/{entryId} {
+        allow create: if isOwner(userId) || isTeamMember(userId);
+        allow update: if isOwner(userId) || isTeamMember(userId);
+        allow delete: if isOwner(userId) || isManager(userId) || isAdmin();
+      }
+
+      match /team/{memberId} {
+        allow read: if isOwner(userId) || isTeamMember(userId) || isAdmin();
+        allow create: if isOwner(userId);
+        allow update: if isOwner(userId);
+        allow delete: if isOwner(userId) || isAdmin();
+      }
+    }
+
+    match /test/connection {
+      allow read: if true;
+    }
+
+    // Default deny
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

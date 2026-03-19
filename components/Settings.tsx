@@ -1,6 +1,6 @@
 import React from 'react';
 import { jsPDF } from 'jspdf';
-import 'jspdf-autotable';
+import autoTable from 'jspdf-autotable';
 import { 
   User, 
   MapPin, 
@@ -25,10 +25,18 @@ import {
   Camera,
   Layers,
   FileJson,
-  FileText
+  FileText,
+  LogOut,
+  Users,
+  UserPlus,
+  ShieldAlert
 } from 'lucide-react';
-
-const WEATHER_API_KEY = "42d5aa17c7f2866670e62b4c77cb3d32";
+import { Geolocation } from '@capacitor/geolocation';
+import { useFirebase } from '../src/components/FirebaseProvider';
+import { db } from '../src/firebase';
+import { collection, query, onSnapshot, doc, updateDoc, addDoc, deleteDoc, setDoc } from 'firebase/firestore';
+import { handleFirestoreError, OperationType } from '../src/utils/firestoreErrorHandler';
+import { TeamMember } from '../types';
 
 const LANGUAGES = [
   { name: "English", label: "English" },
@@ -60,69 +68,138 @@ interface SettingsProps {
 }
 
 const Settings: React.FC<SettingsProps> = ({ language, setLanguage }) => {
-  const loadBool = (key: string, fallback: boolean): boolean => {
-    const val = localStorage.getItem(key);
-    if (val === null) return fallback;
-    return val === 'true';
-  };
+  const { user, profile, logout, activeFarmId } = useFirebase();
 
   const [settings, setSettings] = React.useState({
-    farmName: localStorage.getItem('agri_farm_name') || 'Sunrise Acres',
-    units: localStorage.getItem('agri_units') || 'Metric',
-    notifications: loadBool('agri_notifications', true),
-    weatherAlerts: loadBool('agri_weather_alerts', true),
-    autoNightMode: loadBool('agri_auto_night_mode', true),
-    aiVoice: localStorage.getItem('agri_ai_voice') || 'Zephyr',
-    precisionMode: localStorage.getItem('agri_precision_mode') || 'Balanced',
-    scannerHD: loadBool('agri_scanner_hd', false),
-    kccId: localStorage.getItem('agri_kcc_id') || '',
-    pmKisanId: localStorage.getItem('agri_pm_kisan_id') || ''
+    farmName: profile?.farmName || 'Sunrise Acres',
+    units: profile?.units || 'Metric',
+    notifications: profile?.notifications ?? true,
+    weatherAlerts: profile?.weatherAlerts ?? true,
+    autoNightMode: profile?.autoNightMode ?? true,
+    aiVoice: profile?.aiVoice || 'Zephyr',
+    precisionMode: profile?.precisionMode || 'Balanced',
+    scannerHD: profile?.scannerHD ?? false,
+    kccId: profile?.kccId || '',
+    pmKisanId: profile?.pmKisanId || ''
   });
 
-  const [location, setLocation] = React.useState<string>(localStorage.getItem('agri_farm_location') || 'Awaiting GPS...');
+  const [location, setLocation] = React.useState<string>(profile?.location || 'Awaiting GPS...');
   const [isLocating, setIsLocating] = React.useState(false);
+  const [team, setTeam] = React.useState<TeamMember[]>([]);
+  const [loadingTeam, setLoadingTeam] = React.useState(true);
+  const [devMode, setDevMode] = React.useState(false);
+  const tapCountRef = React.useRef(0);
+  const tapTimeoutRef = React.useRef<NodeJS.Timeout | null>(null);
 
-  const detectLocation = () => {
-    setIsLocating(true);
-    navigator.geolocation.getCurrentPosition(
-      async (pos) => {
-        try {
-          const res = await fetch(
-            `https://api.openweathermap.org/data/2.5/weather?lat=${pos.coords.latitude}&lon=${pos.coords.longitude}&appid=${WEATHER_API_KEY}&units=metric`
-          );
-          const data = await res.json();
-          const cityRegion = data.name && data.sys?.country ? `${data.name}, ${data.sys.country}` : `${pos.coords.latitude.toFixed(2)}, ${pos.coords.longitude.toFixed(2)}`;
-          setLocation(cityRegion);
-          localStorage.setItem('agri_farm_location', cityRegion);
-        } catch (err) {
-          console.error("Location detection failed", err);
-        } finally {
-          setIsLocating(false);
-        }
-      },
-      (err) => {
-        setIsLocating(false);
-        alert("GPS Access Denied. Using fallback.");
-      },
-      { enableHighAccuracy: true }
-    );
+  const handleVersionTap = () => {
+    if (tapTimeoutRef.current) {
+      clearTimeout(tapTimeoutRef.current);
+    }
+
+    tapCountRef.current += 1;
+    
+    if (tapCountRef.current >= 5) {
+      setDevMode(!devMode);
+      tapCountRef.current = 0;
+      alert(`Developer Mode ${!devMode ? 'Enabled' : 'Disabled'}`);
+    } else {
+      tapTimeoutRef.current = setTimeout(() => {
+        tapCountRef.current = 0;
+      }, 2000);
+    }
   };
 
-  React.useEffect(() => {
-    if (!localStorage.getItem('agri_farm_location')) {
-      detectLocation();
+  const becomeAdmin = async () => {
+    if (!user || !activeFarmId) return;
+    try {
+      await updateDoc(doc(db, 'users', activeFarmId), { role: 'admin' });
+      alert("You are now an Admin. Please restart the app or refresh to see changes.");
+    } catch (error) {
+      handleFirestoreError(error, OperationType.UPDATE, `users/${activeFarmId}`);
     }
-  }, []);
+  };
+
+  const WEATHER_API_KEY = import.meta.env.VITE_WEATHER_API_KEY;
+
+  React.useEffect(() => {
+    if (!user || !activeFarmId) return;
+
+    const path = `users/${activeFarmId}/team`;
+    const q = query(collection(db, path));
+
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const members: TeamMember[] = [];
+      snapshot.forEach((doc) => {
+        members.push({ id: doc.id, ...doc.data() } as TeamMember);
+      });
+      setTeam(members);
+      setLoadingTeam(false);
+    }, (error) => {
+      handleFirestoreError(error, OperationType.LIST, path);
+      setLoadingTeam(false);
+    });
+
+    return () => unsubscribe();
+  }, [user]);
+
+  React.useEffect(() => {
+    if (profile) {
+      setSettings({
+        farmName: profile.farmName || 'Sunrise Acres',
+        units: profile.units || 'Metric',
+        notifications: profile.notifications ?? true,
+        weatherAlerts: profile.weatherAlerts ?? true,
+        autoNightMode: profile.autoNightMode ?? true,
+        aiVoice: profile.aiVoice || 'Zephyr',
+        precisionMode: profile.precisionMode || 'Balanced',
+        scannerHD: profile.scannerHD ?? false,
+        kccId: profile.kccId || '',
+        pmKisanId: profile.pmKisanId || ''
+      });
+      setLocation(profile.location || 'Awaiting GPS...');
+    }
+  }, [profile]);
+
+  const detectLocation = async () => {
+    setIsLocating(true);
+    try {
+      const pos = await Geolocation.getCurrentPosition({
+        enableHighAccuracy: true
+      });
+      
+      const res = await fetch(
+        `https://api.openweathermap.org/data/2.5/weather?lat=${pos.coords.latitude}&lon=${pos.coords.longitude}&appid=${WEATHER_API_KEY}&units=metric`
+      );
+      const data = await res.json();
+      const cityRegion = data.name && data.sys?.country ? `${data.name}, ${data.sys.country}` : `${pos.coords.latitude.toFixed(2)}, ${pos.coords.longitude.toFixed(2)}`;
+      setLocation(cityRegion);
+      updateProfileField('location', cityRegion);
+    } catch (err) {
+      console.error("Location detection failed", err);
+      alert("GPS Access Denied or Location Error.");
+    } finally {
+      setIsLocating(false);
+    }
+  };
+
+  const updateProfileField = async (key: string, value: any) => {
+    if (!user || !activeFarmId) return;
+    const path = `users/${activeFarmId}`;
+    try {
+      await updateDoc(doc(db, 'users', activeFarmId), { [key]: value });
+    } catch (error) {
+      handleFirestoreError(error, OperationType.UPDATE, path);
+    }
+  };
 
   const updateSetting = (key: string, value: any) => {
-    const storageKey = `agri_${key.replace(/([A-Z])/g, "_$1").toLowerCase()}`;
     setSettings(prev => ({ ...prev, [key]: value }));
-    localStorage.setItem(storageKey, value.toString());
+    updateProfileField(key, value);
   };
 
   const handleLanguageChange = (val: string) => {
-    localStorage.setItem('agri_language', val);
     setLanguage(val);
+    updateProfileField('language', val);
   };
 
   const exportPDF = () => {
@@ -142,7 +219,7 @@ const Settings: React.FC<SettingsProps> = ({ language, setLanguage }) => {
       }
     }
 
-    (doc as any).autoTable({
+    autoTable(doc, {
       startY: 40,
       head: [['Setting/Data Key', 'Value (Preview)']],
       body: data,
@@ -181,309 +258,521 @@ const Settings: React.FC<SettingsProps> = ({ language, setLanguage }) => {
     }
   };
 
+  const addTeamMember = async () => {
+    if (!user || !activeFarmId) return;
+    const name = prompt("Enter Team Member Name:");
+    const email = prompt("Enter Team Member Email:");
+    const role = prompt("Enter Role (Manager/Worker):", "Worker");
+    const memberUid = prompt("Enter User ID (Optional - for secure access):");
+
+    if (name && email && role) {
+      const memberId = memberUid || `temp_${Date.now()}`;
+      const path = `users/${activeFarmId}/team/${memberId}`;
+      try {
+        await setDoc(doc(db, path), {
+          name,
+          email,
+          role: role.charAt(0).toUpperCase() + role.slice(1).toLowerCase(),
+          joinedAt: new Date().toISOString(),
+          status: memberUid ? 'Active' : 'Pending',
+          uid: memberUid || null
+        });
+      } catch (error) {
+        handleFirestoreError(error, OperationType.CREATE, path);
+      }
+    }
+  };
+
+  const removeTeamMember = async (memberId: string) => {
+    if (!user || !activeFarmId) return;
+    if (confirm("Are you sure you want to remove this team member?")) {
+      const path = `users/${activeFarmId}/team/${memberId}`;
+      try {
+        await deleteDoc(doc(db, path));
+      } catch (error) {
+        handleFirestoreError(error, OperationType.DELETE, path);
+      }
+    }
+  };
+
+  const updateMemberRole = async (memberId: string, currentRole: string) => {
+    if (!user) return;
+    const newRole = prompt("Enter New Role (Manager/Worker):", currentRole);
+    if (newRole && newRole !== currentRole) {
+      const path = `users/${user.uid}/team/${memberId}`;
+      try {
+        await updateDoc(doc(db, path), { 
+          role: newRole.charAt(0).toUpperCase() + newRole.slice(1).toLowerCase() 
+        });
+      } catch (error) {
+        handleFirestoreError(error, OperationType.UPDATE, path);
+      }
+    }
+  };
+
   return (
-    <div className="space-y-6 pb-24 animate-in fade-in slide-in-from-bottom-6">
-      <p className="px-4 text-[11px] font-bold text-stone-400 uppercase tracking-widest">Farm Identity</p>
+    <div className="space-y-6 pb-24 bg-[var(--m3-background)] min-h-screen">
+      {/* Header */}
+      <div className="bg-[var(--m3-primary-container)] rounded-b-[2.5rem] p-8 pt-12 shadow-md relative overflow-hidden">
+        <div className="relative z-10">
+          <h2 className="text-3xl font-medium text-[var(--m3-on-primary-container)] mb-1 m3-headline-medium">Settings</h2>
+          <p className="text-[var(--m3-on-primary-container)] opacity-70 text-xs font-medium uppercase tracking-widest">System Configuration</p>
+        </div>
+      </div>
+
+      <div className="px-6 space-y-6">
+        {/* Farm Identity Section */}
+        <section className="space-y-3">
+          <SectionHeader title="Farm Identity" />
       
-      <div className="bg-white rounded-[2rem] p-4 shadow-sm border border-slate-100 divide-y divide-slate-50">
-        <SettingItem 
-          icon={<User className="text-emerald-600" />}
-          label="Farm Name"
-          value={settings.farmName}
-          onClick={() => {
-            const name = prompt("Enter Farm Name", settings.farmName);
-            if (name) updateSetting('farmName', name);
-          }}
-        />
-        <div className="w-full flex items-center justify-between p-4 active:bg-slate-50 transition-colors group">
-          <div className="flex items-center gap-4 text-left">
-            <div className="p-3 bg-slate-50 rounded-2xl group-hover:bg-emerald-50 transition-colors shadow-inner">
-              <MapPin className="w-5 h-5 text-emerald-600" />
+          <div className="m3-card-filled p-4 bg-[var(--m3-surface-container-low)] divide-y divide-[var(--m3-outline-variant)]">
+            <div className="py-4">
+              <label className="text-[10px] font-medium text-[var(--m3-on-surface-variant)] uppercase tracking-wider mb-2 block">Farm Name</label>
+              <input 
+                value={settings.farmName}
+                onChange={e => updateSetting('farmName', e.target.value)}
+                className="w-full bg-[var(--m3-surface-container-high)] border-b border-[var(--m3-outline)] outline-none text-sm font-medium text-[var(--m3-on-surface)] p-3 rounded-t-lg focus:border-[var(--m3-primary)] transition-all"
+              />
             </div>
-            <div>
-              <p className="text-sm font-bold text-slate-800">Primary Region</p>
-              <div className="flex items-center gap-1.5 mt-0.5">
-                <span className={`w-1.5 h-1.5 rounded-full ${isLocating ? 'bg-emerald-400 animate-pulse' : 'bg-emerald-50 shadow-[0_0_5px_rgba(16,185,129,0.5)]'}`} />
-                <p className="text-[10px] text-slate-400 font-black uppercase tracking-widest">{isLocating ? 'Syncing...' : 'Connected to GPS'}</p>
+            <div className="py-4">
+              <label className="text-[10px] font-medium text-[var(--m3-on-surface-variant)] uppercase tracking-wider mb-2 block">Farm Land Size</label>
+              <div className="flex gap-2">
+                <input 
+                  type="number"
+                  value={profile?.farmSize || 0}
+                  onChange={e => updateSetting('farmSize', parseFloat(e.target.value) || 0)}
+                  className="flex-1 bg-[var(--m3-surface-container-high)] border-b border-[var(--m3-outline)] outline-none text-sm font-medium text-[var(--m3-on-surface)] p-3 rounded-t-lg focus:border-[var(--m3-primary)] transition-all"
+                />
+                <div className="bg-[var(--m3-surface-container-high)] px-4 flex items-center rounded-t-lg border-b border-[var(--m3-outline)] text-xs font-medium text-[var(--m3-on-surface-variant)]">
+                  {profile?.units === 'Imperial' ? 'Acres' : 'Hectares'}
+                </div>
+              </div>
+            </div>
+            <div className="w-full flex items-center justify-between py-4">
+              <div className="flex items-center gap-4 text-left">
+                <div className="p-3 bg-[var(--m3-surface-container-high)] rounded-xl text-[var(--m3-on-surface-variant)]">
+                  <MapPin className="w-5 h-5" />
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-[var(--m3-on-surface)]">Primary Region</p>
+                  <div className="flex items-center gap-1.5 mt-0.5">
+                    <span className={`w-1.5 h-1.5 rounded-full ${isLocating ? 'bg-[var(--m3-primary)] animate-pulse' : 'bg-[var(--m3-outline)]'}`} />
+                    <p className="text-[10px] text-[var(--m3-on-surface-variant)] font-medium uppercase tracking-widest">{isLocating ? 'Syncing...' : 'Connected to GPS'}</p>
+                  </div>
+                </div>
+              </div>
+              <div className="flex items-center gap-3">
+                <div className="flex flex-col items-end">
+                  <span className="text-xs font-medium text-[var(--m3-primary)] truncate max-w-[120px]">{location}</span>
+                  <button 
+                    onClick={() => {
+                      const loc = prompt("Enter Location Manually", location);
+                      if (loc) {
+                        setLocation(loc);
+                        localStorage.setItem('agri_farm_location', loc);
+                      }
+                    }}
+                    className="text-[8px] font-medium text-[var(--m3-on-surface-variant)] uppercase tracking-widest mt-1"
+                  >
+                    Edit Manually
+                  </button>
+                </div>
+                <button 
+                  onClick={detectLocation}
+                  disabled={isLocating}
+                  className="p-2 bg-[var(--m3-surface-container-high)] rounded-xl text-[var(--m3-primary)] disabled:opacity-50"
+                >
+                  {isLocating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Navigation className="w-4 h-4" />}
+                </button>
               </div>
             </div>
           </div>
-          <div className="flex items-center gap-3">
-            <div className="flex flex-col items-end">
-              <span className="text-xs font-black text-emerald-600 truncate max-w-[120px]">{location}</span>
-              <button 
-                onClick={() => {
-                  const loc = prompt("Enter Location Manually", location);
-                  if (loc) {
-                    setLocation(loc);
-                    localStorage.setItem('agri_farm_location', loc);
-                  }
-                }}
-                className="text-[8px] font-black text-slate-400 uppercase tracking-widest mt-1 hover:text-emerald-600"
-              >
-                Edit Manually
-              </button>
+        </section>
+
+        {/* Farm Team Section */}
+        <section className="space-y-3">
+          <SectionHeader title="Farm Team & Roles" />
+        <div className="m3-card-filled p-4 bg-[var(--m3-surface-container-low)] space-y-4">
+          <div className="flex items-center justify-between px-2 mb-2">
+            <div className="flex items-center gap-3">
+              <div className="p-2 bg-[var(--m3-surface-container-high)] rounded-xl text-[var(--m3-on-surface-variant)]">
+                <Users className="w-5 h-5" />
+              </div>
+              <div>
+                <p className="text-sm font-medium text-[var(--m3-on-surface)]">Team Management</p>
+                <p className="text-[10px] text-[var(--m3-on-surface-variant)] font-medium">Manage access for workers & managers</p>
+              </div>
             </div>
             <button 
-              onClick={detectLocation}
-              disabled={isLocating}
-              className="p-2 bg-slate-50 rounded-xl hover:bg-slate-100 text-emerald-600 disabled:opacity-50"
+              onClick={addTeamMember}
+              className="p-2 bg-[var(--m3-primary)] text-[var(--m3-on-primary)] rounded-xl shadow-md active:scale-95 transition-all"
             >
-              {isLocating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Navigation className="w-4 h-4" />}
+              <UserPlus className="w-5 h-5" />
             </button>
           </div>
-        </div>
-      </div>
 
-      <p className="px-4 text-[11px] font-bold text-stone-400 uppercase tracking-widest mt-8">AI & Intelligence Tuning</p>
-      <div className="bg-white rounded-[2rem] p-4 shadow-sm border border-slate-100 divide-y divide-slate-50">
-        <div className="flex items-center justify-between p-4">
-          <div className="flex items-center gap-4">
-            <div className="p-3 bg-slate-50 rounded-2xl shadow-inner">
-              <Mic2 className="w-5 h-5 text-emerald-600" />
-            </div>
-            <div>
-              <p className="text-sm font-bold text-slate-800">AgriVoice Profile</p>
-              <p className="text-[10px] text-slate-400 font-medium italic">Gemini Voice Personality</p>
-            </div>
+          <div className="space-y-3">
+            {loadingTeam ? (
+              <div className="flex items-center justify-center py-6">
+                <Loader2 className="w-6 h-6 animate-spin text-[var(--m3-primary)]/30" />
+              </div>
+            ) : team.length > 0 ? (
+              team.map(member => (
+                <div key={member.id} className="flex items-center justify-between p-4 bg-[var(--m3-surface-container-high)] rounded-2xl border border-[var(--m3-outline-variant)] group">
+                  <div className="flex items-center gap-4">
+                    <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-xs ${
+                      member.role === 'Manager' ? 'bg-[var(--m3-tertiary-container)] text-[var(--m3-on-tertiary-container)]' : 'bg-[var(--m3-secondary-container)] text-[var(--m3-on-secondary-container)]'
+                    }`}>
+                      {member.name.charAt(0)}
+                    </div>
+                    <div>
+                      <p className="text-sm font-medium text-[var(--m3-on-surface)]">{member.name}</p>
+                      <div className="flex items-center gap-2">
+                        <span className={`text-[9px] font-bold uppercase tracking-wider ${
+                          member.role === 'Manager' ? 'text-[var(--m3-tertiary)]' : 'text-[var(--m3-secondary)]'
+                        }`}>{member.role}</span>
+                        <span className="text-[9px] text-[var(--m3-outline)]">•</span>
+                        <span className="text-[9px] text-[var(--m3-on-surface-variant)] font-medium">{member.email}</span>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <button 
+                      onClick={() => updateMemberRole(member.id, member.role)}
+                      className="p-2 text-[var(--m3-on-surface-variant)] hover:text-[var(--m3-primary)] transition-colors"
+                    >
+                      <ShieldCheck className="w-4 h-4" />
+                    </button>
+                    <button 
+                      onClick={() => removeTeamMember(member.id)}
+                      className="p-2 text-[var(--m3-on-surface-variant)] hover:text-[var(--m3-error)] transition-colors"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
+                </div>
+              ))
+            ) : (
+              <div className="text-center py-8 border-2 border-dashed border-[var(--m3-outline-variant)] rounded-2xl">
+                <Users className="w-8 h-8 text-[var(--m3-outline)] mx-auto mb-2" />
+                <p className="text-[10px] font-medium text-[var(--m3-on-surface-variant)] uppercase tracking-widest">No team members yet</p>
+                <button 
+                  onClick={addTeamMember}
+                  className="mt-3 text-[10px] font-medium text-[var(--m3-primary)] uppercase tracking-widest bg-[var(--m3-primary-container)] px-4 py-2 rounded-full border border-[var(--m3-outline-variant)]"
+                >
+                  Add First Member
+                </button>
+              </div>
+            )}
           </div>
-          <select 
-            value={settings.aiVoice}
-            onChange={(e) => updateSetting('aiVoice', e.target.value)}
-            className="bg-slate-50 border-none rounded-xl py-2 px-4 text-xs font-bold text-emerald-700 outline-none shadow-inner"
-          >
-            {AI_VOICES.map(voice => (
-              <option key={voice.name} value={voice.name}>{voice.label}</option>
-            ))}
-          </select>
         </div>
+      </section>
 
-        <div className="flex items-center justify-between p-4">
-          <div className="flex items-center gap-4">
-            <div className="p-3 bg-slate-50 rounded-2xl shadow-inner">
-              <Cpu className="w-5 h-5 text-blue-600" />
-            </div>
-            <div>
-              <p className="text-sm font-bold text-slate-800">Intelligence Strategy</p>
-              <p className="text-[10px] text-slate-400 font-medium italic">Inference Depth vs Speed</p>
-            </div>
-          </div>
-          <select 
-            value={settings.precisionMode}
-            onChange={(e) => updateSetting('precisionMode', e.target.value)}
-            className="bg-slate-50 border-none rounded-xl py-2 px-4 text-xs font-bold text-emerald-700 outline-none shadow-inner"
-          >
-            <option>Standard</option>
-            <option>Balanced</option>
-            <option>High Accuracy</option>
-          </select>
-        </div>
-
-        <ToggleItem 
-          icon={<Camera className="text-amber-600" />}
-          label="HD Diagnostic Scanning"
-          enabled={settings.scannerHD}
-          onToggle={(val) => updateSetting('scannerHD', val)}
-        />
-      </div>
-
-      <p className="px-4 text-[11px] font-bold text-stone-400 uppercase tracking-widest mt-8">Government & Schemes</p>
-      <div className="bg-white rounded-[2rem] p-4 shadow-sm border border-stone-100 divide-y divide-stone-50">
-        <SettingItem 
-          icon={<CreditCard className="text-indigo-600" />}
-          label="Kisan Credit Card (KCC)"
-          value={settings.kccId || 'Link ID'}
-          onClick={() => {
-            const id = prompt("Enter KCC ID (16 digits)", settings.kccId);
-            if (id !== null) updateSetting('kccId', id);
-          }}
-        />
-        <SettingItem 
-          icon={<Landmark className="text-emerald-600" />}
-          label="PM-KISAN ID"
-          value={settings.pmKisanId || 'Link ID'}
-          onClick={() => {
-            const id = prompt("Enter PM-KISAN Registration ID", settings.pmKisanId);
-            if (id !== null) updateSetting('pmKisanId', id);
-          }}
-        />
-      </div>
-
-      <p className="px-4 text-[11px] font-bold text-stone-400 uppercase tracking-widest mt-8">Language & Dialect</p>
-      <div className="px-4 mt-4">
-        <div className="grid grid-cols-2 gap-3">
-          {LANGUAGES.map(lang => {
-            const isActive = language === lang.name;
-            return (
-              <button
-                key={lang.name}
-                onClick={() => handleLanguageChange(lang.name)}
-                className={`flex flex-col items-start p-4 rounded-3xl border transition-all relative overflow-hidden group ${
-                  isActive 
-                    ? 'bg-slate-950 border-slate-950 text-white shadow-xl scale-[1.02]' 
-                    : 'bg-white border-slate-100 text-slate-600 hover:border-emerald-200'
-                }`}
+        {/* AI Section */}
+        <section className="space-y-3">
+          <SectionHeader title="AI & Intelligence Tuning" />
+          <div className="m3-card-filled p-4 bg-[var(--m3-surface-container-low)] divide-y divide-[var(--m3-outline-variant)]">
+            <div className="flex items-center justify-between py-4">
+              <div className="flex items-center gap-4">
+                <div className="p-3 bg-[var(--m3-surface-container-high)] rounded-xl text-[var(--m3-on-surface-variant)]">
+                  <Mic2 className="w-5 h-5" />
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-[var(--m3-on-surface)]">AgriVoice Profile</p>
+                  <p className="text-[10px] text-[var(--m3-on-surface-variant)] font-medium italic">Gemini Voice Personality</p>
+                </div>
+              </div>
+              <select 
+                value={settings.aiVoice}
+                onChange={(e) => updateSetting('aiVoice', e.target.value)}
+                className="bg-[var(--m3-surface-container-high)] border-none rounded-xl py-2 px-4 text-xs font-medium text-[var(--m3-primary)] outline-none"
               >
-                {isActive && (
-                  <div className="absolute top-0 right-0 p-3">
-                    <div className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse" />
-                  </div>
-                )}
-                <span className={`text-[10px] font-black uppercase tracking-widest mb-1 ${isActive ? 'text-emerald-400' : 'text-slate-400'}`}>
-                  {lang.name}
-                </span>
-                <span className="text-sm font-black tracking-tight">
-                  {lang.label.split(' ')[1] || lang.label}
-                </span>
-                {isActive && (
-                  <div className="mt-3 flex items-center gap-1.5">
-                    <div className="w-4 h-px bg-emerald-500/50" />
-                    <span className="text-[8px] font-black uppercase tracking-tighter text-emerald-500/80">Active Profile</span>
-                  </div>
-                )}
+                {AI_VOICES.map(voice => (
+                  <option key={voice.name} value={voice.name}>{voice.label}</option>
+                ))}
+              </select>
+            </div>
+
+            <div className="flex items-center justify-between py-4">
+              <div className="flex items-center gap-4">
+                <div className="p-3 bg-[var(--m3-surface-container-high)] rounded-xl text-[var(--m3-on-surface-variant)]">
+                  <Cpu className="w-5 h-5" />
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-[var(--m3-on-surface)]">Intelligence Strategy</p>
+                  <p className="text-[10px] text-[var(--m3-on-surface-variant)] font-medium italic">Inference Depth vs Speed</p>
+                </div>
+              </div>
+              <select 
+                value={settings.precisionMode}
+                onChange={(e) => updateSetting('precisionMode', e.target.value)}
+                className="bg-[var(--m3-surface-container-high)] border-none rounded-xl py-2 px-4 text-xs font-medium text-[var(--m3-primary)] outline-none"
+              >
+                <option>Standard</option>
+                <option>Balanced</option>
+                <option>High Accuracy</option>
+              </select>
+            </div>
+
+            <ToggleItem 
+              icon={<Camera />}
+              label="HD Diagnostic Scanning"
+              enabled={settings.scannerHD}
+              onToggle={(val) => updateSetting('scannerHD', val)}
+            />
+          </div>
+        </section>
+
+        {/* Government Section */}
+        <section className="space-y-3">
+          <SectionHeader title="Government & Schemes" />
+          <div className="m3-card-filled p-4 bg-[var(--m3-surface-container-low)] divide-y divide-[var(--m3-outline-variant)]">
+            <SettingItem 
+              icon={<CreditCard />}
+              label="Kisan Credit Card (KCC)"
+              value={settings.kccId || 'Link ID'}
+              onClick={() => {
+                const id = prompt("Enter KCC ID (16 digits)", settings.kccId);
+                if (id !== null) updateSetting('kccId', id);
+              }}
+            />
+            <SettingItem 
+              icon={<Landmark />}
+              label="PM-KISAN ID"
+              value={settings.pmKisanId || 'Link ID'}
+              onClick={() => {
+                const id = prompt("Enter PM-KISAN Registration ID", settings.pmKisanId);
+                if (id !== null) updateSetting('pmKisanId', id);
+              }}
+            />
+          </div>
+        </section>
+
+        {/* Language Section */}
+        <section className="space-y-3">
+          <SectionHeader title="Language & Dialect" />
+          <div className="grid grid-cols-2 gap-3">
+            {LANGUAGES.map(lang => {
+              const isActive = language === lang.name;
+              return (
+                <button
+                  key={lang.name}
+                  onClick={() => handleLanguageChange(lang.name)}
+                  className={`flex flex-col items-start p-4 rounded-3xl border transition-all relative overflow-hidden group ${
+                    isActive 
+                      ? 'bg-[var(--m3-primary)] border-[var(--m3-primary)] text-[var(--m3-on-primary)] shadow-xl scale-[1.02]' 
+                      : 'bg-[var(--m3-surface-container-low)] border-[var(--m3-outline-variant)] text-[var(--m3-on-surface)] hover:border-[var(--m3-primary)]'
+                  }`}
+                >
+                  {isActive && (
+                    <div className="absolute top-0 right-0 p-3">
+                      <div className="w-1.5 h-1.5 bg-[var(--m3-on-primary)] rounded-full animate-pulse" />
+                    </div>
+                  )}
+                  <span className={`text-[10px] font-medium uppercase tracking-widest mb-1 ${isActive ? 'text-[var(--m3-on-primary)]/70' : 'text-[var(--m3-on-surface-variant)]'}`}>
+                    {lang.name}
+                  </span>
+                  <span className="text-sm font-medium tracking-tight">
+                    {lang.label.split(' ')[1] || lang.label}
+                  </span>
+                  {isActive && (
+                    <div className="mt-3 flex items-center gap-1.5">
+                      <div className="w-4 h-px bg-[var(--m3-on-primary)]/50" />
+                      <span className="text-[8px] font-medium uppercase tracking-tighter text-[var(--m3-on-primary)]/80">Active Profile</span>
+                    </div>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+        </section>
+
+        {/* Preferences Section */}
+        <section className="space-y-3">
+          <SectionHeader title="System Preferences" />
+          <div className="m3-card-filled p-4 bg-[var(--m3-surface-container-low)] divide-y divide-[var(--m3-outline-variant)]">
+            <div className="flex items-center justify-between py-4">
+              <div className="flex items-center gap-4">
+                <div className="p-3 bg-[var(--m3-surface-container-high)] rounded-xl text-[var(--m3-on-surface-variant)]">
+                  <Globe className="w-5 h-5" />
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-[var(--m3-on-surface)]">Measurement Units</p>
+                  <p className="text-[10px] text-[var(--m3-on-surface-variant)] font-medium italic">Metric (C°, Ha) vs Imperial (F°, Ac)</p>
+                </div>
+              </div>
+              <select 
+                value={settings.units}
+                onChange={(e) => updateSetting('units', e.target.value)}
+                className="bg-[var(--m3-surface-container-high)] border-none rounded-xl py-2 px-4 text-xs font-medium text-[var(--m3-primary)] outline-none"
+              >
+                <option>Metric</option>
+                <option>Imperial</option>
+              </select>
+            </div>
+
+            <ToggleItem 
+              icon={<Bell />}
+              label="Push Notifications"
+              enabled={settings.notifications}
+              onToggle={(val) => updateSetting('notifications', val)}
+            />
+            <ToggleItem 
+              icon={<Bell />}
+              label="Weather Alerts"
+              enabled={settings.weatherAlerts}
+              onToggle={(val) => updateSetting('weatherAlerts', val)}
+            />
+            <ToggleItem 
+              icon={<Moon />}
+              label="Auto Night Mode"
+              enabled={settings.autoNightMode}
+              onToggle={(val) => updateSetting('autoNightMode', val)}
+            />
+          </div>
+        </section>
+
+        {/* Account Section */}
+        <section className="space-y-3">
+          <SectionHeader title="Account & Data" />
+          <div className="m3-card-filled p-4 bg-[var(--m3-surface-container-low)] divide-y divide-[var(--m3-outline-variant)]">
+            <button 
+              onClick={exportPDF}
+              className="w-full flex items-center justify-between py-4 active:bg-[var(--m3-surface-container-high)] transition-colors group text-left"
+            >
+              <div className="flex items-center gap-4">
+                <div className="p-3 bg-[var(--m3-surface-container-high)] rounded-xl text-[var(--m3-on-surface-variant)]">
+                  <FileText className="w-5 h-5" />
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-[var(--m3-on-surface)]">Export Farm Report (PDF)</p>
+                  <p className="text-[10px] text-[var(--m3-on-surface-variant)] font-medium">Download professional PDF report</p>
+                </div>
+              </div>
+              <Download className="w-5 h-5 text-[var(--m3-outline)]" />
+            </button>
+
+            <button 
+              onClick={logout}
+              className="w-full flex items-center gap-4 py-4 text-[var(--m3-on-surface)] active:bg-[var(--m3-surface-container-high)] transition-colors text-left"
+            >
+              <div className="p-3 bg-[var(--m3-surface-container-high)] rounded-xl text-[var(--m3-on-surface-variant)]">
+                <LogOut className="w-5 h-5" />
+              </div>
+              <div>
+                <p className="text-sm font-medium">Sign Out</p>
+                <p className="text-[10px] opacity-60 font-medium">Log out of your Bharat Kisan account</p>
+              </div>
+            </button>
+
+            <button 
+              onClick={() => {
+                if (confirm("This will permanently delete your local cache. Your cloud data will remain safe. Continue?")) {
+                  localStorage.clear();
+                  window.location.reload();
+                }
+              }}
+              className="w-full flex items-center gap-4 py-4 text-[var(--m3-error)] active:bg-[var(--m3-error-container)]/10 transition-colors text-left"
+            >
+              <div className="p-3 bg-[var(--m3-error-container)]/20 rounded-xl text-[var(--m3-error)]">
+                <Trash2 className="w-5 h-5" />
+              </div>
+              <div>
+                <p className="text-sm font-medium">Clear Local Cache</p>
+                <p className="text-[10px] opacity-60 font-medium">Reset local application state</p>
+              </div>
+            </button>
+          </div>
+        </section>
+
+        {/* Developer Options */}
+        {devMode && (
+          <section className="space-y-3 animate-in slide-in-from-bottom-4 duration-500">
+            <SectionHeader title="Developer Options" />
+            <div className="m3-card-filled p-4 bg-[var(--m3-surface-container-low)] divide-y divide-[var(--m3-outline-variant)]">
+              <button 
+                onClick={becomeAdmin}
+                className="w-full flex items-center gap-4 py-4 text-[var(--m3-primary)] active:bg-[var(--m3-primary-container)]/20 transition-colors text-left"
+              >
+                <div className="p-3 bg-[var(--m3-primary-container)]/30 rounded-xl text-[var(--m3-primary)]">
+                  <ShieldAlert className="w-5 h-5" />
+                </div>
+                <div>
+                  <p className="text-sm font-medium">Become Administrator</p>
+                  <p className="text-[10px] opacity-60 font-medium">Elevate your role to Admin (Testing only)</p>
+                </div>
               </button>
-            );
-          })}
-        </div>
+              
+              <div className="py-4">
+                <p className="text-[10px] font-medium text-[var(--m3-on-surface-variant)] uppercase tracking-widest mb-2">Debug Info</p>
+                <div className="bg-black/5 rounded-xl p-3 font-mono text-[10px] text-[var(--m3-on-surface-variant)] space-y-1">
+                  <p>User ID: {user?.uid}</p>
+                  <p>Farm ID: {activeFarmId}</p>
+                  <p>Role: {profile?.role || 'user'}</p>
+                  <p>Platform: {import.meta.env.MODE}</p>
+                </div>
+              </div>
+            </div>
+          </section>
+        )}
       </div>
 
-      <p className="px-4 text-[11px] font-bold text-stone-400 uppercase tracking-widest mt-8">System Preferences</p>
-      <div className="bg-white rounded-[2rem] p-4 shadow-sm border border-stone-100 divide-y divide-stone-50">
-        <div className="flex items-center justify-between p-4">
-          <div className="flex items-center gap-4">
-            <div className="p-3 bg-slate-50 rounded-2xl shadow-inner">
-              <Globe className="w-5 h-5 text-slate-500" />
-            </div>
-            <div>
-              <p className="text-sm font-bold text-slate-800">Measurement Units</p>
-              <p className="text-[10px] text-slate-400 font-medium italic">Metric (C°, Ha) vs Imperial (F°, Ac)</p>
-            </div>
-          </div>
-          <select 
-            value={settings.units}
-            onChange={(e) => updateSetting('units', e.target.value)}
-            className="bg-slate-50 border-none rounded-xl py-2 px-4 text-xs font-bold text-emerald-700 outline-none shadow-inner"
-          >
-            <option>Metric</option>
-            <option>Imperial</option>
-          </select>
-        </div>
-
-        <ToggleItem 
-          icon={<Bell className="text-blue-500" />}
-          label="Push Notifications"
-          enabled={settings.notifications}
-          onToggle={(val) => updateSetting('notifications', val)}
-        />
-        <ToggleItem 
-          icon={<Bell className="text-amber-500" />}
-          label="Weather Alerts"
-          enabled={settings.weatherAlerts}
-          onToggle={(val) => updateSetting('weatherAlerts', val)}
-        />
-        <ToggleItem 
-          icon={<Moon className="text-indigo-400" />}
-          label="Auto Night Mode"
-          enabled={settings.autoNightMode}
-          onToggle={(val) => updateSetting('autoNightMode', val)}
-        />
-      </div>
-
-      <p className="px-4 text-[11px] font-bold text-stone-400 uppercase tracking-widest mt-8">Data Management</p>
-      <div className="bg-white rounded-[2rem] p-4 shadow-sm border border-stone-100 divide-y divide-stone-50">
-        <button 
-          onClick={exportPDF}
-          className="w-full flex items-center justify-between p-4 active:bg-stone-50 transition-colors group text-left"
-        >
-          <div className="flex items-center gap-4">
-            <div className="p-3 bg-stone-50 rounded-2xl group-hover:bg-emerald-50 transition-colors shadow-inner">
-              <FileText className="w-5 h-5 text-emerald-600" />
-            </div>
-            <div>
-              <p className="text-sm font-bold text-stone-800">Export Farm Report (PDF)</p>
-              <p className="text-[10px] text-stone-400 font-medium">Download professional PDF report</p>
-            </div>
-          </div>
-          <Download className="w-5 h-5 text-stone-300" />
-        </button>
-
-        <button 
-          onClick={exportData}
-          className="w-full flex items-center justify-between p-4 active:bg-stone-50 transition-colors group text-left"
-        >
-          <div className="flex items-center gap-4">
-            <div className="p-3 bg-stone-50 rounded-2xl group-hover:bg-emerald-50 transition-colors shadow-inner">
-              <FileJson className="w-5 h-5 text-emerald-600" />
-            </div>
-            <div>
-              <p className="text-sm font-bold text-stone-800">Export Farm Archive</p>
-              <p className="text-[10px] text-stone-400 font-medium">Download full logbook in JSON</p>
-            </div>
-          </div>
-          <Download className="w-5 h-5 text-stone-300" />
-        </button>
-
-        <button 
-          onClick={clearData}
-          className="w-full flex items-center gap-4 p-4 text-rose-600 hover:bg-rose-50 transition-colors text-left"
-        >
-          <div className="p-3 bg-rose-50 rounded-2xl shadow-inner">
-            <Trash2 className="w-5 h-5" />
-          </div>
-          <div>
-            <p className="text-sm font-bold">Wipe Local Database</p>
-            <p className="text-[10px] opacity-60 font-medium">Permanently clear all cached farm data</p>
-          </div>
-        </button>
-      </div>
-
-      <div className="text-center py-6">
-        <div className="inline-flex items-center gap-2 bg-emerald-50 px-4 py-2 rounded-full border border-emerald-100">
-          <Database className="w-3 h-3 text-emerald-600" />
-          <span className="text-[10px] font-black uppercase text-emerald-600 tracking-widest">
+      <div className="text-center py-8">
+        <div className="inline-flex items-center gap-2 bg-[var(--m3-secondary-container)] px-4 py-2 rounded-full border border-[var(--m3-outline-variant)]">
+          <Database className="w-3 h-3 text-[var(--m3-on-secondary-container)]" />
+          <span className="text-[10px] font-medium uppercase text-[var(--m3-on-secondary-container)] tracking-widest">
             Cache: {(JSON.stringify(localStorage).length / 1024).toFixed(1)} KB Used
           </span>
         </div>
-        <p className="text-[9px] text-slate-400 mt-2 font-bold uppercase tracking-widest">Build Version: 2.5.2-Platinum</p>
+        <p 
+          onClick={handleVersionTap}
+          className="text-[9px] text-[var(--m3-on-surface-variant)] mt-3 font-medium uppercase tracking-widest opacity-60 cursor-pointer select-none"
+        >
+          Build Version: 2.5.2-Platinum
+        </p>
       </div>
     </div>
   );
 };
 
+const SectionHeader: React.FC<{ title: string }> = ({ title }) => (
+  <h3 className="text-[10px] font-medium text-[var(--m3-on-surface-variant)] uppercase tracking-[0.15em] ml-1 mb-1">{title}</h3>
+);
+
 const SettingItem: React.FC<{ icon: React.ReactNode, label: string, value?: string, sub?: string, onClick?: () => void }> = ({ icon, label, value, sub, onClick }) => (
   <button 
     onClick={onClick}
-    className="w-full flex items-center justify-between p-4 active:bg-slate-50 transition-colors group"
+    className="w-full flex items-center justify-between p-4 active:bg-[var(--m3-surface-container-high)] transition-colors group rounded-xl"
   >
     <div className="flex items-center gap-4 text-left">
-      <div className="p-3 bg-slate-50 rounded-2xl group-hover:bg-white transition-colors shadow-inner">
+      <div className="p-3 bg-[var(--m3-surface-container-high)] rounded-xl text-[var(--m3-on-surface-variant)]">
         {React.cloneElement(icon as React.ReactElement<any>, { className: 'w-5 h-5' })}
       </div>
       <div>
-        <p className="text-sm font-bold text-slate-800">{label}</p>
-        {sub && <p className="text-[10px] text-slate-400 font-medium">{sub}</p>}
+        <p className="text-sm font-medium text-[var(--m3-on-surface)]">{label}</p>
+        {sub && <p className="text-[10px] text-[var(--m3-on-surface-variant)] font-medium uppercase tracking-wider">{sub}</p>}
       </div>
     </div>
     <div className="flex items-center gap-2">
-      {value && <span className="text-xs font-black text-emerald-600 truncate max-w-[120px]">{value}</span>}
-      <ChevronRight className="w-4 h-4 text-slate-300" />
+      {value && <span className="text-xs font-medium text-[var(--m3-primary)] truncate max-w-[120px]">{value}</span>}
+      <ChevronRight className="w-4 h-4 text-[var(--m3-on-surface-variant)]" />
     </div>
   </button>
 );
 
 const ToggleItem: React.FC<{ icon: React.ReactNode, label: string, enabled: boolean, onToggle: (val: boolean) => void }> = ({ icon, label, enabled, onToggle }) => (
-  <div className="flex items-center justify-between p-4">
+  <div className="flex items-center justify-between py-4">
     <div className="flex items-center gap-4">
-      <div className="p-3 bg-slate-50 rounded-2xl shadow-inner">
+      <div className="p-3 bg-[var(--m3-surface-container-high)] rounded-xl text-[var(--m3-on-surface-variant)]">
         {React.cloneElement(icon as React.ReactElement<any>, { className: 'w-5 h-5' })}
       </div>
-      <p className="text-sm font-bold text-slate-800">{label}</p>
+      <p className="text-sm font-medium text-[var(--m3-on-surface)]">{label}</p>
     </div>
     <button 
       onClick={() => onToggle(!enabled)}
-      className={`w-12 h-6 rounded-full p-1 transition-colors duration-300 ${enabled ? 'bg-emerald-600' : 'bg-slate-200'}`}
+      className={`relative w-12 h-7 rounded-full transition-all duration-300 ${enabled ? 'bg-[var(--m3-primary)]' : 'bg-[var(--m3-surface-container-high)] border border-[var(--m3-outline)]'}`}
     >
-      <div className={`w-4 h-4 bg-white rounded-full transition-transform duration-300 transform ${enabled ? 'translate-x-6' : 'translate-x-0'}`} />
+      <div className={`absolute top-1 w-5 h-5 rounded-full transition-all duration-300 ${enabled ? 'left-6 bg-[var(--m3-on-primary)] shadow-sm' : 'left-1 bg-[var(--m3-on-surface-variant)]'}`} />
     </button>
   </div>
 );

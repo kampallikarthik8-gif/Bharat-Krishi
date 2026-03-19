@@ -19,7 +19,8 @@ import {
   CalendarDays,
   Activity,
   ArrowRight,
-  GripHorizontal
+  GripHorizontal,
+  MessageCircle
 } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 
@@ -107,7 +108,7 @@ const MarketPrices: React.FC<MarketPricesProps> = ({ language }) => {
 
   const detectLocation = () => {
     setDetecting(true);
-    const WEATHER_API_KEY = "42d5aa17c7f2866670e62b4c77cb3d32";
+    const WEATHER_API_KEY = import.meta.env.VITE_WEATHER_API_KEY;
     navigator.geolocation.getCurrentPosition(
       async (pos) => {
         try {
@@ -131,6 +132,18 @@ const MarketPrices: React.FC<MarketPricesProps> = ({ language }) => {
       setResults(result);
     } catch (err) { console.error(err); }
     finally { setLoading(false); }
+  };
+
+  const shareOnWhatsApp = () => {
+    if (!results) return;
+    const message = `*Bharat Kisan - Mandi Bhav*%0A%0A` +
+      `*Crop:* ${crop}%0A` +
+      `*Market:* ${location}%0A` +
+      `*Current Price:* ${results.data.currency}${results.data.currentPrice.toLocaleString()} per ${results.data.unit}%0A%0A` +
+      `*Summary:* ${results.data.summary.substring(0, 200)}...%0A%0A` +
+      `Check live rates on Bharat Kisan App`;
+    
+    window.open(`https://wa.me/?text=${message}`, '_blank');
   };
 
   return (
@@ -229,11 +242,17 @@ const MarketPrices: React.FC<MarketPricesProps> = ({ language }) => {
                            </h3>
                         </div>
                      </div>
-                     <div className="flex flex-col items-end">
+                     <div className="flex flex-col items-end gap-3">
                         <div className="bg-emerald-500/20 px-6 py-2 rounded-full border border-emerald-500/30 flex items-center gap-3">
                            <div className="w-2 h-2 bg-emerald-400 rounded-full animate-pulse" />
                            <span className="text-[10px] font-bold uppercase tracking-widest text-emerald-400">Live Quote</span>
                         </div>
+                        <button 
+                          onClick={shareOnWhatsApp}
+                          className="bg-[#25D366] text-white px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest flex items-center gap-2 hover:bg-[#128C7E] transition-all"
+                        >
+                          <MessageCircle className="w-4 h-4" /> Share WhatsApp
+                        </button>
                      </div>
                   </div>
 

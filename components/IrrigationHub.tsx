@@ -28,7 +28,7 @@ interface IrrigationZone {
   lastWatered?: string;
 }
 
-const WEATHER_API_KEY = "42d5aa17c7f2866670e62b4c77cb3d32";
+const WEATHER_API_KEY = import.meta.env.VITE_WEATHER_API_KEY;
 
 // Fixed error: Added IrrigationHubProps and used language from props
 interface IrrigationHubProps {

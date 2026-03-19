@@ -3,7 +3,7 @@ import { fetchSprayingAdvice } from '../services/geminiService';
 import { ShieldAlert, Wind, Droplets, Loader2, Beaker, Info, CheckCircle2, AlertTriangle, Sunrise, Sunset, Clock, Zap, Ban, Sun } from 'lucide-react';
 import Markdown from 'react-markdown';
 
-const WEATHER_API_KEY = "42d5aa17c7f2866670e62b4c77cb3d32";
+const WEATHER_API_KEY = import.meta.env.VITE_WEATHER_API_KEY;
 
 interface SprayingAdvisorProps {
   language: string;

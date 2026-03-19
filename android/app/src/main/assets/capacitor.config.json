@@ -1,0 +1,9 @@
+{
+	"appId": "com.agriassist.app",
+	"appName": "AgriAssist",
+	"webDir": "dist",
+	"bundledWebRuntime": false,
+	"server": {
+		"androidScheme": "https"
+	}
+}

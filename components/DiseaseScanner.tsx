@@ -4,7 +4,7 @@ import 'jspdf-autotable';
 import { diagnosePlant, identifyPest, generatePestVisual } from '../services/geminiService';
 import { DiseaseDiagnosis, PestIdentification, Task } from '../types';
 import { 
-  Camera, 
+  Camera as CameraIcon, 
   AlertTriangle, 
   Sprout, 
   Info, 
@@ -36,6 +36,16 @@ import {
   Eye,
   Scan
 } from 'lucide-react';
+
+import { Camera, CameraResultType, CameraSource } from '@capacitor/camera';
+import { Share } from '@capacitor/share';
+import { useFirebase } from '../src/components/FirebaseProvider';
+import { db } from '../src/firebase';
+import { collection, addDoc } from 'firebase/firestore';
+import { handleFirestoreError, OperationType } from '../src/utils/firestoreErrorHandler';
+
+import { triggerHaptic, triggerSelectionHaptic } from '../src/utils/haptics';
+import { ImpactStyle } from '@capacitor/haptics';
 
 const ThreatRadar: React.FC<{ level: PestIdentification['threatLevel'] }> = ({ level }) => {
   const levels = {
@@ -82,71 +92,32 @@ interface DiseaseScannerProps {
 }
 
 const DiseaseScanner: React.FC<DiseaseScannerProps> = ({ language }) => {
+  const { activeFarmId } = useFirebase();
   const [image, setImage] = React.useState<string | null>(null);
   const [loading, setLoading] = React.useState(false);
   const [scanMode, setScanMode] = React.useState<'disease' | 'pest'>('disease');
   const [diagnosis, setDiagnosis] = React.useState<DiseaseDiagnosis | null>(null);
   const [pestResult, setPestResult] = React.useState<PestIdentification | null>(null);
   const [referenceImg, setReferenceImg] = React.useState<string | null>(null);
-  const [showCamera, setShowCamera] = React.useState(false);
-  const [facingMode, setFacingMode] = React.useState<'user' | 'environment'>('environment');
   const [addedTasks, setAddedTasks] = React.useState<Set<string>>(new Set());
   
-  const videoRef = React.useRef<HTMLVideoElement>(null);
-  const canvasRef = React.useRef<HTMLCanvasElement>(null);
-  const streamRef = React.useRef<MediaStream | null>(null);
-
-  React.useEffect(() => {
-    if (showCamera && videoRef.current && streamRef.current) {
-      videoRef.current.srcObject = streamRef.current;
-    }
-  }, [showCamera]);
-
   const startCamera = async () => {
+    triggerSelectionHaptic();
     try {
-      if (streamRef.current) stopCamera();
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: facingMode },
-        audio: false
+      const photo = await Camera.getPhoto({
+        quality: 90,
+        allowEditing: false,
+        resultType: CameraResultType.Base64,
+        source: CameraSource.Camera,
+        saveToGallery: false
       });
-      streamRef.current = stream;
-      setShowCamera(true);
-      setDiagnosis(null);
-      setPestResult(null);
-    } catch (err) {
-      console.error("Camera access denied", err);
-      alert("Camera access required for live scanning.");
-    }
-  };
 
-  const stopCamera = () => {
-    if (streamRef.current) {
-      streamRef.current.getTracks().forEach(track => track.stop());
-      streamRef.current = null;
-    }
-    setShowCamera(false);
-  };
-
-  const switchCamera = () => {
-    setFacingMode(prev => prev === 'user' ? 'environment' : 'user');
-    setTimeout(() => startCamera(), 100);
-  };
-
-  const capturePhoto = () => {
-    if (videoRef.current && canvasRef.current) {
-      const video = videoRef.current;
-      const canvas = canvasRef.current;
-      canvas.width = video.videoWidth;
-      canvas.height = video.videoHeight;
-      const ctx = canvas.getContext('2d');
-      if (ctx) {
-        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-        const dataUrl = canvas.toDataURL('image/jpeg');
-        const base64String = dataUrl.split(',')[1];
-        setImage(dataUrl);
-        stopCamera();
-        handleScan(base64String);
+      if (photo.base64String) {
+        setImage(`data:image/jpeg;base64,${photo.base64String}`);
+        handleScan(photo.base64String);
       }
+    } catch (err) {
+      console.error("Camera access denied or cancelled", err);
     }
   };
 
@@ -177,28 +148,32 @@ const DiseaseScanner: React.FC<DiseaseScannerProps> = ({ language }) => {
     }
   };
 
-  const addToTasks = (title: string, desc: string, priority: 'High' | 'Medium' | 'Low' = 'High') => {
-    const savedTasks = localStorage.getItem('agri_tasks');
-    const tasks: Task[] = savedTasks ? JSON.parse(savedTasks) : [];
+  const addToTasks = async (title: string, desc: string, priority: 'High' | 'Medium' | 'Low' = 'High') => {
+    if (!activeFarmId) return;
+    triggerSelectionHaptic();
     
-    const newTask: Task = {
-      id: Date.now().toString(),
-      title,
-      description: desc,
-      priority,
-      status: 'Pending',
-      category: scanMode === 'disease' ? 'Pest Control' : 'Repairs',
-      createdAt: new Date().toISOString()
-    };
-    
-    localStorage.setItem('agri_tasks', JSON.stringify([newTask, ...tasks]));
-    setAddedTasks(prev => new Set(prev).add(title));
+    const path = `users/${activeFarmId}/tasks`;
+    try {
+      await addDoc(collection(db, path), {
+        title,
+        description: desc,
+        priority,
+        status: 'Pending',
+        category: scanMode === 'disease' ? 'Pest Control' : 'Repairs',
+        createdAt: new Date().toISOString()
+      });
+      setAddedTasks(prev => new Set(prev).add(title));
+    } catch (error) {
+      handleFirestoreError(error, OperationType.CREATE, path);
+    }
   };
 
   const handleShare = async () => {
+    triggerSelectionHaptic();
     const content = scanMode === 'disease' ? diagnosis : pestResult;
     if (!content) return;
 
+    // Generate PDF for local saving
     const doc = new jsPDF();
     const timestamp = new Date().toLocaleString();
     const farmName = localStorage.getItem('agri_farm_name') || 'Unnamed Farm';
@@ -277,18 +252,19 @@ const DiseaseScanner: React.FC<DiseaseScannerProps> = ({ language }) => {
 
     doc.save(`AgriAssist_Scan_${new Date().getTime()}.pdf`);
 
-    // Also trigger native share if available
+    // Trigger native share
     const shareText = scanMode === 'disease' 
       ? `AgriAssist Diagnosis:\nPlant: ${diagnosis?.plantName}\nCondition: ${diagnosis?.condition}`
       : `AgriAssist Pest Identification:\nPest: ${pestResult?.pestName}`;
 
-    if (navigator.share) {
-      try {
-        await navigator.share({
-          title: `AgriAssist Scan Report`,
-          text: shareText,
-        });
-      } catch (err) { console.error(err); }
+    try {
+      await Share.share({
+        title: `AgriAssist Scan Report`,
+        text: shareText,
+        dialogTitle: 'Share Diagnostic Report',
+      });
+    } catch (err) { 
+      console.error("Sharing failed", err); 
     }
   };
 
@@ -306,13 +282,19 @@ const DiseaseScanner: React.FC<DiseaseScannerProps> = ({ language }) => {
       {!diagnosis && !pestResult && (
         <div className="flex bg-white/5 p-2 rounded-[2rem] border border-white/10 shadow-2xl max-w-md mx-auto backdrop-blur-xl">
           <button 
-            onClick={() => setScanMode('disease')}
+            onClick={() => {
+              triggerSelectionHaptic();
+              setScanMode('disease');
+            }}
             className={`flex-1 flex items-center justify-center gap-3 py-4 rounded-[1.5rem] font-bold text-[10px] uppercase tracking-[0.2em] transition-all ${scanMode === 'disease' ? 'bg-emerald-500 text-black shadow-[0_0_20px_rgba(16,185,129,0.4)]' : 'text-white/40 hover:text-white'}`}
           >
             <Sprout className="w-4 h-4" /> Disease Scan
           </button>
           <button 
-            onClick={() => setScanMode('pest')}
+            onClick={() => {
+              triggerSelectionHaptic();
+              setScanMode('pest');
+            }}
             className={`flex-1 flex items-center justify-center gap-3 py-4 rounded-[1.5rem] font-bold text-[10px] uppercase tracking-[0.2em] transition-all ${scanMode === 'pest' ? 'bg-emerald-500 text-black shadow-[0_0_20px_rgba(16,185,129,0.4)]' : 'text-white/40 hover:text-white'}`}
           >
             <Bug className="w-4 h-4" /> Pest Identify
@@ -323,7 +305,7 @@ const DiseaseScanner: React.FC<DiseaseScannerProps> = ({ language }) => {
       {(!diagnosis && !pestResult) ? (
         <div className="flex flex-col gap-8">
           <div 
-            onClick={() => !showCamera && startCamera()}
+            onClick={() => startCamera()}
             className="aspect-[4/5] bg-white/5 rounded-[4rem] border-2 border-dashed border-white/10 flex flex-col items-center justify-center relative overflow-hidden active:bg-white/10 transition-all shadow-2xl group cursor-pointer backdrop-blur-sm"
           >
             {image ? (
@@ -333,7 +315,7 @@ const DiseaseScanner: React.FC<DiseaseScannerProps> = ({ language }) => {
                 <div className="relative">
                   <div className="absolute inset-0 bg-emerald-500/20 blur-3xl rounded-full animate-pulse"></div>
                   <div className="bg-white/5 p-10 rounded-[2.5rem] shadow-2xl relative z-10 border border-white/10 backdrop-blur-xl">
-                    {scanMode === 'disease' ? <Camera className="w-16 h-16 text-emerald-500" /> : <Search className="w-16 h-16 text-emerald-500" />}
+                    {scanMode === 'disease' ? <CameraIcon className="w-16 h-16 text-emerald-500" /> : <Search className="w-16 h-16 text-emerald-500" />}
                   </div>
                 </div>
                 <div className="text-center px-8">
@@ -627,66 +609,6 @@ const DiseaseScanner: React.FC<DiseaseScannerProps> = ({ language }) => {
               </div>
             </div>
           )}
-        </div>
-      )}
-
-      {/* Camera Overlay - Full Immersive */}
-      {showCamera && (
-        <div className="fixed inset-0 z-[100] bg-black flex flex-col items-center justify-center animate-in fade-in duration-500">
-          <div className="absolute top-12 left-0 right-0 px-10 flex items-center justify-between z-10">
-            <button 
-              onClick={stopCamera}
-              className="bg-white/10 backdrop-blur-2xl p-5 rounded-full text-white hover:bg-white/20 transition-all border border-white/10 shadow-2xl"
-            >
-              <X className="w-8 h-8" />
-            </button>
-            <div className="bg-white/10 backdrop-blur-2xl px-8 py-4 rounded-full border border-white/20 shadow-2xl">
-               <div className="text-white text-[11px] font-black uppercase tracking-[0.4em] flex items-center gap-4">
-                 <div className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse shadow-[0_0_15px_#10b981]"></div>
-                 Neural Lens Active
-               </div>
-            </div>
-            <button 
-              onClick={switchCamera}
-              className="bg-white/10 backdrop-blur-2xl p-5 rounded-full text-white hover:bg-white/20 transition-all border border-white/10 shadow-2xl"
-            >
-              <RotateCcw className="w-8 h-8" />
-            </button>
-          </div>
-
-          <video 
-            ref={videoRef} 
-            autoPlay 
-            playsInline 
-            muted
-            className="w-full h-full object-cover opacity-80"
-          />
-          <canvas ref={canvasRef} className="hidden" />
-
-          {/* Viewfinder Overlay */}
-          <div className="absolute inset-0 pointer-events-none flex items-center justify-center">
-             <div className="w-[300px] h-[400px] border-2 border-white/20 rounded-[3rem] relative">
-                <div className="absolute top-0 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-white/10 backdrop-blur-md px-4 py-1 rounded-full border border-white/20">
-                   <span className="text-white text-[8px] font-black uppercase tracking-widest">Alignment Matrix</span>
-                </div>
-                <div className="absolute top-1/2 left-0 w-full h-px bg-white/10"></div>
-                <div className="absolute top-0 left-1/2 w-px h-full bg-white/10"></div>
-             </div>
-          </div>
-
-          <div className="absolute bottom-16 flex flex-col items-center gap-12 w-full px-10">
-            <p className="text-white/40 text-[10px] font-black uppercase tracking-[0.4em] text-center max-w-[320px] leading-relaxed">
-              Center the affected specimen within the alignment matrix for morphology capture
-            </p>
-            <button 
-              onClick={capturePhoto}
-              className="w-28 h-28 rounded-full bg-white/10 border-[12px] border-white/5 p-1 active:scale-90 transition-all shadow-[0_0_80px_rgba(16,185,129,0.2)] group"
-            >
-              <div className="w-full h-full rounded-full border-4 border-emerald-500 bg-emerald-500/20 shadow-inner flex items-center justify-center group-hover:bg-emerald-500/40 transition-colors">
-                 <div className="w-6 h-6 rounded-full bg-emerald-500 shadow-[0_0_20px_#10b981]"></div>
-              </div>
-            </button>
-          </div>
         </div>
       )}
 

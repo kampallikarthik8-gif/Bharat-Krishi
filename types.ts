@@ -21,7 +21,6 @@ export enum AppView {
   SUSTAINABILITY_HUB = 'SUSTAINABILITY_HUB',
   HELP_FEEDBACK = 'HELP_FEEDBACK',
   TASK_MANAGER = 'TASK_MANAGER',
-  LAND_MARKER = 'LAND_MARKER',
   TOOLS_HUB = 'TOOLS_HUB',
   WEATHER_HUB = 'WEATHER_HUB',
   INVENTORY_HUB = 'INVENTORY_HUB',
@@ -32,7 +31,11 @@ export enum AppView {
   EQUIPMENT_MARKET = 'EQUIPMENT_MARKET',
   AGRI_ACADEMY = 'AGRI_ACADEMY',
   SMART_ALERTS = 'SMART_ALERTS',
-  CROP_ROTATION_ADVISOR = 'CROP_ROTATION_ADVISOR'
+  CROP_ROTATION_ADVISOR = 'CROP_ROTATION_ADVISOR',
+  CARBON_CREDIT_TRACKER = 'CARBON_CREDIT_TRACKER',
+  EQUIPMENT_RENTAL = 'EQUIPMENT_RENTAL',
+  CROP_HEALTH_MONITOR = 'CROP_HEALTH_MONITOR',
+  ADMIN_PANEL = 'ADMIN_PANEL'
 }
 
 export interface InventoryItem {
@@ -58,7 +61,7 @@ export interface FieldPOI {
   id: string;
   type: 'Well' | 'Pump' | 'Gate' | 'Storage' | 'Fence_Issue' | 'Irrigation' | 'Fertilization' | 'Pest_Control' | 'Other';
   label: string;
-  point: [number, number];
+  point: { lat: number; lng: number };
   status?: 'Operational' | 'Maintenance' | 'Critical';
 }
 
@@ -66,7 +69,7 @@ export interface FieldZone {
   id: string;
   type: 'Irrigation' | 'Fertilization' | 'Pest_Control' | 'Other';
   label: string;
-  points: [number, number][];
+  points: { lat: number; lng: number }[];
   color: string;
   notes?: string;
 }
@@ -76,7 +79,7 @@ export interface Field {
   name: string;
   cropType?: string;
   season?: string;
-  points: [number, number][]; // [lat, lon]
+  points: { lat: number; lng: number }[]; // [{lat, lng}]
   markers?: FieldPOI[];
   zones?: FieldZone[];
   area: number; // In Hectares
@@ -181,4 +184,24 @@ export interface WeatherData {
   city: string;
   lat: number;
   lon: number;
+}
+
+export interface TeamMember {
+  id: string;
+  name: string;
+  email: string;
+  role: 'Owner' | 'Manager' | 'Worker';
+  joinedAt: string;
+  status: 'Active' | 'Pending';
+}
+
+export interface UserProfile {
+  id: string;
+  name: string;
+  email: string;
+  farmName: string;
+  role: 'admin' | 'farmer';
+  onboardingComplete: boolean;
+  createdAt?: string;
+  phone?: string;
 }

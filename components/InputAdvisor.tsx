@@ -36,7 +36,7 @@ import {
 import ReactMarkdown from 'react-markdown';
 import L from 'leaflet';
 
-const WEATHER_API_KEY = "42d5aa17c7f2866670e62b4c77cb3d32";
+const WEATHER_API_KEY = import.meta.env.VITE_WEATHER_API_KEY;
 
 const INPUT_SUGGESTIONS = ['DAP Fertilizer', 'Urea', 'Paddy Seeds', 'Tractor Rental', 'Neem Pesticide', 'Solar Pump'];
 

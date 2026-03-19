@@ -116,11 +116,14 @@ const VisualGallery: React.FC<VisualGalleryProps> = ({ language: initialLanguage
   const canvasRef = React.useRef<HTMLCanvasElement>(null);
   const streamRef = React.useRef<MediaStream | null>(null);
 
-  React.useEffect(() => {
-    if (showCamera && videoRef.current && streamRef.current) {
-      videoRef.current.srcObject = streamRef.current;
+  // Use a callback ref to handle video element mounting
+  const setVideoRef = React.useCallback((node: HTMLVideoElement | null) => {
+    if (node && streamRef.current) {
+      node.srcObject = streamRef.current;
     }
-  }, [showCamera]);
+    // @ts-ignore
+    videoRef.current = node;
+  }, []);
 
   const handleGenerate = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -211,6 +214,15 @@ const VisualGallery: React.FC<VisualGalleryProps> = ({ language: initialLanguage
     if (videoRef.current && canvasRef.current) {
       const video = videoRef.current;
       const canvas = canvasRef.current;
+      
+      // Ensure video is ready
+      if (video.videoWidth === 0 || video.videoHeight === 0) {
+        console.warn("Video not ready for capture");
+        // Try again in 100ms
+        setTimeout(captureAndIdentify, 100);
+        return;
+      }
+
       canvas.width = video.videoWidth;
       canvas.height = video.videoHeight;
       const ctx = canvas.getContext('2d');
@@ -558,7 +570,7 @@ const VisualGallery: React.FC<VisualGalleryProps> = ({ language: initialLanguage
               <RotateCcw className="w-6 h-6" />
             </button>
           </div>
-          <video ref={videoRef} autoPlay playsInline muted className="w-full h-full object-cover" />
+          <video ref={setVideoRef} autoPlay playsInline muted className="w-full h-full object-cover" />
           <canvas ref={canvasRef} className="hidden" />
           <div className="absolute bottom-12 flex flex-col items-center gap-8 w-full px-8">
             <button onClick={captureAndIdentify} className="w-20 h-20 rounded-full bg-white border-4 border-stone-200 p-1 shadow-[0_0_40px_rgba(255,255,255,0.3)] active:scale-90 transition-transform">

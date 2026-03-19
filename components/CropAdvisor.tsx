@@ -1,6 +1,7 @@
 import React from 'react';
 import { jsPDF } from 'jspdf';
-import 'jspdf-autotable';
+import autoTable from 'jspdf-autotable';
+import html2canvas from 'html2canvas';
 import { getCropAdvice, getFertilizerAdvice } from '../services/geminiService';
 import { FertilizerPlan } from '../types';
 import { 
@@ -34,11 +35,17 @@ import {
   AlertCircle,
   GripVertical,
   Sun,
-  Wind
+  Wind,
+  MessageCircle
 } from 'lucide-react';
 import Markdown from 'react-markdown';
 
-const WEATHER_API_KEY = "42d5aa17c7f2866670e62b4c77cb3d32";
+import { useFirebase } from '../src/components/FirebaseProvider';
+import { db } from '../src/firebase';
+import { collection, query, onSnapshot, addDoc, deleteDoc, doc, orderBy } from 'firebase/firestore';
+import { handleFirestoreError, OperationType } from '../src/utils/firestoreErrorHandler';
+
+const WEATHER_API_KEY = import.meta.env.VITE_WEATHER_API_KEY;
 
 const INDIAN_CROPS = [
   'Paddy (Rice)', 'Wheat', 'Sugarcane', 'Cotton', 'Mustard', 'Bajra', 'Moong Dal', 'Tomato', 'Onion', 'Potato', 'Maize', 'Soybean'
@@ -75,11 +82,23 @@ interface CropAdvisorProps {
 }
 
 const CropAdvisor: React.FC<CropAdvisorProps> = ({ language: initialLanguage }) => {
+  const { profile, activeFarmId } = useFirebase();
   const [formData, setFormData] = React.useState({
     crop: '',
-    location: localStorage.getItem('agri_farm_location') || '',
-    soil: localStorage.getItem('agri_soil_type') || ''
+    location: profile?.location || '',
+    soil: profile?.soilType || ''
   });
+
+  React.useEffect(() => {
+    if (profile) {
+      setFormData(prev => ({
+        ...prev,
+        location: prev.location || profile.location || '',
+        soil: prev.soil || profile.soilType || ''
+      }));
+    }
+  }, [profile]);
+
   const [language, setLanguage] = React.useState(initialLanguage);
   const [advice, setAdvice] = React.useState('');
   const [fertilizerPlan, setFertilizerPlan] = React.useState<FertilizerPlan | null>(null);
@@ -88,10 +107,27 @@ const CropAdvisor: React.FC<CropAdvisorProps> = ({ language: initialLanguage }) 
   const [detecting, setDetecting] = React.useState(false);
   const [saveStatus, setSaveStatus] = React.useState<'idle' | 'saved'>('idle');
 
-  const [savedStrategies, setSavedStrategies] = React.useState<SavedStrategy[]>(() => {
-    const saved = localStorage.getItem('agri_saved_crop_strategies');
-    return saved ? JSON.parse(saved) : [];
-  });
+  const [savedStrategies, setSavedStrategies] = React.useState<SavedStrategy[]>([]);
+  const reportRef = React.useRef<HTMLDivElement>(null);
+
+  React.useEffect(() => {
+    if (!activeFarmId) return;
+
+    const path = `users/${activeFarmId}/cropStrategies`;
+    const q = query(collection(db, path), orderBy('timestamp', 'desc'));
+
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const strategies = snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      })) as SavedStrategy[];
+      setSavedStrategies(strategies);
+    }, (error) => {
+      handleFirestoreError(error, OperationType.LIST, path);
+    });
+
+    return () => unsubscribe();
+  }, [activeFarmId]);
 
   const detectLocation = () => {
     setDetecting(true);
@@ -136,36 +172,42 @@ const CropAdvisor: React.FC<CropAdvisorProps> = ({ language: initialLanguage }) 
 
   const onLanguageChange = (newLang: string) => {
     setLanguage(newLang);
-    localStorage.setItem('agri_language', newLang);
     if (advice) {
       handleFetchAdvice(newLang);
     }
   };
 
-  const saveToArchive = () => {
-    if (!advice || !fertilizerPlan) return;
-    const newStrategy: SavedStrategy = {
-      id: Date.now().toString(),
-      timestamp: new Date().toISOString(),
-      crop: formData.crop,
-      location: formData.location,
-      soil: formData.soil,
-      advice,
-      fertilizerPlan
-    };
-    const updated = [newStrategy, ...savedStrategies];
-    setSavedStrategies(updated);
-    localStorage.setItem('agri_saved_crop_strategies', JSON.stringify(updated));
-    setSaveStatus('saved');
-    setTimeout(() => setSaveStatus('idle'), 3000);
+  const saveToArchive = async () => {
+    if (!advice || !fertilizerPlan || !activeFarmId) return;
+    
+    const path = `users/${activeFarmId}/cropStrategies`;
+    try {
+      await addDoc(collection(db, path), {
+        timestamp: new Date().toISOString(),
+        crop: formData.crop,
+        location: formData.location,
+        soil: formData.soil,
+        advice,
+        fertilizerPlan
+      });
+      setSaveStatus('saved');
+      setTimeout(() => setSaveStatus('idle'), 3000);
+    } catch (error) {
+      handleFirestoreError(error, OperationType.CREATE, path);
+    }
   };
 
-  const deleteArchived = (id: string, e: React.MouseEvent) => {
+  const deleteArchived = async (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
+    if (!activeFarmId) return;
     if (!confirm("Remove this archived strategy?")) return;
-    const updated = savedStrategies.filter(s => s.id !== id);
-    setSavedStrategies(updated);
-    localStorage.setItem('agri_saved_crop_strategies', JSON.stringify(updated));
+    
+    const path = `users/${activeFarmId}/cropStrategies/${id}`;
+    try {
+      await deleteDoc(doc(db, path));
+    } catch (error) {
+      handleFirestoreError(error, OperationType.DELETE, path);
+    }
   };
 
   const loadArchived = (strategy: SavedStrategy) => {
@@ -179,174 +221,53 @@ const CropAdvisor: React.FC<CropAdvisorProps> = ({ language: initialLanguage }) 
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
-  const downloadReport = () => {
-    if (!advice && !fertilizerPlan) return;
-
-    const doc = new jsPDF();
-    const farmName = localStorage.getItem('agri_farm_name') || 'Unnamed Farm';
-    const farmerName = localStorage.getItem('agri_farmer_name') || 'Valued Farmer';
-    const timestamp = new Date().toLocaleString();
-
-    // Header
-    doc.setFillColor(24, 24, 24);
-    doc.rect(0, 0, 210, 40, 'F');
-    doc.setTextColor(255, 255, 255);
-    doc.setFontSize(22);
-    doc.setFont('helvetica', 'bold');
-    doc.text('AGRIASSIST STRATEGIC REPORT', 20, 25);
+  const shareOnWhatsApp = () => {
+    if (!advice) return;
     
-    doc.setFontSize(10);
-    doc.setFont('helvetica', 'normal');
-    doc.text(`Generated: ${timestamp}`, 20, 33);
-
-    // Metadata Section
-    doc.setTextColor(40, 40, 40);
-    doc.setFontSize(12);
-    doc.setFont('helvetica', 'bold');
-    doc.text('FARMER INFORMATION', 20, 55);
-    doc.setDrawColor(200, 200, 200);
-    doc.line(20, 58, 190, 58);
-
-    doc.setFont('helvetica', 'normal');
-    doc.setFontSize(10);
-    doc.text(`Farmer Name: ${farmerName}`, 20, 65);
-    doc.text(`Farm Unit:   ${farmName}`, 20, 72);
-    doc.text(`Language:    ${language}`, 20, 79);
-
-    doc.setFont('helvetica', 'bold');
-    doc.text('FIELD PARAMETERS', 110, 55);
-    doc.setFont('helvetica', 'normal');
-    doc.text(`Target Crop: ${formData.crop}`, 110, 65);
-    doc.text(`Location:    ${formData.location || 'N/A'}`, 110, 72);
-    doc.text(`Soil Type:   ${formData.soil || 'N/A'}`, 110, 79);
-
-    // Strategic Advisory
-    doc.setFontSize(12);
-    doc.setFont('helvetica', 'bold');
-    doc.text('[1] STRATEGIC ADVISORY', 20, 95);
-    doc.line(20, 98, 190, 98);
-
-    doc.setFont('helvetica', 'normal');
-    doc.setFontSize(9);
-    const cleanAdvice = advice
-      .replace(/#{1,6}\s/g, '')
-      .replace(/\*\*/g, '')
-      .replace(/\*/g, '-');
+    const farmName = localStorage.getItem('agri_farm_name') || 'My Farm';
+    const message = `*Bharat Kisan - Crop Strategy Report*%0A%0A` +
+      `*Farm:* ${farmName}%0A` +
+      `*Crop:* ${formData.crop}%0A` +
+      `*Location:* ${formData.location}%0A%0A` +
+      `*Strategic Advice:*%0A${advice.substring(0, 500)}${advice.length > 500 ? '...' : ''}%0A%0A` +
+      `Generated via Bharat Kisan App`;
     
-    const splitAdvice = doc.splitTextToSize(cleanAdvice, 170);
-    doc.text(splitAdvice, 20, 105);
+    window.open(`https://wa.me/?text=${message}`, '_blank');
+  };
 
-    let currentY = 105 + (splitAdvice.length * 5) + 10;
+  const downloadReport = async () => {
+    if (!advice || !reportRef.current) return;
 
-    if (fertilizerPlan) {
-      if (currentY > 250) {
-        doc.addPage();
-        currentY = 20;
-      }
-
-      doc.setFontSize(12);
-      doc.setFont('helvetica', 'bold');
-      doc.text('[2] FERTILIZATION & NUTRIENT PLAN', 20, currentY);
-      doc.line(20, currentY + 3, 190, currentY + 3);
-      currentY += 10;
-
-      doc.setFont('helvetica', 'normal');
-      doc.setFontSize(9);
-      const reqText = doc.splitTextToSize(`Crop Requirements: ${fertilizerPlan.cropRequirements}`, 170);
-      doc.text(reqText, 20, currentY);
-      currentY += (reqText.length * 5) + 5;
-
-      const adjText = doc.splitTextToSize(`Soil Adjustments: ${fertilizerPlan.soilAdjustments}`, 170);
-      doc.text(adjText, 20, currentY);
-      currentY += (adjText.length * 5) + 10;
-
-      // Fertilizer Table
-      doc.setFont('helvetica', 'bold');
-      doc.text('RECOMMENDED FERTILIZERS', 20, currentY);
-      currentY += 5;
-
-      const fertData = fertilizerPlan.fertilizers.map(f => [
-        f.name,
-        f.npk,
-        f.isOrganic ? 'Organic' : 'Synthetic',
-        f.description
-      ]);
-
-      (doc as any).autoTable({
-        startY: currentY,
-        head: [['Name', 'NPK', 'Type', 'Description']],
-        body: fertData,
-        theme: 'striped',
-        headStyles: { fillColor: [130, 85, 0] },
-        styles: { fontSize: 8 },
-        margin: { left: 20, right: 20 }
+    try {
+      const canvas = await html2canvas(reportRef.current, {
+        scale: 2,
+        useCORS: true,
+        logging: false,
+        backgroundColor: '#ffffff'
       });
 
-      currentY = (doc as any).lastAutoTable.finalY + 15;
+      const imgData = canvas.toDataURL('image/png');
+      const pdf = new jsPDF('p', 'mm', 'a4');
+      const imgWidth = 210; // A4 width in mm
+      const pageHeight = 297; // A4 height in mm
+      const imgHeight = (canvas.height * imgWidth) / canvas.width;
+      let heightLeft = imgHeight;
+      let position = 0;
 
-      if (currentY > 250) {
-        doc.addPage();
-        currentY = 20;
+      pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
+      heightLeft -= pageHeight;
+
+      while (heightLeft >= 0) {
+        position = heightLeft - imgHeight;
+        pdf.addPage();
+        pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
+        heightLeft -= pageHeight;
       }
 
-      // Schedule Table
-      doc.setFont('helvetica', 'bold');
-      doc.text('APPLICATION SCHEDULE', 20, currentY);
-      currentY += 5;
-
-      const scheduleData = fertilizerPlan.schedule.map(s => [
-        s.stage,
-        s.timing,
-        s.dosage,
-        s.method
-      ]);
-
-      (doc as any).autoTable({
-        startY: currentY,
-        head: [['Stage', 'Timing', 'Dosage', 'Method']],
-        body: scheduleData,
-        theme: 'grid',
-        headStyles: { fillColor: [16, 185, 129] },
-        styles: { fontSize: 8 },
-        margin: { left: 20, right: 20 }
-      });
-
-      currentY = (doc as any).lastAutoTable.finalY + 15;
-
-      if (currentY > 250) {
-        doc.addPage();
-        currentY = 20;
-      }
-
-      if (fertilizerPlan.micronutrients && fertilizerPlan.micronutrients.length > 0) {
-        doc.setFont('helvetica', 'bold');
-        doc.text('MICRONUTRIENTS', 20, currentY);
-        currentY += 5;
-        doc.setFont('helvetica', 'normal');
-        doc.text(fertilizerPlan.micronutrients.join(', '), 20, currentY);
-        currentY += 10;
-      }
-
-      doc.setFont('helvetica', 'bold');
-      doc.text('EXPERT TIPS', 20, currentY);
-      currentY += 5;
-      doc.setFont('helvetica', 'normal');
-      const tipsText = fertilizerPlan.tips.map(t => `- ${t}`).join('\n');
-      const splitTips = doc.splitTextToSize(tipsText, 170);
-      doc.text(splitTips, 20, currentY);
+      pdf.save(`AgriAssist_Report_${formData.crop.replace(/\s+/g, '_')}_${new Date().getTime()}.pdf`);
+    } catch (error) {
+      console.error('Error generating PDF:', error);
     }
-
-    // Footer on last page
-    const pageCount = (doc as any).internal.getNumberOfPages();
-    for (let i = 1; i <= pageCount; i++) {
-      doc.setPage(i);
-      doc.setFontSize(8);
-      doc.setTextColor(150, 150, 150);
-      doc.text(`Page ${i} of ${pageCount}`, 105, 285, { align: 'center' });
-      doc.text('Disclaimer: AI recommendations should be verified with local agricultural officers.', 105, 290, { align: 'center' });
-    }
-
-    doc.save(`AgriAssist_Plan_${formData.crop.replace(/\s+/g, '_')}.pdf`);
   };
 
   return (
@@ -480,6 +401,12 @@ const CropAdvisor: React.FC<CropAdvisorProps> = ({ language: initialLanguage }) 
                   className="flex items-center gap-3 bg-[#825500] text-white px-6 py-3 rounded-2xl font-black text-[10px] uppercase tracking-widest hover:bg-black active:scale-95 transition-all shadow-xl"
                  >
                    <Download className="w-4 h-4" /> Export Document
+                 </button>
+                 <button 
+                  onClick={shareOnWhatsApp}
+                  className="flex items-center gap-3 bg-[#25D366] text-white px-6 py-3 rounded-2xl font-black text-[10px] uppercase tracking-widest hover:bg-[#128C7E] active:scale-95 transition-all shadow-xl"
+                 >
+                   <MessageCircle className="w-4 h-4" /> Share WhatsApp
                  </button>
                </div>
             </div>
@@ -708,6 +635,124 @@ const CropAdvisor: React.FC<CropAdvisorProps> = ({ language: initialLanguage }) 
           </div>
         </div>
       )}
+
+      {/* Hidden Report Template for PDF Generation */}
+      <div 
+        ref={reportRef}
+        style={{ 
+          position: 'absolute', 
+          left: '-9999px', 
+          top: '-9999px', 
+          width: '800px', 
+          backgroundColor: 'white',
+          padding: '40px',
+          color: '#1c1917',
+          fontFamily: 'sans-serif'
+        }}
+      >
+        <div style={{ backgroundColor: '#1c1917', padding: '30px', borderRadius: '12px', marginBottom: '30px', color: 'white' }}>
+          <h1 style={{ fontSize: '28px', fontWeight: '900', margin: 0, letterSpacing: '-0.02em' }}>AGRIASSIST STRATEGIC REPORT</h1>
+          <p style={{ fontSize: '12px', opacity: 0.7, marginTop: '8px' }}>Generated: {new Date().toLocaleString()}</p>
+        </div>
+
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '40px', marginBottom: '40px' }}>
+          <div>
+            <h3 style={{ fontSize: '14px', fontWeight: '900', borderBottom: '1px solid #e7e5e4', paddingBottom: '8px', marginBottom: '12px', color: '#78716c' }}>FARMER INFORMATION</h3>
+            <p style={{ fontSize: '14px', margin: '4px 0' }}><strong>Farmer Name:</strong> {profile?.name || 'Valued Farmer'}</p>
+            <p style={{ fontSize: '14px', margin: '4px 0' }}><strong>Farm Unit:</strong> {profile?.farmName || 'Unnamed Farm'}</p>
+            <p style={{ fontSize: '14px', margin: '4px 0' }}><strong>Language:</strong> {language}</p>
+          </div>
+          <div>
+            <h3 style={{ fontSize: '14px', fontWeight: '900', borderBottom: '1px solid #e7e5e4', paddingBottom: '8px', marginBottom: '12px', color: '#78716c' }}>FIELD PARAMETERS</h3>
+            <p style={{ fontSize: '14px', margin: '4px 0' }}><strong>Target Crop:</strong> {formData.crop}</p>
+            <p style={{ fontSize: '14px', margin: '4px 0' }}><strong>Location:</strong> {formData.location || 'N/A'}</p>
+            <p style={{ fontSize: '14px', margin: '4px 0' }}><strong>Soil Type:</strong> {formData.soil || 'N/A'}</p>
+          </div>
+        </div>
+
+        <div style={{ marginBottom: '40px' }}>
+          <h3 style={{ fontSize: '16px', fontWeight: '900', borderBottom: '2px solid #1c1917', paddingBottom: '8px', marginBottom: '20px' }}>[1] STRATEGIC ADVISORY</h3>
+          <div style={{ fontSize: '14px', lineHeight: '1.6', whiteSpace: 'pre-wrap' }}>
+            <Markdown>{advice}</Markdown>
+          </div>
+        </div>
+
+        {fertilizerPlan && (
+          <div>
+            <h3 style={{ fontSize: '16px', fontWeight: '900', borderBottom: '2px solid #1c1917', paddingBottom: '8px', marginBottom: '20px' }}>[2] FERTILIZATION & NUTRIENT PLAN</h3>
+            
+            <div style={{ marginBottom: '24px' }}>
+              <p style={{ fontSize: '14px', marginBottom: '8px' }}><strong>Crop Requirements:</strong> {fertilizerPlan.cropRequirements}</p>
+              <p style={{ fontSize: '14px' }}><strong>Soil Adjustments:</strong> {fertilizerPlan.soilAdjustments}</p>
+            </div>
+
+            <h4 style={{ fontSize: '14px', fontWeight: '900', marginBottom: '12px', color: '#854d0e' }}>RECOMMENDED FERTILIZERS</h4>
+            <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: '24px', fontSize: '12px' }}>
+              <thead>
+                <tr style={{ backgroundColor: '#854d0e', color: 'white' }}>
+                  <th style={{ padding: '10px', textAlign: 'left', border: '1px solid #e7e5e4' }}>Name</th>
+                  <th style={{ padding: '10px', textAlign: 'left', border: '1px solid #e7e5e4' }}>NPK</th>
+                  <th style={{ padding: '10px', textAlign: 'left', border: '1px solid #e7e5e4' }}>Type</th>
+                  <th style={{ padding: '10px', textAlign: 'left', border: '1px solid #e7e5e4' }}>Description</th>
+                </tr>
+              </thead>
+              <tbody>
+                {fertilizerPlan.fertilizers.map((f, i) => (
+                  <tr key={i} style={{ backgroundColor: i % 2 === 0 ? '#fafaf9' : 'white' }}>
+                    <td style={{ padding: '10px', border: '1px solid #e7e5e4' }}>{f.name}</td>
+                    <td style={{ padding: '10px', border: '1px solid #e7e5e4' }}>{f.npk}</td>
+                    <td style={{ padding: '10px', border: '1px solid #e7e5e4' }}>{f.isOrganic ? 'Organic' : 'Synthetic'}</td>
+                    <td style={{ padding: '10px', border: '1px solid #e7e5e4' }}>{f.description}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+
+            <h4 style={{ fontSize: '14px', fontWeight: '900', marginBottom: '12px', color: '#059669' }}>APPLICATION SCHEDULE</h4>
+            <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: '24px', fontSize: '12px' }}>
+              <thead>
+                <tr style={{ backgroundColor: '#059669', color: 'white' }}>
+                  <th style={{ padding: '10px', textAlign: 'left', border: '1px solid #e7e5e4' }}>Stage</th>
+                  <th style={{ padding: '10px', textAlign: 'left', border: '1px solid #e7e5e4' }}>Timing</th>
+                  <th style={{ padding: '10px', textAlign: 'left', border: '1px solid #e7e5e4' }}>Dosage</th>
+                  <th style={{ padding: '10px', textAlign: 'left', border: '1px solid #e7e5e4' }}>Method</th>
+                </tr>
+              </thead>
+              <tbody>
+                {fertilizerPlan.schedule.map((s, i) => (
+                  <tr key={i} style={{ border: '1px solid #e7e5e4' }}>
+                    <td style={{ padding: '10px', border: '1px solid #e7e5e4' }}>{s.stage}</td>
+                    <td style={{ padding: '10px', border: '1px solid #e7e5e4' }}>{s.timing}</td>
+                    <td style={{ padding: '10px', border: '1px solid #e7e5e4' }}>{s.dosage}</td>
+                    <td style={{ padding: '10px', border: '1px solid #e7e5e4' }}>{s.method}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+
+            {fertilizerPlan.micronutrients && fertilizerPlan.micronutrients.length > 0 && (
+              <div style={{ marginBottom: '24px' }}>
+                <h4 style={{ fontSize: '14px', fontWeight: '900', marginBottom: '8px' }}>MICRONUTRIENTS</h4>
+                <p style={{ fontSize: '14px' }}>{fertilizerPlan.micronutrients.join(', ')}</p>
+              </div>
+            )}
+
+            <div>
+              <h4 style={{ fontSize: '14px', fontWeight: '900', marginBottom: '8px' }}>EXPERT TIPS</h4>
+              <ul style={{ fontSize: '14px', paddingLeft: '20px' }}>
+                {fertilizerPlan.tips.map((t, i) => (
+                  <li key={i} style={{ marginBottom: '4px' }}>{t}</li>
+                ))}
+              </ul>
+            </div>
+          </div>
+        )}
+
+        <div style={{ marginTop: '60px', borderTop: '1px solid #e7e5e4', paddingTop: '20px', textAlign: 'center', fontSize: '10px', color: '#a8a29e' }}>
+          <p>Disclaimer: AI recommendations should be verified with local agricultural officers.</p>
+          <p>© 2026 AgriAssist Smart Farming Companion</p>
+        </div>
+      </div>
     </div>
   );
 };

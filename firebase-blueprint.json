@@ -1,0 +1,141 @@
+{
+  "entities": {
+    "User": {
+      "title": "User Profile",
+      "description": "Stores user profile information and farm details.",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string", "description": "User's full name" },
+        "farmName": { "type": "string", "description": "Name of the farm" },
+        "phone": { "type": "string", "description": "User's phone number" },
+        "email": { "type": "string", "description": "User's email address" },
+        "language": { "type": "string", "description": "Preferred language" },
+        "state": { "type": "string", "description": "Farm state" },
+        "district": { "type": "string", "description": "Farm district" },
+        "mandal": { "type": "string", "description": "Farm mandal" },
+        "revenueVillage": { "type": "string", "description": "Farm revenue village" },
+        "farmSize": { "type": "number", "description": "Farm land size in acres" },
+        "soilType": { "type": "string", "description": "Farm soil type" },
+        "units": { "type": "string", "description": "Preferred units (Metric/Imperial)" },
+        "location": { "type": "string", "description": "Farm location coordinates or name" },
+        "notifications": { "type": "boolean", "description": "Enable notifications" },
+        "weatherAlerts": { "type": "boolean", "description": "Enable weather alerts" },
+        "autoNightMode": { "type": "boolean", "description": "Enable auto night mode" },
+        "aiVoice": { "type": "string", "description": "Preferred AI voice" },
+        "precisionMode": { "type": "string", "description": "AI precision mode" },
+        "scannerHD": { "type": "boolean", "description": "Enable HD scanning" },
+        "kccId": { "type": "string", "description": "Kisan Credit Card ID" },
+        "pmKisanId": { "type": "string", "description": "PM-KISAN ID" },
+        "onboardingComplete": { "type": "boolean", "description": "Whether onboarding is finished" },
+        "mainCrops": { "type": "array", "description": "Main crops grown" },
+        "cropHistory": { "type": "array", "description": "History of crops grown" },
+        "pastIssues": { "type": "array", "description": "Past farm issues" },
+        "irrigation": { "type": "string", "description": "Irrigation type" },
+        "terrain": { "type": "string", "description": "Farm terrain type" },
+        "sizeUnit": { "type": "string", "description": "Display unit for farm size" },
+        "farmSizeUnit": { "type": "string", "description": "Internal unit for farm size" },
+        "updatedAt": { "type": "string", "description": "Last update timestamp" },
+        "createdAt": { "type": "string", "description": "Creation timestamp" },
+        "role": { "type": "string", "description": "User role" }
+      },
+      "required": ["name", "farmName", "onboardingComplete"]
+    },
+    "Task": {
+      "title": "Farm Task",
+      "description": "Represents a task to be completed on the farm.",
+      "type": "object",
+      "properties": {
+        "title": { "type": "string", "description": "Task title" },
+        "category": { "type": "string", "description": "Task category" },
+        "priority": { "type": "string", "description": "Task priority (High/Medium/Low)" },
+        "status": { "type": "string", "description": "Task status (Pending/Completed)" },
+        "dueDate": { "type": "string", "description": "Due date in ISO format" },
+        "createdAt": { "type": "string", "description": "Creation date in ISO format" }
+      },
+      "required": ["title", "category", "priority", "status"]
+    },
+    "Field": {
+      "title": "Farm Field",
+      "description": "Represents a mapped field or parcel on the farm.",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string", "description": "Field name" },
+        "cropType": { "type": "string", "description": "Type of crop planted" },
+        "points": { "type": "array", "description": "Coordinates of the field boundary" },
+        "markers": { "type": "array", "description": "Points of interest markers" },
+        "area": { "type": "number", "description": "Area in hectares" },
+        "perimeter": { "type": "number", "description": "Perimeter in meters" },
+        "createdAt": { "type": "string", "description": "Creation date in ISO format" },
+        "color": { "type": "string", "description": "Display color" },
+        "status": { "type": "string", "description": "Field status" },
+        "zones": { "type": "array", "description": "Management zones within the field" }
+      },
+      "required": ["name", "points", "area"]
+    },
+    "InventoryItem": {
+      "title": "Inventory Item",
+      "description": "Represents an item in the farm inventory.",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string", "description": "Item name" },
+        "category": { "type": "string", "description": "Item category" },
+        "quantity": { "type": "number", "description": "Current quantity" },
+        "unit": { "type": "string", "description": "Measurement unit" },
+        "minThreshold": { "type": "number", "description": "Minimum threshold for alerts" },
+        "expiryDate": { "type": "string", "description": "Expiry date in ISO format" }
+      },
+      "required": ["name", "category", "quantity", "unit"]
+    },
+    "Transaction": {
+      "title": "Financial Transaction",
+      "description": "Represents an income or expense transaction.",
+      "type": "object",
+      "properties": {
+        "type": { "type": "string", "description": "Transaction type (Income/Expense)" },
+        "category": { "type": "string", "description": "Transaction category" },
+        "amount": { "type": "number", "description": "Transaction amount" },
+        "date": { "type": "string", "description": "Transaction date in ISO format" },
+        "note": { "type": "string", "description": "Optional note" }
+      },
+      "required": ["type", "category", "amount", "date"]
+    },
+    "Membership": {
+      "title": "Farm Membership",
+      "description": "Represents a user's membership in a farm.",
+      "type": "object",
+      "properties": {
+        "farmId": { "type": "string", "description": "The ID of the farm owner" },
+        "farmName": { "type": "string", "description": "The name of the farm" },
+        "role": { "type": "string", "description": "The user's role in the farm" },
+        "joinedAt": { "type": "string", "description": "When the user joined" }
+      },
+      "required": ["farmId", "farmName", "role"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "User",
+      "description": "User profile document"
+    },
+    "/users/{userId}/memberships/{membershipId}": {
+      "schema": "Membership",
+      "description": "User's farm memberships"
+    },
+    "/users/{userId}/tasks/{taskId}": {
+      "schema": "Task",
+      "description": "User's farm tasks"
+    },
+    "/users/{userId}/fields/{fieldId}": {
+      "schema": "Field",
+      "description": "User's farm fields"
+    },
+    "/users/{userId}/inventory/{itemId}": {
+      "schema": "InventoryItem",
+      "description": "User's inventory items"
+    },
+    "/users/{userId}/transactions/{txId}": {
+      "schema": "Transaction",
+      "description": "User's financial transactions"
+    }
+  }
+}

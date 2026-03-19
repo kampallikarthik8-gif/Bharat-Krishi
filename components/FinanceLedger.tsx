@@ -2,7 +2,7 @@
 import React from 'react';
 import { Transaction } from '../types';
 import { jsPDF } from 'jspdf';
-import 'jspdf-autotable';
+import autoTable from 'jspdf-autotable';
 import { 
   Wallet, 
   Plus, 
@@ -17,17 +17,19 @@ import {
   CreditCard,
   PieChart,
   DollarSign,
-  Download
+  Download,
+  MessageCircle
 } from 'lucide-react';
+import { db, auth } from '../src/firebase';
+import { collection, addDoc, deleteDoc, doc, onSnapshot, query, orderBy } from 'firebase/firestore';
+import { handleFirestoreError, OperationType } from '../src/utils/firestoreErrorHandler';
+
+import { useFirebase } from '../src/components/FirebaseProvider';
 
 const FinanceLedger: React.FC = () => {
-  const [transactions, setTransactions] = React.useState<Transaction[]>(() => {
-    const saved = localStorage.getItem('agri_finances');
-    return saved ? JSON.parse(saved) : [
-      { id: '1', type: 'Expense', category: 'Seeds', amount: 12000, date: '2023-10-15', note: 'Basmati Paddy Seeds' },
-      { id: '2', type: 'Income', category: 'Sales', amount: 85000, date: '2023-10-20', note: 'Wheat Harvest Sale' }
-    ];
-  });
+  const { activeFarmId } = useFirebase();
+  const [transactions, setTransactions] = React.useState<Transaction[]>([]);
+  const [loading, setLoading] = React.useState(true);
   
   const [showAdd, setShowAdd] = React.useState(false);
   const [newTx, setNewTx] = React.useState<Partial<Transaction>>({
@@ -37,8 +39,25 @@ const FinanceLedger: React.FC = () => {
   });
 
   React.useEffect(() => {
-    localStorage.setItem('agri_finances', JSON.stringify(transactions));
-  }, [transactions]);
+    if (!activeFarmId) return;
+
+    const path = `users/${activeFarmId}/transactions`;
+    const q = query(collection(db, path), orderBy('date', 'desc'));
+
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const txData: Transaction[] = [];
+      snapshot.forEach((doc) => {
+        txData.push({ id: doc.id, ...doc.data() } as Transaction);
+      });
+      setTransactions(txData);
+      setLoading(false);
+    }, (error) => {
+      handleFirestoreError(error, OperationType.LIST, path);
+      setLoading(false);
+    });
+
+    return () => unsubscribe();
+  }, [activeFarmId]);
 
   const exportPDF = () => {
     const doc = new jsPDF();
@@ -56,7 +75,7 @@ const FinanceLedger: React.FC = () => {
       `INR ${tx.amount.toLocaleString()}`
     ]);
 
-    (doc as any).autoTable({
+    autoTable(doc, {
       startY: 40,
       head: [['Date', 'Type', 'Category', 'Note', 'Amount']],
       body: tableData,
@@ -79,12 +98,24 @@ const FinanceLedger: React.FC = () => {
     doc.save(`BharatKisan_Finance_Report_${new Date().toISOString().split('T')[0]}.pdf`);
   };
 
-  const addTx = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newTx.amount || !newTx.category) return;
+  const shareOnWhatsApp = () => {
+    const farmName = localStorage.getItem('agri_farm_name') || 'My Farm';
+    const message = `*Bharat Kisan - Finance Summary*%0A%0A` +
+      `*Farm:* ${farmName}%0A` +
+      `*Net Balance:* ₹${balance.toLocaleString()}%0A` +
+      `*Total Income:* ₹${totals.income.toLocaleString()}%0A` +
+      `*Total Expense:* ₹${totals.expense.toLocaleString()}%0A%0A` +
+      `Managed via Bharat Kisan App`;
     
-    const tx: Transaction = {
-      id: Date.now().toString(),
+    window.open(`https://wa.me/?text=${message}`, '_blank');
+  };
+
+  const addTx = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newTx.amount || !newTx.category || !activeFarmId) return;
+    
+    const path = `users/${activeFarmId}/transactions`;
+    const txData = {
       type: newTx.type as any,
       category: newTx.category,
       amount: parseFloat(newTx.amount.toString()),
@@ -92,13 +123,23 @@ const FinanceLedger: React.FC = () => {
       note: newTx.note || ''
     };
     
-    setTransactions([tx, ...transactions]);
-    setShowAdd(false);
-    setNewTx({ type: 'Expense', category: 'Seeds', date: new Date().toISOString().split('T')[0] });
+    try {
+      await addDoc(collection(db, path), txData);
+      setShowAdd(false);
+      setNewTx({ type: 'Expense', category: 'Seeds', date: new Date().toISOString().split('T')[0] });
+    } catch (error) {
+      handleFirestoreError(error, OperationType.CREATE, path);
+    }
   };
 
-  const deleteTx = (id: string) => {
-    setTransactions(transactions.filter(t => t.id !== id));
+  const deleteTx = async (id: string) => {
+    if (!activeFarmId) return;
+    const path = `users/${activeFarmId}/transactions/${id}`;
+    try {
+      await deleteDoc(doc(db, path));
+    } catch (error) {
+      handleFirestoreError(error, OperationType.DELETE, path);
+    }
   };
 
   const totals = transactions.reduce((acc, tx) => {
@@ -108,6 +149,14 @@ const FinanceLedger: React.FC = () => {
   }, { income: 0, expense: 0 });
 
   const balance = totals.income - totals.expense;
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-stone-50 flex items-center justify-center">
+        <Loader2 className="w-12 h-12 animate-spin text-emerald-500" />
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6 pb-12 animate-in fade-in slide-in-from-bottom-6 duration-700">
@@ -126,6 +175,13 @@ const FinanceLedger: React.FC = () => {
             title="Export PDF"
           >
             <Download className="w-6 h-6" />
+          </button>
+          <button 
+            onClick={shareOnWhatsApp}
+            className="bg-[#25D366] text-white p-3 rounded-2xl shadow-xl active:scale-90 transition-transform"
+            title="Share WhatsApp"
+          >
+            <MessageCircle className="w-6 h-6" />
           </button>
           <button 
             onClick={() => setShowAdd(true)}

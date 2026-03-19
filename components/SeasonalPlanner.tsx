@@ -36,7 +36,7 @@ import {
 import Markdown from 'react-markdown';
 import { motion, AnimatePresence } from 'motion/react';
 
-const WEATHER_API_KEY = "42d5aa17c7f2866670e62b4c77cb3d32";
+const WEATHER_API_KEY = import.meta.env.VITE_WEATHER_API_KEY;
 
 const LANGUAGES = [
   { name: "English", label: "English" },

@@ -267,9 +267,9 @@ export const analyzeSoil = async (base64Image: string, language: string = 'Engli
   };
 };
 
-export const analyzeFieldBoundary = async (points: [number, number][], name: string, language: string = 'English') => {
+export const analyzeFieldBoundary = async (points: { lat: number; lng: number }[], name: string, language: string = 'English') => {
   const ai = getAIClient();
-  const coordsString = points.map(p => `[${p[0].toFixed(6)}, ${p[1].toFixed(6)}]`).join(', ');
+  const coordsString = points.map(p => `[${p.lat.toFixed(6)}, ${p.lng.toFixed(6)}]`).join(', ');
   const prompt = `Perform a geo-profile analysis for an Indian agricultural field named "${name}" defined by coordinates: ${coordsString}. 
   Describe typical: 1. Regional soil characteristics. 2. Climate/Rainfall pattern. 3. Suitability for Kharif/Rabi crops. 4. Potential drainage issues based on local terrain patterns. 5. Government schemes applicable in this latitude/longitude.
   CRITICAL: Provide the entire response in ${language}.`;

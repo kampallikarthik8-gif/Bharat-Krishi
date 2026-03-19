@@ -1,21 +1,25 @@
 
 import React from 'react';
-import { BookOpen, Plus, Trash2, Calendar, Tag, FileText, Sparkles, Loader2, ChevronRight, X, Download } from 'lucide-react';
+import { BookOpen, Plus, Trash2, Calendar, Tag, FileText, Sparkles, Loader2, ChevronRight, X, Download, MessageCircle } from 'lucide-react';
 import { JournalEntry } from '../types';
 import { analyzeJournal } from '../services/geminiService';
 import ReactMarkdown from 'react-markdown';
 import { jsPDF } from 'jspdf';
-import 'jspdf-autotable';
+import autoTable from 'jspdf-autotable';
+import { db, auth } from '../src/firebase';
+import { collection, addDoc, deleteDoc, doc, onSnapshot, query, orderBy } from 'firebase/firestore';
+import { handleFirestoreError, OperationType } from '../src/utils/firestoreErrorHandler';
+
+import { useFirebase } from '../src/components/FirebaseProvider';
 
 interface FarmJournalProps {
   language: string;
 }
 
 const FarmJournal: React.FC<FarmJournalProps> = ({ language }) => {
-  const [entries, setEntries] = React.useState<JournalEntry[]>(() => {
-    const saved = localStorage.getItem('agriassist_journal');
-    return saved ? JSON.parse(saved) : [];
-  });
+  const { activeFarmId } = useFirebase();
+  const [entries, setEntries] = React.useState<JournalEntry[]>([]);
+  const [loading, setLoading] = React.useState(true);
   
   const [showForm, setShowForm] = React.useState(false);
   const [analyzing, setAnalyzing] = React.useState(false);
@@ -28,8 +32,25 @@ const FarmJournal: React.FC<FarmJournalProps> = ({ language }) => {
   });
 
   React.useEffect(() => {
-    localStorage.setItem('agriassist_journal', JSON.stringify(entries));
-  }, [entries]);
+    if (!activeFarmId) return;
+
+    const path = `users/${activeFarmId}/journal`;
+    const q = query(collection(db, path), orderBy('date', 'desc'));
+
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const journalData: JournalEntry[] = [];
+      snapshot.forEach((doc) => {
+        journalData.push({ id: doc.id, ...doc.data() } as JournalEntry);
+      });
+      setEntries(journalData);
+      setLoading(false);
+    }, (error) => {
+      handleFirestoreError(error, OperationType.LIST, path);
+      setLoading(false);
+    });
+
+    return () => unsubscribe();
+  }, [activeFarmId]);
 
   const exportPDF = () => {
     const doc = new jsPDF();
@@ -46,7 +67,7 @@ const FarmJournal: React.FC<FarmJournalProps> = ({ language }) => {
       entry.notes
     ]);
 
-    (doc as any).autoTable({
+    autoTable(doc, {
       startY: 40,
       head: [['Date', 'Category', 'Crop/Field', 'Notes']],
       body: tableData,
@@ -57,22 +78,44 @@ const FarmJournal: React.FC<FarmJournalProps> = ({ language }) => {
     doc.save(`BharatKisan_Journal_Report_${new Date().toISOString().split('T')[0]}.pdf`);
   };
 
-  const addEntry = (e: React.FormEvent) => {
+  const shareOnWhatsApp = () => {
+    if (!analysis) return;
+    const message = `*Bharat Kisan - Seasonal Farm Analysis*%0A%0A` +
+      `${analysis.substring(0, 500)}${analysis.length > 500 ? '...' : ''}%0A%0A` +
+      `Generated via Bharat Kisan App`;
+    
+    window.open(`https://wa.me/?text=${message}`, '_blank');
+  };
+
+  const addEntry = async (e: React.FormEvent) => {
     e.preventDefault();
-    const entry: JournalEntry = {
-      id: Date.now().toString(),
+    if (!activeFarmId || !newEntry.crop || !newEntry.notes) return;
+
+    const path = `users/${activeFarmId}/journal`;
+    const entryData = {
       date: newEntry.date!,
       category: newEntry.category as JournalEntry['category'],
       crop: newEntry.crop!,
       notes: newEntry.notes!
     };
-    setEntries([entry, ...entries]);
-    setShowForm(false);
-    setNewEntry({ category: 'Planting', crop: '', notes: '', date: new Date().toISOString().split('T')[0] });
+
+    try {
+      await addDoc(collection(db, path), entryData);
+      setShowForm(false);
+      setNewEntry({ category: 'Planting', crop: '', notes: '', date: new Date().toISOString().split('T')[0] });
+    } catch (error) {
+      handleFirestoreError(error, OperationType.CREATE, path);
+    }
   };
 
-  const deleteEntry = (id: string) => {
-    setEntries(entries.filter(e => e.id !== id));
+  const deleteEntry = async (id: string) => {
+    if (!activeFarmId) return;
+    const path = `users/${activeFarmId}/journal/${id}`;
+    try {
+      await deleteDoc(doc(db, path));
+    } catch (error) {
+      handleFirestoreError(error, OperationType.DELETE, path);
+    }
   };
 
   const handleAnalyze = async () => {
@@ -87,6 +130,14 @@ const FarmJournal: React.FC<FarmJournalProps> = ({ language }) => {
       setAnalyzing(false);
     }
   };
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-20">
+        <Loader2 className="w-8 h-8 animate-spin text-emerald-600" />
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -150,7 +201,13 @@ const FarmJournal: React.FC<FarmJournalProps> = ({ language }) => {
                 </div>
               </div>
 
-              <div className="mt-8 pt-6 border-t border-stone-100 flex justify-end">
+              <div className="mt-8 pt-6 border-t border-stone-100 flex justify-end gap-3">
+                <button 
+                  onClick={shareOnWhatsApp}
+                  className="bg-[#25D366] text-white px-8 py-3 rounded-2xl font-black text-xs uppercase tracking-widest active:scale-95 transition-all flex items-center gap-2"
+                >
+                  <MessageCircle className="w-4 h-4" /> Share WhatsApp
+                </button>
                 <button 
                   onClick={() => setAnalysis(null)}
                   className="bg-stone-900 text-white px-8 py-3 rounded-2xl font-black text-xs uppercase tracking-widest active:scale-95 transition-all"

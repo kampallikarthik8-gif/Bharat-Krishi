@@ -25,7 +25,6 @@ import HelpFeedback from './components/HelpFeedback';
 import TaskManager from './components/TaskManager';
 import Onboarding from './components/Onboarding';
 import Login from './components/Login';
-import LandMarker from './components/LandMarker';
 import ToolsHub from './components/ToolsHub';
 import WeatherHub from './components/WeatherHub';
 import InventoryHub from './components/InventoryHub';
@@ -33,6 +32,11 @@ import FinanceLedger from './components/FinanceLedger';
 import SubsidyTracker from './components/SubsidyTracker';
 import SeasonalPlanner from './components/SeasonalPlanner';
 import InputAdvisor from './components/InputAdvisor';
+import CarbonCreditTracker from './components/CarbonCreditTracker';
+import EquipmentRental from './components/EquipmentRental';
+import CropHealthMonitor from './components/CropHealthMonitor';
+import SplashScreen from './components/SplashScreen';
+import AdminPanel from './components/AdminPanel';
 
 import AgriAcademy from './components/AgriAcademy';
 import EquipmentMarket from './components/EquipmentMarket';
@@ -40,11 +44,14 @@ import SmartAlerts from './components/SmartAlerts';
 import FeatureTour from './components/FeatureTour';
 import CropRotationAdvisor from './components/CropRotationAdvisor';
 
+import { useFirebase } from './src/components/FirebaseProvider';
+import { auth, db } from './src/firebase';
+import { signOut } from 'firebase/auth';
+import { doc, setDoc } from 'firebase/firestore';
+import { Loader2 } from 'lucide-react';
+
 const App: React.FC = () => {
-  const [isLoggedIn, setIsLoggedIn] = React.useState<boolean>(() => {
-    return localStorage.getItem('agri_session_active') === 'true';
-  });
-  const [authMode, setAuthMode] = React.useState<'login' | 'register'>('login');
+  const { user, profile, loading, memberships, activeFarmId, setActiveFarmId } = useFirebase();
   const [currentView, setCurrentView] = React.useState<AppView>(AppView.DASHBOARD);
   const [viewHistory, setViewHistory] = React.useState<AppView[]>([]);
   const [language, setLanguage] = React.useState<string>(() => {
@@ -53,20 +60,79 @@ const App: React.FC = () => {
   const [showTour, setShowTour] = React.useState<boolean>(() => {
     return localStorage.getItem('agri_tour_completed') !== 'true';
   });
+  const [showSplash, setShowSplash] = React.useState(true);
 
-  const handleOnboardingComplete = (name: string, farm: string, phone: string, lang: string, state: string, district: string, mandal: string, revenue: string) => {
-    localStorage.setItem('agri_farmer_name', name);
-    localStorage.setItem('agri_farm_name', farm);
-    localStorage.setItem('agri_farmer_phone', phone);
-    localStorage.setItem('agri_language', lang);
-    localStorage.setItem('agri_state', state);
-    localStorage.setItem('agri_district', district);
-    localStorage.setItem('agri_mandal', mandal);
-    localStorage.setItem('agri_revenue_village', revenue);
-    localStorage.setItem('agri_session_active', 'true');
-    setLanguage(lang);
-    setIsLoggedIn(true);
-    setShowTour(true);
+  React.useEffect(() => {
+    const timer = setTimeout(() => {
+      setShowSplash(false);
+    }, 2500);
+    return () => clearTimeout(timer);
+  }, []);
+
+  // Auto-switch to first membership if no personal profile
+  React.useEffect(() => {
+    if (!loading && !profile && memberships.length > 0 && activeFarmId === user?.uid) {
+      setActiveFarmId(memberships[0].farmId);
+    }
+  }, [loading, profile, memberships, activeFarmId, user]);
+
+  React.useEffect(() => {
+    if (profile) {
+      // Sync to localStorage for components that still use it
+      localStorage.setItem('agri_farmer_name', profile.name);
+      localStorage.setItem('agri_farm_name', profile.farmName);
+      localStorage.setItem('agri_farmer_phone', profile.phone || '');
+      localStorage.setItem('agri_language', profile.language || 'English');
+      localStorage.setItem('agri_state', profile.state || '');
+      localStorage.setItem('agri_district', profile.district || '');
+      localStorage.setItem('agri_mandal', profile.mandal || '');
+      localStorage.setItem('agri_revenue_village', profile.revenueVillage || '');
+      localStorage.setItem('agri_soil_type', profile.soilType || '');
+      localStorage.setItem('agri_units', profile.units || 'Metric');
+      setLanguage(profile.language || 'English');
+    }
+  }, [profile]);
+
+  const handleOnboardingComplete = async (name: string, farm: string, phone: string, lang: string, state: string, district: string, mandal: string, revenue: string, farmSize: string) => {
+    if (!user) return;
+
+    const profileData = {
+      name,
+      farmName: farm,
+      phone,
+      email: user.email,
+      language: lang,
+      state,
+      district,
+      mandal,
+      revenueVillage: revenue,
+      farmSize: parseFloat(farmSize) || 0,
+      role: 'farmer',
+      createdAt: new Date().toISOString(),
+      soilType: 'Loamy', // Default
+      units: 'Metric', // Default
+      onboardingComplete: true
+    };
+
+    try {
+      await setDoc(doc(db, 'users', user.uid), profileData);
+      
+      // Sync to localStorage
+      localStorage.setItem('agri_farmer_name', name);
+      localStorage.setItem('agri_farm_name', farm);
+      localStorage.setItem('agri_farmer_phone', phone);
+      localStorage.setItem('agri_language', lang);
+      localStorage.setItem('agri_state', state);
+      localStorage.setItem('agri_district', district);
+      localStorage.setItem('agri_mandal', mandal);
+      localStorage.setItem('agri_revenue_village', revenue);
+      localStorage.setItem('agri_session_active', 'true');
+      
+      setLanguage(lang);
+      setShowTour(true);
+    } catch (error) {
+      console.error("Error saving profile:", error);
+    }
   };
 
   const navigateTo = (view: AppView) => {
@@ -86,21 +152,12 @@ const App: React.FC = () => {
     }
   };
 
-  const handleLogout = () => {
-    localStorage.setItem('agri_session_active', 'false');
-    setIsLoggedIn(false);
-    setAuthMode('login');
-  };
-
-  const handleLogin = (phone: string) => {
-    const storedPhone = localStorage.getItem('agri_farmer_phone');
-    const hasRegistered = !!localStorage.getItem('agri_farmer_name');
-
-    if (hasRegistered && (!storedPhone || storedPhone === phone)) {
-      localStorage.setItem('agri_session_active', 'true');
-      setIsLoggedIn(true);
-    } else {
-      setAuthMode('register');
+  const handleLogout = async () => {
+    try {
+      await signOut(auth);
+      localStorage.setItem('agri_session_active', 'false');
+    } catch (error) {
+      console.error("Error signing out:", error);
     }
   };
 
@@ -133,7 +190,7 @@ const App: React.FC = () => {
       case AppView.IRRIGATION_HUB:
         return <IrrigationHub language={language} />;
       case AppView.FIELD_MAP:
-        return <FieldMap language={language} />;
+        return <FieldMap language={language} onBack={handleBack} />;
       case AppView.SPRAYING_ADVISOR:
         return <SprayingAdvisor language={language} />;
       case AppView.SETTINGS:
@@ -150,8 +207,6 @@ const App: React.FC = () => {
         return <HelpFeedback />;
       case AppView.TASK_MANAGER:
         return <TaskManager language={language} />;
-      case AppView.LAND_MARKER:
-        return <LandMarker language={language} onBack={handleBack} />;
       case AppView.WEATHER_HUB:
         return <WeatherHub language={language} />;
       case AppView.INVENTORY_HUB:
@@ -172,6 +227,14 @@ const App: React.FC = () => {
         return <SmartAlerts />;
       case AppView.CROP_ROTATION_ADVISOR:
         return <CropRotationAdvisor language={language} />;
+      case AppView.CARBON_CREDIT_TRACKER:
+        return <CarbonCreditTracker />;
+      case AppView.EQUIPMENT_RENTAL:
+        return <EquipmentRental />;
+      case AppView.CROP_HEALTH_MONITOR:
+        return <CropHealthMonitor />;
+      case AppView.ADMIN_PANEL:
+        return <AdminPanel />;
       default:
         return <Dashboard setView={navigateTo} />;
     }
@@ -182,11 +245,24 @@ const App: React.FC = () => {
     setShowTour(false);
   };
 
-  if (!isLoggedIn) {
-    if (authMode === 'login') {
-      return <Login onLogin={handleLogin} onSwitchToRegister={() => setAuthMode('register')} />;
-    }
-    return <Onboarding onComplete={handleOnboardingComplete} onBackToLogin={() => setAuthMode('login')} />;
+  if (showSplash) {
+    return <SplashScreen />;
+  }
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-stone-50">
+        <Loader2 className="w-10 h-10 animate-spin text-emerald-600" />
+      </div>
+    );
+  }
+
+  if (!user) {
+    return <Login onLogin={() => {}} onSwitchToRegister={() => {}} />;
+  }
+
+  if (!profile && memberships.length === 0) {
+    return <Onboarding onComplete={handleOnboardingComplete} onBackToLogin={handleLogout} />;
   }
 
   return (
@@ -201,7 +277,7 @@ const App: React.FC = () => {
         {renderView()}
       </Layout>
       <AnimatePresence>
-        {isLoggedIn && showTour && (
+        {user && showTour && (
           <FeatureTour onComplete={handleTourComplete} />
         )}
       </AnimatePresence>

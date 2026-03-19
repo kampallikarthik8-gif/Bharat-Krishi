@@ -1,5 +1,5 @@
 import React from 'react';
-import { getFertilizerAdvice, fetchFieldMap } from '../services/geminiService';
+import { getFertilizerAdvice, fetchFieldMap, analyzeFieldBoundary } from '../services/geminiService';
 import { Field, FertilizerPlan, SoilReport, FieldPOI, GroundingChunk } from '../types';
 import { 
   Navigation, 
@@ -10,7 +10,10 @@ import {
   Sprout, 
   Zap, 
   X, 
+  ChevronLeft,
   ChevronRight,
+  ChevronDown,
+  ArrowUp,
   ClipboardList,
   RefreshCw,
   Trash2,
@@ -41,14 +44,17 @@ import {
   Navigation2,
   ArrowUpRight,
   Settings2,
-  Magnet
+  Magnet,
+  Sparkles
 } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import { motion, AnimatePresence } from 'motion/react';
 import L from 'leaflet';
-// @ts-ignore
-window.L = L;
-import 'leaflet-geometryutil';
+import { db, auth } from '../src/firebase';
+import { collection, query, onSnapshot, addDoc, updateDoc, deleteDoc, doc, orderBy, setDoc } from 'firebase/firestore';
+import { handleFirestoreError, OperationType } from '../src/utils/firestoreErrorHandler';
+
+import { useFirebase } from '../src/components/FirebaseProvider';
 
 const FIELD_COLORS = [
   '#FF7E5F', '#FEB47B', '#FFD194', '#FF9A8B', '#FF6A88', '#FF99AC', '#FFC3A0'
@@ -119,7 +125,7 @@ const POI_STATUS_THEMES: Record<string, { ring: string, animate: string, label: 
 };
 
 interface SnapResult {
-  point: [number, number];
+  point: { lat: number; lng: number };
   type: 'Boundary' | 'Asset';
   label: string;
 }
@@ -142,18 +148,47 @@ const ControlBtn: React.FC<{ active: boolean, onClick: () => void, icon: any, la
   </button>
 );
 
-const FieldMap = ({ language }: { language: string }) => {
+const formatArea = (hectares: number) => {
+  const totalAcres = hectares * 2.47105;
+  const wholeAcres = Math.floor(totalAcres);
+  const gunthas = (totalAcres - wholeAcres) * 40;
+  if (wholeAcres === 0) return `${gunthas.toFixed(1)} Gn`;
+  return `${wholeAcres} Ac, ${gunthas.toFixed(0)} Gn`;
+};
+
+const calculateArea = (points: { lat: number; lng: number }[]) => {
+  if (points.length < 3) return 0;
+  const avgLat = points.reduce((s, p) => s + p.lat, 0) / points.length;
+  const latFactor = 111132.92;
+  const lonFactor = 111319.49 * Math.cos(avgLat * Math.PI / 180);
+  let area = 0;
+  for (let i = 0; i < points.length; i++) {
+    const p1 = points[i];
+    const p2 = points[(i + 1) % points.length];
+    area += ((p1.lng * lonFactor) * (p2.lat * latFactor) - (p2.lng * lonFactor) * (p1.lat * latFactor));
+  }
+  return Math.abs(area / 2);
+};
+
+const calculateDistance = (p1: { lat: number; lng: number }, p2: { lat: number; lng: number }) => {
+  return L.latLng(p1).distanceTo(L.latLng(p2));
+};
+
+const FieldMap = ({ language, onBack }: { language: string, onBack: () => void }) => {
+  const { activeFarmId } = useFirebase();
   const [isSatellite, setIsSatellite] = React.useState(true);
-  const [activeMode, setActiveMode] = React.useState<'Navigate' | 'Boundary' | 'Asset' | 'Ruler' | 'Zone'>('Navigate');
+  const [activeMode, setActiveMode] = React.useState<'Navigate' | 'Boundary' | 'Asset' | 'Ruler' | 'Zone' | 'Discovery'>('Navigate');
   const [showLabels, setShowLabels] = React.useState(true);
   const [snappingEnabled, setSnappingEnabled] = React.useState(true);
   
-  const [drawingPoints, setDrawingPoints] = React.useState<[number, number][]>([]);
+  const [drawingPoints, setDrawingPoints] = React.useState<{ lat: number; lng: number }[]>([]);
   const [tempMarkers, setTempMarkers] = React.useState<FieldPOI[]>([]);
   const [tempZones, setTempZones] = React.useState<any[]>([]);
-  const [rulerPoints, setRulerPoints] = React.useState<[number, number][]>([]);
+  const [rulerPoints, setRulerPoints] = React.useState<{ lat: number; lng: number }[]>([]);
   const [discoveryQuery, setDiscoveryQuery] = React.useState('');
   const [discoveryResults, setDiscoveryResults] = React.useState<GroundingChunk[]>([]);
+  const [fieldAnalysis, setFieldAnalysis] = React.useState<{ fieldId: string, report: string } | null>(null);
+  const [isAnalyzingField, setIsAnalyzingField] = React.useState(false);
   const [isSearchingDiscovery, setIsSearchingDiscovery] = React.useState(false);
   const [snapIndicator, setSnapIndicator] = React.useState<SnapResult | null>(null);
   
@@ -169,6 +204,8 @@ const FieldMap = ({ language }: { language: string }) => {
   const [adviceLoading, setAdviceLoading] = React.useState(false);
   const [mapReady, setMapReady] = React.useState(false);
 
+  const registryRef = React.useRef<HTMLElement>(null);
+
   const [formData, setFormData] = React.useState({
     name: '',
     crop: '',
@@ -183,10 +220,28 @@ const FieldMap = ({ language }: { language: string }) => {
     notes: ''
   });
 
-  const [savedFields, setSavedFields] = React.useState<Field[]>(() => {
-    const saved = localStorage.getItem('agri_saved_fields');
-    return saved ? JSON.parse(saved) : [];
-  });
+  const [savedFields, setSavedFields] = React.useState<Field[]>([]);
+  const [loading, setLoading] = React.useState(true);
+
+  React.useEffect(() => {
+    if (!activeFarmId) return;
+
+    const path = `users/${activeFarmId}/fields`;
+    const q = query(collection(db, path), orderBy('createdAt', 'desc'));
+
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const fields: Field[] = [];
+      snapshot.forEach((doc) => {
+        fields.push({ id: doc.id, ...doc.data() } as Field);
+      });
+      setSavedFields(fields);
+      setLoading(false);
+    }, (error) => {
+      handleFirestoreError(error, OperationType.LIST, path);
+    });
+
+    return () => unsubscribe();
+  }, []);
 
   const mapRef = React.useRef<L.Map | null>(null);
   const mapContainerRef = React.useRef<HTMLDivElement>(null);
@@ -195,10 +250,10 @@ const FieldMap = ({ language }: { language: string }) => {
   const discoveryLayersRef = React.useRef<L.FeatureGroup | null>(null);
   const snapLayersRef = React.useRef<L.FeatureGroup | null>(null);
 
-  const stateRef = React.useRef({ activeMode, drawingPoints, savedFields, mapReady, rulerPoints, snappingEnabled, snapIndicator });
+  const stateRef = React.useRef({ activeMode, drawingPoints, savedFields, mapReady, rulerPoints, snappingEnabled, snapIndicator, discoveryResults });
   React.useEffect(() => {
-    stateRef.current = { activeMode, drawingPoints, savedFields, mapReady, rulerPoints, snappingEnabled, snapIndicator };
-  }, [activeMode, drawingPoints, savedFields, mapReady, rulerPoints, snappingEnabled, snapIndicator]);
+    stateRef.current = { activeMode, drawingPoints, savedFields, mapReady, rulerPoints, snappingEnabled, snapIndicator, discoveryResults };
+  }, [activeMode, drawingPoints, savedFields, mapReady, rulerPoints, snappingEnabled, snapIndicator, discoveryResults]);
 
   const findSnapPoint = (latlng: L.LatLng): SnapResult | null => {
     const { snappingEnabled: enabled, savedFields: fields, drawingPoints: current } = stateRef.current;
@@ -272,9 +327,27 @@ const FieldMap = ({ language }: { language: string }) => {
     }
   };
 
+  const recenterMap = () => {
+    setIsSearchingPincode(true);
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        if (mapRef.current) {
+          mapRef.current.setView([pos.coords.latitude, pos.coords.longitude], 17);
+        }
+        setIsSearchingPincode(false);
+      },
+      (err) => {
+        console.error("Geolocation failed", err);
+        setIsSearchingPincode(false);
+        alert("Unable to fetch current location. Please check your GPS settings.");
+      },
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+    );
+  };
+
   const getDrawingStats = () => {
     if (activeMode === 'Boundary' && drawingPoints.length > 2) {
-      const area = (L as any).GeometryUtil.geodesicArea(drawingPoints.map(p => L.latLng(p))) / 10000;
+      const area = calculateArea(drawingPoints) / 10000;
       const perimeter = drawingPoints.reduce((acc, p, i) => acc + (i > 0 ? calculateDistance(drawingPoints[i-1], p) : 0), 0);
       return { area, perimeter };
     }
@@ -316,10 +389,21 @@ const FieldMap = ({ language }: { language: string }) => {
 
     map.on('click', (e) => {
       setContextMenu(null);
-      const { activeMode: mode, snapIndicator: snap } = stateRef.current;
-      const pt: [number, number] = snap ? snap.point : [e.latlng.lat, e.latlng.lng];
+      const { activeMode: mode, snapIndicator: snap, drawingPoints: currentPoints } = stateRef.current;
+      const pt: { lat: number; lng: number } = snap ? snap.point : { lat: e.latlng.lat, lng: e.latlng.lng };
       
       if (mode === 'Boundary' || mode === 'Zone') {
+        // Check if clicking near the first point to complete the polygon
+        if (currentPoints.length >= 3) {
+          const firstPt = currentPoints[0];
+          const dist = calculateDistance(pt, firstPt);
+          // If within 10 meters, complete the polygon
+          if (dist < 10) {
+            if (mode === 'Boundary') setShowSaveModal(true);
+            else setShowZoneModal(true);
+            return;
+          }
+        }
         setDrawingPoints(prev => [...prev, pt]);
       } else if (mode === 'Asset') {
         const typeObj = POI_TYPES[0]; 
@@ -330,8 +414,14 @@ const FieldMap = ({ language }: { language: string }) => {
           point: pt,
           status: 'Operational'
         };
-        setTempMarkers(prev => [...prev, newAsset]);
-        setEditingPOI({ poi: newAsset });
+        
+        if (activeField) {
+          // If a field is active, we can directly prompt to add it to this field
+          setEditingPOI({ poi: newAsset, fieldId: activeField.id });
+        } else {
+          setTempMarkers(prev => [...prev, newAsset]);
+          setEditingPOI({ poi: newAsset });
+        }
       } else if (mode === 'Ruler') {
         setRulerPoints(prev => [...prev, pt]);
       }
@@ -428,22 +518,30 @@ const FieldMap = ({ language }: { language: string }) => {
 
   React.useEffect(() => { renderUserFields(); }, [renderUserFields]);
 
-  const handlePOISave = (updatedPOI: FieldPOI) => {
-    const updatedFields = savedFields.map(f => {
-      if (f.id === editingPOI?.fieldId) {
-        return { 
-          ...f, 
-          markers: (f.markers || []).map(m => m.id === updatedPOI.id ? updatedPOI : m) 
-        };
+  const handlePOISave = async (updatedPOI: FieldPOI) => {
+    if (!auth.currentUser) return;
+
+    if (editingPOI?.fieldId) {
+      const path = `users/${activeFarmId}/fields/${editingPOI.fieldId}`;
+      const field = savedFields.find(f => f.id === editingPOI.fieldId);
+      if (field) {
+        const existingMarkerIdx = (field.markers || []).findIndex(m => m.id === updatedPOI.id);
+        let updatedMarkers = [...(field.markers || [])];
+        
+        if (existingMarkerIdx > -1) {
+          updatedMarkers[existingMarkerIdx] = updatedPOI;
+        } else {
+          updatedMarkers.push(updatedPOI);
+        }
+
+        try {
+          await updateDoc(doc(db, path), { markers: updatedMarkers });
+        } catch (error) {
+          handleFirestoreError(error, OperationType.UPDATE, path);
+        }
       }
-      return f;
-    });
-    
-    if (!editingPOI?.fieldId) {
-      setTempMarkers(prev => prev.map(m => m.id === updatedPOI.id ? updatedPOI : m));
     } else {
-      setSavedFields(updatedFields);
-      localStorage.setItem('agri_saved_fields', JSON.stringify(updatedFields));
+      setTempMarkers(prev => prev.map(m => m.id === updatedPOI.id ? updatedPOI : m));
     }
     setEditingPOI(null);
   };
@@ -480,6 +578,18 @@ const FieldMap = ({ language }: { language: string }) => {
     }
   };
 
+  const handleFieldAnalysis = async (field: Field) => {
+    setIsAnalyzingField(true);
+    try {
+      const report = await analyzeFieldBoundary(field.points, field.name, language);
+      setFieldAnalysis({ fieldId: field.id, report });
+    } catch (err) {
+      console.error("Analysis failed", err);
+    } finally {
+      setIsAnalyzingField(false);
+    }
+  };
+
   const exportGeoJSON = () => {
     const geojson = {
       type: "FeatureCollection",
@@ -488,7 +598,7 @@ const FieldMap = ({ language }: { language: string }) => {
         properties: { name: f.name, crop: f.cropType, area: f.area, status: f.status },
         geometry: {
           type: "Polygon",
-          coordinates: [f.points.map(p => [p[1], p[0]])]
+          coordinates: [f.points.map(p => [p.lng, p.lat])]
         }
       }))
     };
@@ -518,22 +628,11 @@ const FieldMap = ({ language }: { language: string }) => {
     }
   };
 
-  const formatArea = (hectares: number) => {
-    const totalAcres = hectares * 2.47105;
-    const wholeAcres = Math.floor(totalAcres);
-    const gunthas = (totalAcres - wholeAcres) * 40;
-    if (wholeAcres === 0) return `${gunthas.toFixed(1)} Gn`;
-    return `${wholeAcres} Ac, ${gunthas.toFixed(0)} Gn`;
-  };
-
-  const calculateDistance = (p1: [number, number], p2: [number, number]) => {
-    return L.latLng(p1).distanceTo(L.latLng(p2));
-  };
-
   React.useEffect(() => {
     navigator.geolocation.getCurrentPosition(
       (pos) => initMap(pos.coords.latitude, pos.coords.longitude),
-      () => initMap(20.5937, 78.9629)
+      () => initMap(20.5937, 78.9629),
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
     );
   }, []);
 
@@ -557,7 +656,7 @@ const FieldMap = ({ language }: { language: string }) => {
         L.polyline(rulerPoints, { color: '#f97316', weight: 4, dashArray: '8, 8' }).addTo(drawingLayersRef.current);
         for(let i=1; i<rulerPoints.length; i++) {
           const dist = calculateDistance(rulerPoints[i-1], rulerPoints[i]);
-          L.marker([(rulerPoints[i-1][0]+rulerPoints[i][0])/2, (rulerPoints[i-1][1]+rulerPoints[i][1])/2], {
+          L.marker([(rulerPoints[i-1].lat + rulerPoints[i].lat) / 2, (rulerPoints[i-1].lng + rulerPoints[i].lng) / 2], {
             icon: L.divIcon({ html: `<div class="bg-stone-900 text-white px-2 py-1 rounded-lg text-[9px] font-black shadow-xl border border-white/20 whitespace-nowrap">${dist.toFixed(1)}m</div>`, className: '' })
           }).addTo(drawingLayersRef.current);
         }
@@ -566,8 +665,60 @@ const FieldMap = ({ language }: { language: string }) => {
     }
     
     if (activeMode === 'Boundary' || activeMode === 'Zone') {
-      if (drawingPoints.length > 1) L.polyline(drawingPoints, { color: activeMode === 'Zone' ? '#fbbf24' : 'white', weight: 4, dashArray: '5, 10' }).addTo(drawingLayersRef.current);
+      if (drawingPoints.length > 1) {
+        L.polyline(drawingPoints, { color: activeMode === 'Zone' ? '#fbbf24' : 'white', weight: 4, dashArray: '5, 10' }).addTo(drawingLayersRef.current);
+        if (drawingPoints.length >= 3) {
+          // Show closing line
+          L.polyline([drawingPoints[drawingPoints.length - 1], drawingPoints[0]], { color: activeMode === 'Zone' ? '#fbbf24' : 'white', weight: 2, dashArray: '2, 5', opacity: 0.5 }).addTo(drawingLayersRef.current);
+        }
+      }
       drawingPoints.forEach(p => L.circleMarker(p, { radius: 6, color: activeMode === 'Zone' ? '#fbbf24' : '#10b981', fillOpacity: 1, fillColor: 'white', weight: 2 }).addTo(drawingLayersRef.current!));
+    }
+
+    if (discoveryResults.length > 0) {
+      discoveryResults.forEach(async (result) => {
+        if (result.maps?.title) {
+          // We try to find if we already have a marker for this title to avoid duplicates
+          let exists = false;
+          discoveryLayersRef.current?.eachLayer((layer: any) => {
+            if (layer.options?.title === result.maps?.title) exists = true;
+          });
+          if (exists) return;
+
+          try {
+            const response = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(result.maps.title)}&limit=1`);
+            const data = await response.json();
+            if (data && data.length > 0 && discoveryLayersRef.current) {
+              const { lat, lon } = data[0];
+              const marker = L.marker([parseFloat(lat), parseFloat(lon)], {
+                title: result.maps.title,
+                icon: L.divIcon({
+                  html: `
+                    <div class="relative flex items-center justify-center">
+                      <div class="absolute inset-0 rounded-full bg-amber-500 animate-ping opacity-20"></div>
+                      <div class="relative w-8 h-8 rounded-xl border-2 border-white shadow-2xl flex items-center justify-center bg-amber-500 text-stone-950">
+                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></svg>
+                      </div>
+                    </div>
+                  `,
+                  className: '', iconSize: [32, 32], iconAnchor: [16, 16]
+                })
+              }).addTo(discoveryLayersRef.current);
+              
+              marker.bindPopup(`
+                <div class="p-3 bg-white rounded-xl">
+                  <h3 class="font-black text-[10px] uppercase text-stone-900 mb-2 tracking-tight">${result.maps.title}</h3>
+                  <a href="${result.maps.uri}" target="_blank" class="inline-flex items-center gap-1.5 px-3 py-1.5 bg-amber-500 text-stone-950 rounded-lg text-[8px] font-black uppercase tracking-widest no-underline">
+                    View on Maps <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+                  </a>
+                </div>
+              `, { className: 'custom-popup' });
+            }
+          } catch (err) {
+            console.error("Geocoding failed", err);
+          }
+        }
+      });
     }
     
     tempMarkers.forEach(m => {
@@ -591,22 +742,38 @@ const FieldMap = ({ language }: { language: string }) => {
     });
   }, [drawingPoints, tempMarkers, rulerPoints, activeMode, mapReady, snapIndicator]);
 
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-stone-50 flex items-center justify-center">
+        <Loader2 className="w-12 h-12 animate-spin text-amber-500" />
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-stone-50 space-y-0 pb-40 animate-in fade-in duration-700 relative flex flex-col">
-      {/* Dramatic Header */}
+      {/* Standard Header */}
       <section className="px-6 pt-8 pb-6 bg-stone-950 text-white relative overflow-hidden">
         <div className="absolute top-0 right-0 p-8 opacity-10 rotate-12">
           <MapIcon className="w-48 h-48" />
         </div>
-        <div className="relative z-10 space-y-3">
-          <div className="flex items-center gap-3">
-            <div className="w-1.5 h-1.5 bg-amber-500 rounded-full animate-pulse" />
-            <span className="text-[8px] font-black uppercase tracking-[0.4em] text-amber-500/80">Geospatial Intelligence</span>
+        <div className="relative z-10 space-y-4">
+          <button 
+            onClick={onBack}
+            className="w-10 h-10 bg-white/10 rounded-xl flex items-center justify-center border border-white/10 active:scale-95 transition-all"
+          >
+            <ChevronLeft className="w-5 h-5 text-white" />
+          </button>
+          <div className="space-y-3">
+            <div className="flex items-center gap-3">
+              <div className="w-1.5 h-1.5 bg-amber-500 rounded-full animate-pulse" />
+              <span className="text-[8px] font-black uppercase tracking-[0.4em] text-amber-500/80">Geospatial Intelligence</span>
+            </div>
+            <h1 className="text-4xl font-black tracking-tighter uppercase leading-[0.85]">
+              Field<br />
+              <span className="text-amber-500 italic">Mapper.</span>
+            </h1>
           </div>
-          <h1 className="text-4xl font-black tracking-tighter uppercase leading-[0.85]">
-            Field<br />
-            <span className="text-amber-500 italic">Mapper.</span>
-          </h1>
           <div className="flex items-center gap-6 pt-2">
             <div className="flex flex-col">
               <span className="text-[7px] font-black text-stone-500 uppercase tracking-widest">Active Parcels</span>
@@ -626,7 +793,7 @@ const FieldMap = ({ language }: { language: string }) => {
       <div className="relative -mt-6 px-4 z-20">
       {contextMenu && (
         <div 
-          className="fixed z-[2000] bg-white rounded-2xl shadow-2xl border border-stone-100 p-2 animate-in zoom-in-95"
+          className="absolute z-[2000] bg-white rounded-2xl shadow-2xl border border-stone-100 p-2 animate-in zoom-in-95"
           style={{ left: `${contextMenu.x}px`, top: `${contextMenu.y}px`, transform: 'translate(-50%, -100%) translateY(-20px)' }}
         >
           <div className="flex items-center gap-1">
@@ -650,7 +817,7 @@ const FieldMap = ({ language }: { language: string }) => {
       )}
 
       {editingPOI && (
-        <div className="fixed inset-0 z-[6000] bg-black/85 backdrop-blur-2xl flex items-center justify-center p-6 animate-in fade-in">
+        <div className="absolute inset-0 z-[6000] bg-black/85 backdrop-blur-2xl flex items-center justify-center p-6 animate-in fade-in">
            <div className="bg-white w-full max-w-sm rounded-[3.5rem] p-10 shadow-2xl relative">
               <div className="flex items-center gap-5 mb-10">
                  <div className="p-4 bg-blue-50 rounded-2xl text-blue-600 shadow-inner">
@@ -702,6 +869,29 @@ const FieldMap = ({ language }: { language: string }) => {
               </div>
               <div className="mt-8 flex gap-3">
                  <button onClick={() => setEditingPOI(null)} className="flex-1 py-4 bg-stone-100 text-stone-400 rounded-2xl font-black text-[10px] uppercase tracking-widest">Cancel</button>
+                 {editingPOI.fieldId && (
+                   <button 
+                     onClick={async () => {
+                       if (!auth.currentUser || !editingPOI.fieldId) return;
+                       if (confirm("Delete this asset?")) {
+                         const path = `users/${activeFarmId}/fields/${editingPOI.fieldId}`;
+                         const field = savedFields.find(f => f.id === editingPOI.fieldId);
+                         if (field) {
+                           const updatedMarkers = (field.markers || []).filter(m => m.id !== editingPOI.poi.id);
+                           try {
+                             await updateDoc(doc(db, path), { markers: updatedMarkers });
+                             setEditingPOI(null);
+                           } catch (error) {
+                             handleFirestoreError(error, OperationType.UPDATE, path);
+                           }
+                         }
+                       }
+                     }}
+                     className="p-4 bg-rose-50 text-rose-500 rounded-2xl hover:bg-rose-500 hover:text-white transition-all"
+                   >
+                     <Trash2 className="w-5 h-5" />
+                   </button>
+                 )}
                  <button onClick={() => handlePOISave(editingPOI.poi)} className="flex-[2] bg-stone-900 text-white font-black py-4 rounded-2xl shadow-xl active:scale-95">Finalize</button>
               </div>
            </div>
@@ -713,7 +903,32 @@ const FieldMap = ({ language }: { language: string }) => {
           
           {/* Drawing Instructions Overlay */}
           <AnimatePresence>
-            {activeMode !== 'Navigate' && (
+            {activeMode === 'Discovery' && (
+              <motion.div 
+                initial={{ opacity: 0, y: -20 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -20 }}
+                className="absolute top-24 left-1/2 -translate-x-1/2 z-[1000] w-full max-w-sm px-4 pointer-events-auto"
+              >
+                <form onSubmit={handleDiscoverySearch} className="flex gap-2">
+                  <div className="relative flex-1 group">
+                    <input 
+                      type="text" 
+                      placeholder="SEARCH NEARBY (e.g. Mandi)..." 
+                      value={discoveryQuery}
+                      onChange={(e) => setDiscoveryQuery(e.target.value)}
+                      className="w-full bg-stone-950/90 backdrop-blur-xl border border-white/10 rounded-xl px-4 py-3 text-[10px] font-mono text-amber-500 placeholder:text-stone-600 outline-none focus:border-amber-500 transition-all shadow-2xl"
+                    />
+                    {isSearchingDiscovery && <Loader2 className="absolute right-3 top-3 w-4 h-4 text-amber-500 animate-spin" />}
+                  </div>
+                  <button type="submit" className="bg-amber-500 text-stone-950 p-3 rounded-xl hover:bg-amber-400 transition-all shadow-lg active:scale-90">
+                    <Search className="w-5 h-5" />
+                  </button>
+                </form>
+              </motion.div>
+            )}
+
+            {activeMode !== 'Navigate' && activeMode !== 'Discovery' && (
               <motion.div 
                 initial={{ opacity: 0, scale: 0.9 }}
                 animate={{ opacity: 1, scale: 1 }}
@@ -726,7 +941,11 @@ const FieldMap = ({ language }: { language: string }) => {
                   </div>
                   <div>
                     <p className="text-[8px] font-black text-amber-500 uppercase tracking-widest leading-none mb-1">Drawing Active: {activeMode}</p>
-                    <p className="text-[10px] font-black text-white uppercase tracking-tight">Click on the map to define points</p>
+                    <p className="text-[10px] font-black text-white uppercase tracking-tight">
+                      {drawingPoints.length >= 3 
+                        ? "Click the first point to complete or use button" 
+                        : "Click on the map to define points"}
+                    </p>
                   </div>
                   <button 
                     onClick={() => { setActiveMode('Navigate'); setDrawingPoints([]); }}
@@ -774,6 +993,12 @@ const FieldMap = ({ language }: { language: string }) => {
              
              <div className="flex flex-col gap-2 pointer-events-auto">
                 <ControlBtn 
+                  active={false} 
+                  onClick={recenterMap} 
+                  icon={Navigation2} 
+                  label="GPS"
+                />
+                <ControlBtn 
                   active={snappingEnabled} 
                   onClick={() => setSnappingEnabled(!snappingEnabled)} 
                   icon={Magnet} 
@@ -790,6 +1015,12 @@ const FieldMap = ({ language }: { language: string }) => {
                   onClick={() => setShowLabels(!showLabels)} 
                   icon={showLabels ? Eye : EyeOff} 
                   label="Tags"
+                />
+                <ControlBtn 
+                  active={false} 
+                  onClick={() => registryRef.current?.scrollIntoView({ behavior: 'smooth' })} 
+                  icon={ChevronDown} 
+                  label="Registry"
                 />
              </div>
           </div>
@@ -830,6 +1061,7 @@ const FieldMap = ({ language }: { language: string }) => {
                 <ModeBtn id="Draw" icon={PenTool} active={activeMode === 'Boundary'} onClick={() => { setActiveMode('Boundary'); setDrawingPoints([]); }} />
                 <ModeBtn id="Zone" icon={Layers} active={activeMode === 'Zone'} onClick={() => { setActiveMode('Zone'); setDrawingPoints([]); }} />
                 <ModeBtn id="Asset" icon={MapPinned} active={activeMode === 'Asset'} onClick={setActiveMode} />
+                <ModeBtn id="Discovery" icon={Search} active={activeMode === 'Discovery'} onClick={setActiveMode} />
                 <ModeBtn id="Ruler" icon={Ruler} active={activeMode === 'Ruler'} onClick={() => { setActiveMode('Ruler'); setRulerPoints([]); }} />
                 
                 {(drawingPoints.length > 0 || rulerPoints.length > 0) && (
@@ -857,13 +1089,24 @@ const FieldMap = ({ language }: { language: string }) => {
       </div>
 
       {/* Registry - Technical Data Grid Style */}
-      <section className="px-6 py-8 space-y-6">
+      <section ref={registryRef} className="px-6 py-8 space-y-6 scroll-mt-6">
         <div className="flex items-end justify-between border-b-2 border-stone-200 pb-3">
            <div>
               <h2 className="text-3xl font-black text-stone-950 tracking-tighter uppercase leading-none">Registry.</h2>
               <p className="text-[9px] text-stone-400 font-black uppercase tracking-[0.4em] mt-1.5">Geospatial Asset Database</p>
            </div>
            <div className="flex items-center gap-3">
+             <button 
+               onClick={() => {
+                 if (mapContainerRef.current) {
+                   mapContainerRef.current.scrollIntoView({ behavior: 'smooth' });
+                 }
+               }}
+               className="p-3 bg-stone-100 rounded-xl text-stone-400 hover:text-stone-900 transition-all shadow-inner"
+               title="Back to Map"
+             >
+               <ArrowUp className="w-5 h-5" />
+             </button>
              <button 
                onClick={() => {
                  setActiveMode('Boundary');
@@ -949,7 +1192,17 @@ const FieldMap = ({ language }: { language: string }) => {
                            >
                              <div className="p-8 grid grid-cols-1 md:grid-cols-3 gap-8">
                                 <div className="space-y-4">
-                                   <p className="text-[10px] font-black text-stone-400 uppercase tracking-[0.3em]">Spatial Metrics</p>
+                                    <div className="flex items-center justify-between mb-4">
+                                       <p className="text-[10px] font-black text-stone-400 uppercase tracking-[0.3em]">Spatial Metrics</p>
+                                       <button 
+                                         onClick={() => handleFieldAnalysis(field)}
+                                         disabled={isAnalyzingField}
+                                         className="flex items-center gap-1.5 px-3 py-1.5 bg-stone-900 text-amber-500 rounded-xl text-[8px] font-black uppercase tracking-widest hover:bg-amber-500 hover:text-stone-950 transition-all shadow-lg disabled:opacity-50"
+                                       >
+                                         {isAnalyzingField ? <Loader2 className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3" />}
+                                         {isAnalyzingField ? 'AI Report' : 'AI Report'}
+                                       </button>
+                                    </div>
                                    <div className="grid grid-cols-2 gap-4">
                                       <div className="bg-white p-4 rounded-2xl border border-stone-100 shadow-sm">
                                          <p className="text-[8px] font-black text-stone-400 uppercase mb-1">Perimeter</p>
@@ -988,7 +1241,17 @@ const FieldMap = ({ language }: { language: string }) => {
                                          <ChevronRight className="w-4 h-4 text-stone-600 group-hover:text-amber-400" />
                                       </button>
                                       <div className="flex gap-2">
-                                        <button className="flex-1 py-3 bg-white border border-stone-200 rounded-xl text-[9px] font-black uppercase text-stone-400 hover:text-rose-500 hover:border-rose-200 transition-all" onClick={() => { if(confirm("Delete parcel?")) setSavedFields(savedFields.filter(f => f.id !== field.id)); }}>Delete</button>
+                                        <button className="flex-1 py-3 bg-white border border-stone-200 rounded-xl text-[9px] font-black uppercase text-stone-400 hover:text-rose-500 hover:border-rose-200 transition-all" onClick={async () => { 
+                                          if(confirm("Delete parcel?")) {
+                                            if (!auth.currentUser) return;
+                                            const path = `users/${activeFarmId}/fields/${field.id}`;
+                                            try {
+                                              await deleteDoc(doc(db, path));
+                                            } catch (error) {
+                                              handleFirestoreError(error, OperationType.DELETE, path);
+                                            }
+                                          } 
+                                        }}>Delete</button>
                                         <button className="flex-1 py-3 bg-white border border-stone-200 rounded-xl text-[9px] font-black uppercase text-stone-400 hover:text-amber-500 hover:border-amber-200 transition-all">Edit</button>
                                       </div>
                                    </div>
@@ -1005,8 +1268,85 @@ const FieldMap = ({ language }: { language: string }) => {
         )}
       </section>
 
+      {/* Discovery Results List */}
+      <AnimatePresence>
+        {discoveryResults.length > 0 && (
+          <motion.section 
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 20 }}
+            className="px-6 py-4 space-y-4"
+          >
+            <div className="flex items-center justify-between border-b border-stone-200 pb-2">
+              <h3 className="text-sm font-black text-stone-950 uppercase tracking-widest">Discovery Results</h3>
+              <button onClick={() => { setDiscoveryResults([]); discoveryLayersRef.current?.clearLayers(); }} className="text-[10px] font-black text-stone-400 uppercase hover:text-rose-500 transition-colors">Clear</button>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              {discoveryResults.map((result, idx) => (
+                <div key={idx} className="bg-white p-4 rounded-2xl border border-stone-100 shadow-sm flex items-center justify-between group hover:border-amber-500 transition-all">
+                  <div className="flex items-center gap-3">
+                    <div className="w-8 h-8 bg-amber-50 rounded-lg flex items-center justify-center text-amber-600">
+                      <MapPin className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <h4 className="text-[11px] font-black text-stone-900 uppercase leading-none">{result.maps?.title || result.web?.title || 'Unknown Location'}</h4>
+                      <p className="text-[8px] font-bold text-stone-400 uppercase tracking-tighter mt-1">Found via AI Grounding</p>
+                    </div>
+                  </div>
+                  {result.maps?.uri && (
+                    <a 
+                      href={result.maps.uri} 
+                      target="_blank" 
+                      rel="noopener noreferrer"
+                      className="p-2 bg-stone-50 text-stone-400 hover:bg-amber-500 hover:text-stone-950 rounded-lg transition-all"
+                    >
+                      <ArrowUpRight className="w-4 h-4" />
+                    </a>
+                  )}
+                </div>
+              ))}
+            </div>
+          </motion.section>
+        )}
+      </AnimatePresence>
+
+      {fieldAnalysis && (
+        <div className="absolute inset-0 z-[5000] bg-black/90 backdrop-blur-2xl flex items-center justify-center p-6 animate-in fade-in">
+          <motion.div 
+            initial={{ opacity: 0, scale: 0.9, y: 20 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            className="bg-white w-full max-w-2xl max-h-[80vh] rounded-[3rem] overflow-hidden shadow-2xl flex flex-col"
+          >
+            <div className="p-8 border-b border-stone-100 flex items-center justify-between bg-stone-50">
+               <div className="flex items-center gap-4">
+                  <div className="w-12 h-12 bg-amber-500 rounded-2xl flex items-center justify-center text-stone-950 shadow-lg">
+                     <Sparkles className="w-6 h-6" />
+                  </div>
+                  <div>
+                     <h3 className="text-2xl font-black text-stone-900 tracking-tighter uppercase leading-none">AI Field Report</h3>
+                     <p className="text-[10px] font-black text-stone-400 uppercase tracking-widest mt-1">Geospatial & Agronomic Analysis</p>
+                  </div>
+               </div>
+               <button onClick={() => setFieldAnalysis(null)} className="w-10 h-10 bg-white border border-stone-200 rounded-xl flex items-center justify-center text-stone-400 hover:text-rose-500 transition-all">
+                  <X className="w-5 h-5" />
+               </button>
+            </div>
+            <div className="flex-1 overflow-y-auto p-10">
+               <div className="prose prose-stone max-w-none">
+                  <div className="markdown-body">
+                    <ReactMarkdown>{fieldAnalysis.report}</ReactMarkdown>
+                  </div>
+               </div>
+            </div>
+            <div className="p-8 bg-stone-50 border-t border-stone-100 flex justify-end">
+               <button onClick={() => setFieldAnalysis(null)} className="px-8 py-4 bg-stone-900 text-white rounded-2xl font-black text-[10px] uppercase tracking-widest shadow-lg hover:bg-amber-500 hover:text-stone-950 transition-all">Close Report</button>
+            </div>
+          </motion.div>
+        </div>
+      )}
+
       {showZoneModal && (
-        <div className="fixed inset-0 z-[4000] bg-black/80 backdrop-blur-xl flex items-center justify-center p-6 animate-in fade-in">
+        <div className="absolute inset-0 z-[4000] bg-black/80 backdrop-blur-xl flex items-center justify-center p-6 animate-in fade-in">
            <div className="bg-white w-full max-w-sm rounded-[3.5rem] p-10 shadow-2xl relative">
               <h3 className="text-3xl font-black text-stone-900 tracking-tighter mb-8 leading-none">Define Zone</h3>
               <div className="space-y-6">
@@ -1058,11 +1398,13 @@ const FieldMap = ({ language }: { language: string }) => {
                  </div>
                  <div className="flex gap-3 pt-6">
                     <button onClick={() => setShowZoneModal(false)} className="px-6 py-4 bg-stone-100 text-stone-500 font-black rounded-2xl text-[10px] uppercase tracking-widest">Back</button>
-                    <button onClick={() => {
+                    <button onClick={async () => {
                       if (!activeField) {
                         alert("Please select a field first to attach this zone.");
                         return;
                       }
+                      if (!auth.currentUser) return;
+
                       const typeInfo = ZONE_TYPES.find(z => z.type === zoneFormData.type)!;
                       const newZone = {
                         id: Date.now().toString(),
@@ -1073,19 +1415,18 @@ const FieldMap = ({ language }: { language: string }) => {
                         notes: zoneFormData.notes
                       };
                       
-                      const updatedFields = savedFields.map(f => {
-                        if (f.id === activeField.id) {
-                          return { ...f, zones: [...(f.zones || []), newZone] };
-                        }
-                        return f;
-                      });
-                      
-                      setSavedFields(updatedFields);
-                      localStorage.setItem('agri_saved_fields', JSON.stringify(updatedFields));
-                      setDrawingPoints([]); 
-                      setActiveMode('Navigate'); 
-                      setShowZoneModal(false);
-                      setZoneFormData({ label: '', type: 'Irrigation', color: ZONE_COLORS[0], notes: '' });
+                      const path = `users/${activeFarmId}/fields/${activeField.id}`;
+                      try {
+                        await updateDoc(doc(db, path), {
+                          zones: [...(activeField.zones || []), newZone]
+                        });
+                        setDrawingPoints([]); 
+                        setActiveMode('Navigate'); 
+                        setShowZoneModal(false);
+                        setZoneFormData({ label: '', type: 'Irrigation', color: ZONE_COLORS[0], notes: '' });
+                      } catch (error) {
+                        handleFirestoreError(error, OperationType.UPDATE, path);
+                      }
                     }} className="flex-1 bg-stone-900 text-white font-black py-4 rounded-2xl shadow-xl flex items-center justify-center gap-2"><CheckCircle2 className="w-5 h-5 text-emerald-400"/> Attach Zone</button>
                  </div>
               </div>
@@ -1094,7 +1435,7 @@ const FieldMap = ({ language }: { language: string }) => {
       )}
 
       {showSaveModal && (
-        <div className="fixed inset-0 z-[4000] bg-black/80 backdrop-blur-xl flex items-center justify-center p-6 animate-in fade-in">
+        <div className="absolute inset-0 z-[4000] bg-black/80 backdrop-blur-xl flex items-center justify-center p-6 animate-in fade-in">
            <div className="bg-white w-full max-w-sm rounded-[3.5rem] p-10 shadow-2xl relative">
               <h3 className="text-3xl font-black text-stone-900 tracking-tighter mb-8 leading-none">Register Plot</h3>
               <div className="space-y-6">
@@ -1124,11 +1465,13 @@ const FieldMap = ({ language }: { language: string }) => {
                  </div>
                  <div className="flex gap-3 pt-6">
                     <button onClick={() => setShowSaveModal(false)} className="px-6 py-4 bg-stone-100 text-stone-500 font-black rounded-2xl text-[10px] uppercase tracking-widest">Back</button>
-                    <button onClick={() => {
-                      const areaHectares = (L as any).GeometryUtil.geodesicArea(drawingPoints.map(p => L.latLng(p))) / 10000;
+                    <button onClick={async () => {
+                      if (!auth.currentUser) return;
+                      const areaHectares = calculateArea(drawingPoints) / 10000;
                       const perimeter = drawingPoints.reduce((acc, p, i) => acc + (i > 0 ? calculateDistance(drawingPoints[i-1], p) : 0), 0);
-                      const newField: Field = {
-                        id: Date.now().toString(),
+                      
+                      const path = `users/${activeFarmId}/fields`;
+                      const fieldData = {
                         name: formData.name || `Parcel ${savedFields.length + 1}`,
                         cropType: formData.crop,
                         points: drawingPoints,
@@ -1139,9 +1482,16 @@ const FieldMap = ({ language }: { language: string }) => {
                         color: formData.color,
                         status: formData.status
                       };
-                      setSavedFields([newField, ...savedFields]);
-                      localStorage.setItem('agri_saved_fields', JSON.stringify([newField, ...savedFields]));
-                      setDrawingPoints([]); setTempMarkers([]); setActiveMode('Navigate'); setShowSaveModal(false);
+
+                      try {
+                        await addDoc(collection(db, path), fieldData);
+                        setDrawingPoints([]); 
+                        setTempMarkers([]); 
+                        setActiveMode('Navigate'); 
+                        setShowSaveModal(false);
+                      } catch (error) {
+                        handleFirestoreError(error, OperationType.CREATE, path);
+                      }
                     }} className="flex-1 bg-stone-900 text-white font-black py-4 rounded-2xl shadow-xl flex items-center justify-center gap-2"><CheckCircle2 className="w-5 h-5 text-emerald-400"/> Confirm</button>
                  </div>
               </div>
@@ -1150,7 +1500,7 @@ const FieldMap = ({ language }: { language: string }) => {
       )}
 
       {detailedAdvice && (
-        <div className="fixed inset-0 z-[5000] bg-stone-950/90 backdrop-blur-2xl flex flex-col animate-in slide-in-from-bottom-full duration-500">
+        <div className="absolute inset-0 z-[5000] bg-stone-950/90 backdrop-blur-2xl flex flex-col animate-in slide-in-from-bottom-full duration-500">
            <header className="p-8 flex items-center justify-between border-b border-white/5">
               <div className="flex items-center gap-5">
                  <div className="p-4 bg-amber-500 rounded-2xl"><FileBadge className="w-7 h-7 text-stone-950" /></div>

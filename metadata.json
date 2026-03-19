@@ -1,6 +1,6 @@
 {
   "name": "Bharat Kisan- Smart Farming Companion",
-  "description": "An AI-powered agricultural assistant tailored for Indian farmers, providing disease detection, mandi prices, and personalized crop advice in local languages.",
+  "description": "An AI-powered agricultural assistant for Indian farmers, featuring advanced field analysis, real-time team management, disease detection, and personalized crop advice in local languages.",
   "requestFramePermissions": [
     "camera",
     "geolocation"
