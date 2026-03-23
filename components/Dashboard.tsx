@@ -60,7 +60,7 @@ const Dashboard: React.FC<DashboardProps> = ({ setView }) => {
       collection(db, path), 
       where('status', '==', 'Pending'),
       orderBy('createdAt', 'desc'),
-      limit(4)
+      limit(3)
     );
 
     const unsubscribe = onSnapshot(q, (snapshot) => {
@@ -76,7 +76,7 @@ const Dashboard: React.FC<DashboardProps> = ({ setView }) => {
     });
 
     return () => unsubscribe();
-  }, []);
+  }, [activeFarmId]);
 
   const fetchWeather = async (lat: number, lon: number) => {
     setLoadingWeather(true);
@@ -115,225 +115,259 @@ const Dashboard: React.FC<DashboardProps> = ({ setView }) => {
 
   const getWeatherIcon = (description: string, size: string = "w-10 h-10") => {
     const desc = description.toLowerCase();
-    if (desc.includes('rain')) return <CloudRain className={`${size} text-[var(--m3-primary)]`} />;
-    if (desc.includes('cloud')) return <Cloud className={`${size} text-[var(--m3-on-surface-variant)]`} />;
-    if (desc.includes('clear')) return <Sun className={`${size} text-amber-600`} />;
-    if (desc.includes('storm')) return <CloudLightning className={`${size} text-purple-600`} />;
+    if (desc.includes('rain')) return <CloudRain className={`${size} text-amber-600`} />;
+    if (desc.includes('cloud')) return <Cloud className={`${size} text-stone-500`} />;
+    if (desc.includes('clear')) return <Sun className={`${size} text-amber-500`} />;
+    if (desc.includes('storm')) return <CloudLightning className={`${size} text-orange-500`} />;
     return <CloudSun className={`${size} text-amber-500`} />;
   };
 
   return (
-    <div className="w-full flex flex-col pb-32 bg-transparent min-h-full">
+    <div className="w-full flex flex-col pb-40 bg-black min-h-screen">
       
-      {/* Welcome Header */}
-      <section className="px-4 pt-4 pb-6">
-        <div className="flex items-center justify-between">
-          <div className="flex flex-col">
-            <h2 className="text-2xl font-medium text-[var(--m3-on-surface)] m3-headline-large">
-              Namaste, <span className="text-[var(--m3-primary)]">{farmerName}</span>
+      {/* Editorial Hero Header */}
+      <section className="px-6 pt-12 pb-10 relative overflow-hidden">
+        <div className="absolute top-0 right-0 w-80 h-80 bg-amber-500/5 rounded-full blur-[100px] -mr-40 -mt-40" />
+        <div className="relative z-10 flex items-start justify-between">
+          <div className="space-y-4">
+            <div className="flex items-center gap-3">
+              <span className="w-10 h-[1px] bg-amber-900" />
+              <span className="text-[10px] font-black text-amber-500/40 uppercase tracking-[0.4em]">Daily Briefing</span>
+            </div>
+            <h2 className="text-6xl font-black text-white tracking-tighter leading-[0.85]">
+              Namaste,<br/>
+              <span className="text-amber-500 font-serif italic font-light">{farmerName}.</span>
             </h2>
-            <p className="text-sm text-[var(--m3-on-surface-variant)] m3-body-medium">
-              Here's what's happening on your farm today.
+            <p className="text-[11px] font-bold text-stone-500 uppercase tracking-[0.2em] max-w-[200px] leading-relaxed">
+              Your farm is performing <span className="text-amber-400">optimally</span> today.
             </p>
           </div>
           <motion.button 
             whileTap={{ scale: 0.9 }}
             onClick={() => handleSetView(AppView.SMART_ALERTS)}
-            className="w-12 h-12 rounded-full active:bg-[var(--m3-surface-container-high)] flex items-center justify-center relative transition-all"
+            className="w-14 h-14 rounded-full bg-stone-950 border border-amber-500/10 shadow-xl shadow-black/40 flex items-center justify-center relative group active:scale-95 transition-all"
           >
-            <Bell className="w-6 h-6 text-[var(--m3-on-surface-variant)]" />
-            <div className="absolute top-3 right-3 w-2 h-2 bg-[var(--m3-error)] rounded-full border-2 border-[var(--m3-background)]"></div>
+            <Bell className="w-6 h-6 text-stone-500 group-hover:text-amber-500 transition-colors" />
+            <div className="absolute top-4 right-4 w-2.5 h-2.5 bg-amber-600 rounded-full border-2 border-black animate-pulse"></div>
           </motion.button>
         </div>
       </section>
 
-      {/* Weather Card (M3 Elevated) */}
-      <section className="px-4 mb-6">
-        <motion.div 
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          onClick={() => handleSetView(AppView.WEATHER_HUB)}
-          className="m3-card-elevated p-6 relative overflow-hidden group cursor-pointer"
-        >
-          {loadingWeather ? (
-            <div className="flex items-center justify-center py-6">
-              <Loader2 className="w-8 h-8 animate-spin text-[var(--m3-primary)] opacity-50" />
+      {/* Bento Grid Stats & Weather */}
+      <section className="px-6 mb-12">
+        <div className="grid grid-cols-2 gap-4">
+          {/* Weather Bento - Large */}
+          <motion.div 
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            onClick={() => handleSetView(AppView.WEATHER_HUB)}
+            className="col-span-2 bg-stone-950 p-8 rounded-[3rem] relative overflow-hidden group shadow-2xl shadow-black/40 border border-amber-500/5"
+          >
+            <div className="absolute top-0 right-0 p-12 opacity-[0.05] group-hover:opacity-[0.1] transition-opacity">
+              {weather && getWeatherIcon(weather.description, "w-64 h-64 -mr-16 -mt-16 rotate-12")}
             </div>
-          ) : (
-            <div className="flex justify-between items-center">
-              <div className="space-y-1">
-                <div className="flex items-center gap-2 text-[var(--m3-primary)]">
-                  <MapPin className="w-4 h-4" />
-                  <span className="text-xs font-medium m3-label-large">{weather.city}</span>
-                  <button 
-                    onClick={refreshWeather}
-                    className="p-1 hover:bg-[var(--m3-primary-container)] rounded-full transition-colors"
-                    title="Refresh location"
-                  >
-                    <RefreshCw className="w-3 h-3" />
-                  </button>
+            
+            {loadingWeather ? (
+              <div className="flex items-center justify-center py-10">
+                <Loader2 className="w-8 h-8 animate-spin text-amber-500/50" />
+              </div>
+            ) : (
+              <div className="relative z-10 flex flex-col justify-between h-full min-h-[160px]">
+                <div className="flex justify-between items-start">
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-2 text-amber-400">
+                      <MapPin className="w-4 h-4" />
+                      <span className="text-[10px] font-black uppercase tracking-widest">{weather.city}</span>
+                    </div>
+                    <div className="flex items-baseline gap-3">
+                      <span className="text-7xl font-black text-white tracking-tighter">{weather.temp}°</span>
+                      <span className="text-lg font-serif italic text-white/40 capitalize">{weather.description}</span>
+                    </div>
+                  </div>
+                  {getWeatherIcon(weather.description, "w-16 h-16")}
                 </div>
-                <div className="flex items-baseline gap-2">
-                  <span className="text-5xl font-medium text-[var(--m3-on-surface)] m3-display-large">{weather.temp}°</span>
-                  <span className="text-lg font-medium text-[var(--m3-on-surface-variant)] capitalize">{weather.description}</span>
+                
+                <div className="flex gap-8 mt-8">
+                  <div className="flex flex-col">
+                    <span className="text-[8px] font-black text-white/20 uppercase tracking-[0.3em] mb-1">Humidity</span>
+                    <div className="flex items-center gap-2 text-white/60">
+                      <Droplets className="w-4 h-4 text-amber-600" />
+                      <span className="text-sm font-bold">{weather.humidity}%</span>
+                    </div>
+                  </div>
+                  <div className="flex flex-col">
+                    <span className="text-[8px] font-black text-white/20 uppercase tracking-[0.3em] mb-1">Wind Speed</span>
+                    <div className="flex items-center gap-2 text-white/60">
+                      <Wind className="w-4 h-4 text-amber-400" />
+                      <span className="text-sm font-bold">{weather.wind} km/h</span>
+                    </div>
+                  </div>
                 </div>
               </div>
-              <div className="flex flex-col items-end gap-2">
-                {getWeatherIcon(weather.description, "w-16 h-16")}
-                <div className="flex gap-4">
-                  <div className="flex items-center gap-1 text-[var(--m3-on-surface-variant)]">
-                    <Droplets className="w-4 h-4" />
-                    <span className="text-xs font-medium">{weather.humidity}%</span>
-                  </div>
-                  <div className="flex items-center gap-1 text-[var(--m3-on-surface-variant)]">
-                    <Wind className="w-4 h-4" />
-                    <span className="text-xs font-medium">{weather.wind} km/h</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
-        </motion.div>
-      </section>
+            )}
+          </motion.div>
 
-      {/* Quick Actions Grid (M3 Style) */}
-      <section className="px-4 mb-8">
-        <div className="grid grid-cols-4 gap-2">
-          <QuickAction 
-            icon={<Camera />} 
-            label="Scan" 
-            onClick={() => handleSetView(AppView.DISEASE_SCANNER)} 
-          />
-          <QuickAction 
-            icon={<TrendingUp />} 
-            label="Prices" 
-            onClick={() => handleSetView(AppView.MARKET_PRICES)} 
-          />
-          <QuickAction 
-            icon={<MapPin />} 
-            label="Map" 
-            onClick={() => handleSetView(AppView.FIELD_MAP)} 
-          />
-          <QuickAction 
-            icon={<Truck />} 
-            label="Rent" 
-            onClick={() => handleSetView(AppView.EQUIPMENT_RENTAL)} 
-          />
+          {/* Quick Stats Bento */}
+          <div className="bg-stone-950 p-6 rounded-[2.5rem] border border-amber-500/5 shadow-sm flex flex-col justify-between min-h-[140px]">
+            <div className="w-10 h-10 bg-amber-500/10 text-amber-500 rounded-xl flex items-center justify-center border border-amber-500/20">
+              <TrendingUp className="w-5 h-5" />
+            </div>
+            <div>
+              <p className="text-[8px] font-black text-stone-500 uppercase tracking-widest mb-1">Market Trend</p>
+              <h4 className="text-2xl font-black text-white tracking-tight">+12.4%</h4>
+            </div>
+          </div>
+
+          <div className="bg-stone-950 p-6 rounded-[2.5rem] border border-amber-500/5 shadow-sm flex flex-col justify-between min-h-[140px]">
+            <div className="w-10 h-10 bg-amber-500/10 text-amber-500 rounded-xl flex items-center justify-center border border-amber-500/20">
+              <Droplets className="w-5 h-5" />
+            </div>
+            <div>
+              <p className="text-[8px] font-black text-stone-500 uppercase tracking-widest mb-1">Soil Moisture</p>
+              <h4 className="text-2xl font-black text-white tracking-tight">64%</h4>
+            </div>
+          </div>
         </div>
       </section>
 
-      {/* Main Features (M3 Filled Cards) */}
-      <section className="px-4 mb-8">
-        <h3 className="text-sm font-medium text-[var(--m3-on-surface-variant)] mb-4 px-2 m3-label-large uppercase tracking-wider">Recommended for you</h3>
-        <div className="grid grid-cols-2 gap-4">
+      {/* Quick Actions - Pills */}
+      <section className="px-6 mb-12 overflow-x-auto no-scrollbar">
+        <div className="flex gap-3 pb-2">
+          <QuickActionPill icon={<Camera />} label="Scan" onClick={() => handleSetView(AppView.DISEASE_SCANNER)} />
+          <QuickActionPill icon={<TrendingUp />} label="Prices" onClick={() => handleSetView(AppView.MARKET_PRICES)} />
+          <QuickActionPill icon={<MapPin />} label="Map" onClick={() => handleSetView(AppView.FIELD_MAP)} />
+          <QuickActionPill icon={<Truck />} label="Rent" onClick={() => handleSetView(AppView.EQUIPMENT_RENTAL)} />
+          <QuickActionPill icon={<LayoutGrid />} label="Tools" onClick={() => handleSetView(AppView.TOOLS_HUB)} />
+        </div>
+      </section>
+
+      {/* Recommended Intelligence */}
+      <section className="px-6 mb-12 space-y-8">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-4">
+            <span className="text-2xl font-black text-amber-900 font-mono">01</span>
+            <h3 className="text-[11px] font-black text-amber-500/40 uppercase tracking-[0.3em]">Recommended</h3>
+          </div>
+          <div className="h-px flex-1 bg-amber-500/10 ml-6" />
+        </div>
+        
+        <div className="grid grid-cols-1 gap-4">
           <ActionCard 
             icon={<Sprout className="w-6 h-6" />} 
-            label="Crop Rotation" 
-            sub="Optimize Soil"
+            label="Crop Rotation Advisor" 
+            sub="Optimize soil health with AI-driven rotation protocols."
             onClick={() => handleSetView(AppView.CROP_ROTATION_ADVISOR)}
+            theme="amber"
           />
           <ActionCard 
             icon={<Leaf className="w-6 h-6" />} 
-            label="Carbon Credits" 
-            sub="Green Revenue"
+            label="Carbon Credit Tracker" 
+            sub="Monitor your eco-impact and unlock green revenue streams."
             onClick={() => handleSetView(AppView.CARBON_CREDIT_TRACKER)}
-          />
-          <ActionCard 
-            icon={<Calendar className="w-6 h-6" />} 
-            label="Harvest Plan" 
-            sub="Schedule Now"
-            onClick={() => handleSetView(AppView.HARVEST_SCHEDULER)}
-          />
-          <ActionCard 
-            icon={<LayoutGrid className="w-6 h-6" />} 
-            label="Tools Hub" 
-            sub="All Services"
-            onClick={() => handleSetView(AppView.TOOLS_HUB)}
+            theme="orange"
           />
         </div>
       </section>
 
-      {/* Tasks (M3 Outlined Cards) */}
-      <section className="px-4 mb-8">
-        <div className="flex items-center justify-between mb-4 px-2">
-          <h3 className="text-sm font-medium text-[var(--m3-on-surface-variant)] m3-label-large uppercase tracking-wider">Upcoming Tasks</h3>
+      {/* Tasks Section */}
+      <section className="px-6 mb-12 space-y-8">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-4">
+            <span className="text-2xl font-black text-amber-900 font-mono">02</span>
+            <h3 className="text-[11px] font-black text-amber-500/40 uppercase tracking-[0.3em]">Active Tasks</h3>
+          </div>
           <button 
-            onClick={() => handleSetView(AppView.TASK_MANAGER)} 
-            className="text-sm font-medium text-[var(--m3-primary)]"
+            onClick={() => handleSetView(AppView.TASK_MANAGER)}
+            className="text-[10px] font-black text-amber-500 uppercase tracking-widest hover:translate-x-1 transition-transform"
           >
-            See all
+            View All
           </button>
         </div>
         
-        <div className="space-y-3">
-          {tasks.length > 0 ? (
+        <div className="space-y-4">
+          {loadingTasks ? (
+            <div className="flex items-center justify-center py-10">
+              <Loader2 className="w-6 h-6 animate-spin text-amber-500/50" />
+            </div>
+          ) : tasks.length > 0 ? (
             tasks.map((task, i) => (
               <motion.div 
                 key={task.id} 
                 initial={{ opacity: 0, x: -10 }}
                 animate={{ opacity: 1, x: 0 }}
-                transition={{ delay: i * 0.05 }}
+                transition={{ delay: i * 0.1 }}
                 onClick={() => handleSetView(AppView.TASK_MANAGER)}
-                className="m3-card-outlined p-4 flex items-center gap-4 active:bg-[var(--m3-surface-container-high)] transition-all"
+                className="flex items-center gap-6 p-6 bg-stone-950 border border-amber-500/5 rounded-[2.5rem] active:scale-[0.98] transition-all group shadow-sm hover:shadow-xl hover:shadow-black/40"
               >
-                <div className={`w-12 h-12 rounded-xl flex items-center justify-center ${
-                  task.priority === 'High' ? 'bg-[var(--m3-error-container)] text-[var(--m3-on-error-container)]' : 'bg-[var(--m3-surface-container-high)] text-[var(--m3-on-surface-variant)]'
+                <div className={`p-4 rounded-2xl border transition-all group-hover:scale-110 ${
+                  task.priority === 'High' ? 'bg-amber-500/10 text-amber-500 border-amber-500/20' : 'bg-stone-900 text-stone-500 border-stone-800'
                 }`}>
                   <Calendar className="w-6 h-6" />
                 </div>
                 <div className="flex-1">
-                  <p className="text-base font-medium text-[var(--m3-on-surface)] m3-title-medium">{task.title}</p>
-                  <p className="text-xs text-[var(--m3-on-surface-variant)] m3-body-medium">{task.category} • {task.priority} Priority</p>
+                  <h4 className="text-xs font-black text-white uppercase tracking-wider mb-1">{task.title}</h4>
+                  <p className="text-[9px] text-stone-500 font-bold uppercase tracking-widest">{task.category} • {task.priority} Priority</p>
                 </div>
-                <ChevronRight className="w-5 h-5 text-[var(--m3-on-surface-variant)]" />
+                <ChevronRight className="w-5 h-5 text-stone-700 group-hover:text-amber-500 transition-colors" />
               </motion.div>
             ))
           ) : (
-            <div className="py-12 bg-[var(--m3-surface-container-low)] rounded-3xl text-center border border-dashed border-[var(--m3-outline-variant)]">
-               <CheckCircle2 className="w-10 h-10 text-[var(--m3-primary)] mx-auto mb-2 opacity-30" />
-               <p className="text-sm font-medium text-[var(--m3-on-surface-variant)]">All tasks completed!</p>
+            <div className="py-16 bg-stone-950/50 rounded-[3rem] text-center border border-dashed border-amber-500/10">
+               <CheckCircle2 className="w-12 h-12 text-amber-500 mx-auto mb-4 opacity-20" />
+               <p className="text-[10px] font-black text-stone-600 uppercase tracking-[0.3em]">All protocols completed</p>
             </div>
           )}
         </div>
       </section>
 
       {/* FAB - Quick Scan */}
-      <button 
+      <motion.button 
+        whileHover={{ scale: 1.1, rotate: 5 }}
+        whileTap={{ scale: 0.9 }}
         onClick={() => handleSetView(AppView.DISEASE_SCANNER)}
-        className="m3-fab"
+        className="fixed bottom-28 right-6 w-16 h-16 bg-amber-600 text-black rounded-[1.5rem] flex items-center justify-center shadow-2xl shadow-amber-900/40 z-50 border-t border-white/20"
       >
-        <Camera className="w-6 h-6" />
-      </button>
+        <Camera className="w-7 h-7" />
+      </motion.button>
     </div>
   );
 };
 
-const ActionCard: React.FC<{ icon: React.ReactNode, label: string, sub: string, onClick: () => void }> = ({ icon, label, sub, onClick }) => (
-  <motion.button 
-    whileTap={{ scale: 0.98 }}
-    onClick={onClick}
-    className="m3-card-filled p-5 text-left flex flex-col gap-3 active:bg-[var(--m3-surface-container-highest)] transition-all"
-  >
-    <div className="w-10 h-10 bg-[var(--m3-primary-container)] text-[var(--m3-on-primary-container)] rounded-xl flex items-center justify-center">
-      {icon}
-    </div>
-    <div>
-      <p className="font-medium text-[var(--m3-on-surface)] m3-title-medium leading-tight">{label}</p>
-      <p className="text-xs text-[var(--m3-on-surface-variant)] m3-body-medium">{sub}</p>
-    </div>
-  </motion.button>
-);
+const ActionCard: React.FC<{ icon: React.ReactNode, label: string, sub: string, onClick: () => void, theme: 'amber' | 'orange' }> = ({ icon, label, sub, onClick, theme }) => {
+  const themes = {
+    amber: 'bg-amber-500/10 text-amber-500 border-amber-500/20',
+    orange: 'bg-orange-500/10 text-orange-500 border-orange-500/20'
+  };
 
-const QuickAction: React.FC<{ icon: any, label: string, onClick: () => void }> = ({ icon, label, onClick }) => (
+  return (
+    <motion.button 
+      whileTap={{ scale: 0.98 }}
+      onClick={onClick}
+      className="w-full bg-stone-950 p-8 rounded-[3rem] border border-amber-500/5 flex items-center gap-6 text-left active:scale-[0.98] transition-all group shadow-sm hover:shadow-2xl hover:shadow-black/40"
+    >
+      <div className={`${themes[theme]} p-5 rounded-[1.5rem] border transition-all group-hover:scale-110 group-hover:rotate-6`}>
+        {icon}
+      </div>
+      <div>
+        <h4 className="text-sm font-black text-white uppercase tracking-wider mb-1 group-hover:text-amber-500 transition-colors">{label}</h4>
+        <p className="text-[10px] text-stone-500 font-bold uppercase tracking-widest leading-relaxed max-w-[200px]">{sub}</p>
+      </div>
+      <ArrowUpRight className="w-6 h-6 text-stone-700 ml-auto group-hover:text-amber-500 transition-colors" />
+    </motion.button>
+  );
+};
+
+const QuickActionPill: React.FC<{ icon: any, label: string, onClick: () => void }> = ({ icon, label, onClick }) => (
   <button
     onClick={onClick}
-    className="flex flex-col items-center gap-2 py-2"
+    className="flex items-center gap-3 px-6 py-4 bg-stone-950 border border-amber-500/5 rounded-full whitespace-nowrap active:scale-90 transition-all shadow-sm hover:shadow-md hover:border-amber-500/20 group"
   >
-    <div className="w-14 h-14 bg-[var(--m3-secondary-container)] text-[var(--m3-on-secondary-container)] rounded-2xl flex items-center justify-center active:scale-90 transition-transform">
-      {React.cloneElement(icon as React.ReactElement<any>, { className: "w-6 h-6" })}
+    <div className="text-stone-500 group-hover:text-amber-500 transition-colors">
+      {React.cloneElement(icon as React.ReactElement<any>, { className: "w-4 h-4" })}
     </div>
-    <span className="text-xs font-medium text-[var(--m3-on-surface-variant)] m3-label-medium">{label}</span>
+    <span className="text-[10px] font-black text-stone-400 uppercase tracking-widest group-hover:text-white transition-colors">{label}</span>
   </button>
 );
+
 
 export default Dashboard;

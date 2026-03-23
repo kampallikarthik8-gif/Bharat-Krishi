@@ -26,14 +26,21 @@ import {
   CreditCard,
   Landmark,
   Droplets,
-  Layers
+  Layers,
+  Share2,
+  Download,
+  AlertCircle,
+  History
 } from 'lucide-react';
 import { JournalEntry, AppView } from '../types';
 import { Geolocation } from '@capacitor/geolocation';
+import { Share } from '@capacitor/share';
 import { useFirebase } from '../src/components/FirebaseProvider';
 import { db } from '../src/firebase';
 import { doc, updateDoc } from 'firebase/firestore';
 import { handleFirestoreError, OperationType } from '../src/utils/firestoreErrorHandler';
+import { jsPDF } from 'jspdf';
+import autoTable from 'jspdf-autotable';
 
 interface ProfileProps {
   onLogout: () => void;
@@ -234,20 +241,101 @@ const Profile: React.FC<ProfileProps> = ({ onLogout, onNavigate }) => {
     }));
   };
 
+  const exportProfilePDF = () => {
+    const doc = new jsPDF();
+    
+    // Theme Colors
+    const amber: [number, number, number] = [255, 180, 0];
+    const dark: [number, number, number] = [20, 20, 20];
+    
+    // Header
+    doc.setFillColor(dark[0], dark[1], dark[2]);
+    doc.rect(0, 0, 210, 40, 'F');
+    
+    doc.setTextColor(amber[0], amber[1], amber[2]);
+    doc.setFontSize(24);
+    doc.text('BHARAT KISAN - FARMER PROFILE', 14, 25);
+    
+    doc.setTextColor(255, 255, 255);
+    doc.setFontSize(10);
+    doc.text(`Generated on: ${new Date().toLocaleString()}`, 14, 33);
+
+    // Basic Info
+    autoTable(doc, {
+      startY: 50,
+      head: [['Category', 'Details']],
+      body: [
+        ['Farmer Name', profile.farmerName],
+        ['Farm Name', profile.farmName],
+        ['Contact', `${profile.phone} | ${profile.email}`],
+        ['Location', `${profile.location} (${profile.state}, ${profile.district})`],
+        ['Farm Size', `${profile.farmSize} ${profile.sizeUnit}`],
+        ['Soil Type', profile.soilType],
+        ['Irrigation', profile.irrigation]
+      ],
+      theme: 'grid',
+      headStyles: { fillColor: amber as any, textColor: [0, 0, 0], fontStyle: 'bold' },
+      styles: { fontSize: 9, cellPadding: 4 }
+    });
+
+    // Crops
+    autoTable(doc, {
+      startY: (doc as any).lastAutoTable.finalY + 10,
+      head: [['Main Crops']],
+      body: profile.mainCrops.map(c => [c]),
+      theme: 'grid',
+      headStyles: { fillColor: amber as any, textColor: [0, 0, 0], fontStyle: 'bold' },
+      styles: { fontSize: 9, cellPadding: 4 }
+    });
+
+    // History
+    if (profile.cropHistory.length > 0) {
+      autoTable(doc, {
+        startY: (doc as any).lastAutoTable.finalY + 10,
+        head: [['Year', 'Crop', 'Yield']],
+        body: profile.cropHistory.map((h: any) => [h.year, h.crop, h.yield]),
+        theme: 'grid',
+        headStyles: { fillColor: amber as any, textColor: [0, 0, 0], fontStyle: 'bold' },
+        styles: { fontSize: 9, cellPadding: 4 }
+      });
+    }
+
+    doc.save(`BharatKisan_Profile_${profile.farmerName.replace(/\s+/g, '_')}.pdf`);
+  };
+
+  const shareProfile = async () => {
+    const text = `*Bharat Kisan - Farmer Profile*\n\n*Name:* ${profile.farmerName}\n*Farm:* ${profile.farmName}\n*Location:* ${profile.location}\n*Crops:* ${profile.mainCrops.join(', ')}\n\n_Generated via Bharat Kisan App_`;
+    
+    try {
+      await Share.share({
+        title: 'My Farm Profile',
+        text: text,
+        url: window.location.href,
+        dialogTitle: 'Share Profile'
+      });
+    } catch (err) {
+      console.error("Sharing failed", err);
+      // Fallback for web if Share API not available
+      const whatsappUrl = `https://wa.me/?text=${encodeURIComponent(text)}`;
+      window.open(whatsappUrl, '_blank');
+    }
+  };
+
   return (
-    <div className="space-y-6 pb-24 bg-[var(--m3-background)] min-h-screen">
+    <div className="space-y-6 pb-24 bg-black min-h-screen">
       {/* Header Profile Card */}
-      <div className="bg-[var(--m3-primary-container)] rounded-b-[2.5rem] p-8 pt-12 shadow-md relative overflow-hidden">
+      <div className="bg-stone-950 rounded-b-[2.5rem] p-8 pt-12 shadow-2xl relative overflow-hidden border-b border-amber-500/10">
+        <div className="absolute top-0 right-0 w-64 h-64 bg-amber-500/5 rounded-full blur-3xl -mr-32 -mt-32" />
         <div className="relative z-10 flex flex-col items-center">
           <div className="relative mb-4 group">
-            <div className="w-28 h-28 bg-[var(--m3-surface)] rounded-3xl flex items-center justify-center shadow-lg overflow-hidden border-2 border-[var(--m3-outline-variant)]">
-              <div className="w-full h-full bg-[var(--m3-surface-container-high)] flex items-center justify-center">
-                <User className="w-14 h-14 text-[var(--m3-primary)]" />
+            <div className="w-28 h-28 bg-stone-900 rounded-3xl flex items-center justify-center shadow-lg overflow-hidden border-2 border-amber-500/20">
+              <div className="w-full h-full bg-stone-950 flex items-center justify-center">
+                <User className="w-14 h-14 text-amber-500" />
               </div>
             </div>
             <button 
               onClick={handleEditToggle}
-              className={`absolute -bottom-2 -right-2 p-3 rounded-2xl shadow-md transition-all ${isEditing ? 'bg-[var(--m3-error)] text-[var(--m3-on-error)]' : 'bg-[var(--m3-primary)] text-[var(--m3-on-primary)]'}`}
+              className={`absolute -bottom-2 -right-2 p-3 rounded-2xl shadow-md transition-all ${isEditing ? 'bg-red-600 text-white' : 'bg-amber-600 text-black'}`}
             >
               {isEditing ? <RotateCcw className="w-5 h-5" /> : <Edit2 className="w-5 h-5" />}
             </button>
@@ -260,31 +348,31 @@ const Profile: React.FC<ProfileProps> = ({ onLogout, onNavigate }) => {
                   value={profile.farmerName}
                   onChange={e => setProfile({...profile, farmerName: e.target.value})}
                   placeholder="Farmer Name"
-                  className="text-2xl font-medium text-[var(--m3-on-primary-container)] bg-[var(--m3-surface)] border-b-2 border-[var(--m3-primary)] outline-none px-4 py-2 rounded-t-lg w-full text-center focus:bg-[var(--m3-surface-container-high)] transition-all"
+                  className="text-2xl font-black text-white bg-stone-900 border-b-2 border-amber-500 outline-none px-4 py-2 rounded-t-lg w-full text-center focus:bg-stone-800 transition-all uppercase tracking-tighter"
                 />
                 <input 
                   value={profile.farmName}
                   onChange={e => setProfile({...profile, farmName: e.target.value})}
                   placeholder="Farm Name"
-                  className="text-sm font-medium text-[var(--m3-on-primary-container)] opacity-80 bg-transparent border-b border-[var(--m3-outline)] outline-none px-4 py-1 text-center w-2/3 uppercase tracking-widest"
+                  className="text-[10px] font-black text-amber-500/60 bg-transparent border-b border-stone-800 outline-none px-4 py-1 text-center w-2/3 uppercase tracking-[0.3em]"
                 />
               </div>
             ) : (
               <>
-                <h2 className="text-3xl font-medium text-[var(--m3-on-primary-container)] mb-1 m3-headline-medium">{profile.farmerName}</h2>
-                <p className="text-[var(--m3-on-primary-container)] opacity-70 text-xs font-medium uppercase tracking-widest">{profile.farmName}</p>
+                <h2 className="text-4xl font-black text-white mb-1 uppercase tracking-tighter">{profile.farmerName}</h2>
+                <p className="text-amber-500/60 text-[10px] font-black uppercase tracking-[0.3em]">{profile.farmName}</p>
               </>
             )}
           </div>
 
           <div className="mt-6 flex gap-2">
-             <div className="bg-[var(--m3-surface)]/50 backdrop-blur-sm px-4 py-2 rounded-full border border-[var(--m3-outline-variant)] flex items-center gap-2">
-                <Award className="w-4 h-4 text-[var(--m3-primary)]" />
-                <span className="text-[10px] font-medium uppercase text-[var(--m3-on-surface)] tracking-wider">Krishi Master</span>
+             <div className="bg-stone-900/50 backdrop-blur-sm px-4 py-2 rounded-full border border-amber-500/10 flex items-center gap-2">
+                <Award className="w-4 h-4 text-amber-500" />
+                <span className="text-[10px] font-black uppercase text-stone-300 tracking-widest">Krishi Master</span>
              </div>
-             <div className="bg-[var(--m3-surface)]/50 backdrop-blur-sm px-4 py-2 rounded-full border border-[var(--m3-outline-variant)] flex items-center gap-2">
-                <TrendingUp className="w-4 h-4 text-[var(--m3-primary)]" />
-                <span className="text-[10px] font-medium uppercase text-[var(--m3-on-surface)] tracking-wider">Level 12</span>
+             <div className="bg-stone-900/50 backdrop-blur-sm px-4 py-2 rounded-full border border-amber-500/10 flex items-center gap-2">
+                <TrendingUp className="w-4 h-4 text-amber-500" />
+                <span className="text-[10px] font-black uppercase text-stone-300 tracking-widest">Level 12</span>
              </div>
           </div>
         </div>
@@ -292,45 +380,45 @@ const Profile: React.FC<ProfileProps> = ({ onLogout, onNavigate }) => {
 
       {/* Stats Summary */}
       <div className="grid grid-cols-3 gap-3 px-6">
-        <StatsCard icon={<Briefcase className="w-4 h-4" />} label="Total Logs" value={stats.totalLogs.toString()} color="bg-[var(--m3-surface-container-low)]" textColor="text-[var(--m3-on-surface)]" />
-        <StatsCard icon={<Clock className="w-4 h-4" />} label="Activity" value={stats.lastActivity} color="bg-[var(--m3-surface-container-low)]" textColor="text-[var(--m3-on-surface)]" isSmall />
-        <StatsCard icon={<Leaf className="w-4 h-4" />} label="Focus Crop" value={stats.topCategory} color="bg-[var(--m3-surface-container-low)]" textColor="text-[var(--m3-on-surface)]" />
+        <StatsCard icon={<Briefcase className="w-4 h-4" />} label="Total Logs" value={stats.totalLogs.toString()} color="bg-stone-950" textColor="text-white" />
+        <StatsCard icon={<Clock className="w-4 h-4" />} label="Activity" value={stats.lastActivity} color="bg-stone-950" textColor="text-white" isSmall />
+        <StatsCard icon={<Leaf className="w-4 h-4" />} label="Focus Crop" value={stats.topCategory} color="bg-stone-950" textColor="text-white" />
       </div>
 
       {/* Account Settings Section */}
       <div className="px-6 space-y-3">
         <SectionHeader title="Account Management" />
-        <div className="m3-card-filled p-2 bg-[var(--m3-surface-container-low)] divide-y divide-[var(--m3-outline-variant)]">
+        <div className="m3-card-filled p-2 bg-stone-950 divide-y divide-amber-500/5 border border-amber-500/5">
           <button 
             onClick={handleEditToggle}
-            className="w-full flex items-center justify-between p-4 active:bg-[var(--m3-surface-container-high)] transition-colors group rounded-xl"
+            className="w-full flex items-center justify-between p-4 active:bg-stone-900 transition-colors group rounded-xl"
           >
             <div className="flex items-center gap-4 text-left">
-              <div className="p-3 bg-[var(--m3-primary-container)] rounded-xl text-[var(--m3-on-primary-container)]">
+              <div className="p-3 bg-amber-500/10 rounded-xl text-amber-500 border border-amber-500/20">
                 <Edit2 className="w-5 h-5" />
               </div>
               <div>
-                <p className="text-sm font-medium text-[var(--m3-on-surface)]">Edit Profile</p>
-                <p className="text-[10px] text-[var(--m3-on-surface-variant)] font-medium uppercase tracking-wider">Update Identity & Operation</p>
+                <p className="text-xs font-black text-white uppercase tracking-wider">Edit Profile</p>
+                <p className="text-[9px] text-stone-500 font-bold uppercase tracking-widest">Update Identity & Operation</p>
               </div>
             </div>
-            <ChevronRight className="w-5 h-5 text-[var(--m3-on-surface-variant)]" />
+            <ChevronRight className="w-5 h-5 text-stone-700 group-hover:text-amber-500 transition-colors" />
           </button>
           
           <button 
             onClick={() => onNavigate(AppView.SETTINGS)}
-            className="w-full flex items-center justify-between p-4 active:bg-[var(--m3-surface-container-high)] transition-colors group rounded-xl"
+            className="w-full flex items-center justify-between p-4 active:bg-stone-900 transition-colors group rounded-xl"
           >
             <div className="flex items-center gap-4 text-left">
-              <div className="p-3 bg-[var(--m3-surface-container-high)] rounded-xl text-[var(--m3-on-surface-variant)]">
+              <div className="p-3 bg-stone-900 rounded-xl text-stone-500 border border-stone-800">
                 <SettingsIcon className="w-5 h-5" />
               </div>
               <div>
-                <p className="text-sm font-medium text-[var(--m3-on-surface)]">System Preferences</p>
-                <p className="text-[10px] text-[var(--m3-on-surface-variant)] font-medium uppercase tracking-wider">Language, Units & Alerts</p>
+                <p className="text-xs font-black text-white uppercase tracking-wider">System Preferences</p>
+                <p className="text-[9px] text-stone-500 font-bold uppercase tracking-widest">Language, Units & Alerts</p>
               </div>
             </div>
-            <ChevronRight className="w-5 h-5 text-[var(--m3-on-surface-variant)]" />
+            <ChevronRight className="w-5 h-5 text-stone-700 group-hover:text-amber-500 transition-colors" />
           </button>
         </div>
       </div>
@@ -339,7 +427,7 @@ const Profile: React.FC<ProfileProps> = ({ onLogout, onNavigate }) => {
       <div className="space-y-6 px-6 pb-12">
         <section className="space-y-3">
           <SectionHeader title="Contact Details" />
-          <div className="m3-card-filled p-4 bg-[var(--m3-surface-container-low)] divide-y divide-[var(--m3-outline-variant)]">
+          <div className="m3-card-filled p-4 bg-stone-950 divide-y divide-amber-500/5 border border-amber-500/5">
             <ProfileItem 
               icon={<Phone />} 
               label="Mobile" 
@@ -359,60 +447,60 @@ const Profile: React.FC<ProfileProps> = ({ onLogout, onNavigate }) => {
 
         <section className="space-y-3">
           <SectionHeader title="Farm Geo-Data" />
-          <div className="m3-card-filled p-4 bg-[var(--m3-surface-container-low)] divide-y divide-[var(--m3-outline-variant)]">
+          <div className="m3-card-filled p-4 bg-stone-950 divide-y divide-amber-500/5 border border-amber-500/5">
             <div className="flex items-center gap-4 py-4">
-              <div className="p-3 bg-[var(--m3-surface-container-high)] rounded-xl text-[var(--m3-on-surface-variant)]">
+              <div className="p-3 bg-stone-900 rounded-xl text-stone-500 border border-stone-800">
                 <MapPin className="w-5 h-5" />
               </div>
               <div className="flex-1 min-w-0">
-                <p className="text-[10px] font-medium text-[var(--m3-on-surface-variant)] uppercase tracking-wider mb-1">State & Region</p>
+                <p className="text-[9px] font-black text-stone-500 uppercase tracking-widest mb-1">State & Region</p>
                 {isEditing ? (
                   <div className="flex flex-col gap-2">
                     <input 
                       value={profile.state} 
                       onChange={e => setProfile({...profile, state: e.target.value})}
                       placeholder="State"
-                      className="flex-1 bg-[var(--m3-surface-container-high)] border-b border-[var(--m3-outline)] outline-none text-sm font-medium text-[var(--m3-on-surface)] p-2 rounded-t-lg focus:border-[var(--m3-primary)] transition-all"
+                      className="flex-1 bg-stone-900 border-b border-amber-500/20 outline-none text-xs font-bold text-white p-2 rounded-t-lg focus:border-amber-500 transition-all"
                     />
                     <input 
                       value={profile.district} 
                       onChange={e => setProfile({...profile, district: e.target.value})}
                       placeholder="District"
-                      className="flex-1 bg-[var(--m3-surface-container-high)] border-b border-[var(--m3-outline)] outline-none text-sm font-medium text-[var(--m3-on-surface)] p-2 rounded-t-lg focus:border-[var(--m3-primary)] transition-all"
+                      className="flex-1 bg-stone-900 border-b border-amber-500/20 outline-none text-xs font-bold text-white p-2 rounded-t-lg focus:border-amber-500 transition-all"
                     />
-                    <button onClick={detectLocation} disabled={isLocating} className="p-2 bg-[var(--m3-primary-container)] text-[var(--m3-on-primary-container)] rounded-full disabled:opacity-50 w-fit text-xs font-medium flex items-center gap-2">
+                    <button onClick={detectLocation} disabled={isLocating} className="p-2 bg-amber-500/10 text-amber-500 rounded-full border border-amber-500/20 disabled:opacity-50 w-fit text-[9px] font-black uppercase tracking-widest flex items-center gap-2">
                       {isLocating ? <Loader2 className="w-3 h-3 animate-spin" /> : <><Navigation className="w-3 h-3" /> Auto-Detect</>}
                     </button>
                   </div>
                 ) : (
-                  <p className="text-sm font-medium text-[var(--m3-on-surface)] truncate">{profile.state}, {profile.district}</p>
+                  <p className="text-xs font-bold text-white truncate">{profile.state}, {profile.district}</p>
                 )}
               </div>
             </div>
 
             <div className="flex items-center gap-4 py-4">
-              <div className="p-3 bg-[var(--m3-surface-container-high)] rounded-xl text-[var(--m3-on-surface-variant)]">
+              <div className="p-3 bg-stone-900 rounded-xl text-stone-500 border border-stone-800">
                 <Landmark className="w-5 h-5" />
               </div>
               <div className="flex-1 min-w-0">
-                <p className="text-[10px] font-medium text-[var(--m3-on-surface-variant)] uppercase tracking-wider mb-1">Mandal & Revenue Village</p>
+                <p className="text-[9px] font-black text-stone-500 uppercase tracking-widest mb-1">Mandal & Revenue Village</p>
                 {isEditing ? (
                   <div className="flex flex-col gap-2">
                      <input 
                       value={profile.mandal} 
                       onChange={e => setProfile({...profile, mandal: e.target.value})}
                       placeholder="Mandal"
-                      className="flex-1 bg-[var(--m3-surface-container-high)] border-b border-[var(--m3-outline)] outline-none text-sm font-medium text-[var(--m3-on-surface)] p-2 rounded-t-lg focus:border-[var(--m3-primary)] transition-all"
+                      className="flex-1 bg-stone-900 border-b border-amber-500/20 outline-none text-xs font-bold text-white p-2 rounded-t-lg focus:border-amber-500 transition-all"
                     />
                     <input 
                       value={profile.revenue} 
                       onChange={e => setProfile({...profile, revenue: e.target.value})}
                       placeholder="Revenue Village"
-                      className="flex-1 bg-[var(--m3-surface-container-high)] border-b border-[var(--m3-outline)] outline-none text-sm font-medium text-[var(--m3-on-surface)] p-2 rounded-t-lg focus:border-[var(--m3-primary)] transition-all"
+                      className="flex-1 bg-stone-900 border-b border-amber-500/20 outline-none text-xs font-bold text-white p-2 rounded-t-lg focus:border-amber-500 transition-all"
                     />
                   </div>
                 ) : (
-                  <p className="text-sm font-medium text-[var(--m3-on-surface)]">{profile.mandal} • {profile.revenue}</p>
+                  <p className="text-xs font-bold text-white">{profile.mandal} • {profile.revenue}</p>
                 )}
               </div>
             </div>
@@ -430,7 +518,7 @@ const Profile: React.FC<ProfileProps> = ({ onLogout, onNavigate }) => {
 
         <section className="space-y-3">
           <SectionHeader title="Farm Intelligence" />
-          <div className="m3-card-filled p-4 bg-[var(--m3-surface-container-low)] divide-y divide-[var(--m3-outline-variant)]">
+          <div className="m3-card-filled p-4 bg-stone-950 divide-y divide-amber-500/5 border border-amber-500/5">
             <ProfileItem 
               icon={<Droplets className="w-5 h-5" />} 
               label="Irrigation System" 
@@ -457,26 +545,26 @@ const Profile: React.FC<ProfileProps> = ({ onLogout, onNavigate }) => {
 
         <section className="space-y-3">
           <SectionHeader title="Crop Intelligence" />
-          <div className="m3-card-filled p-6 bg-[var(--m3-surface-container-low)]">
+          <div className="m3-card-filled p-6 bg-stone-950 border border-amber-500/5 shadow-sm">
             <div className="flex items-center gap-4">
-              <div className="p-3 bg-[var(--m3-surface-container-high)] rounded-xl text-[var(--m3-primary)]">
+              <div className="p-3 bg-stone-900 rounded-xl text-amber-500 border border-stone-800">
                 <Leaf className="w-5 h-5" />
               </div>
               <div className="flex-1">
                 <div className="flex items-center justify-between mb-3">
-                  <p className="text-[10px] font-medium text-[var(--m3-on-surface-variant)] uppercase tracking-wider">Active Crops</p>
+                  <p className="text-[9px] font-black text-stone-500 uppercase tracking-widest">Active Crops</p>
                   {isEditing && (
-                    <button onClick={addCrop} className="flex items-center gap-1.5 text-[10px] font-medium text-[var(--m3-primary)] bg-[var(--m3-primary-container)] px-3 py-1.5 rounded-full active:scale-95 transition-all">
+                    <button onClick={addCrop} className="flex items-center gap-1.5 text-[9px] font-black text-amber-500 bg-amber-500/10 px-3 py-1.5 rounded-full active:scale-95 transition-all border border-amber-500/20 uppercase tracking-widest">
                       <Plus className="w-3.5 h-3.5" /> Add Crop
                     </button>
                   )}
                 </div>
                 <div className="flex flex-wrap gap-2">
                   {profile.mainCrops.map((c: string) => (
-                    <span key={c} className="inline-flex items-center gap-2 bg-[var(--m3-surface)] border border-[var(--m3-outline-variant)] px-4 py-2 rounded-full text-xs font-medium text-[var(--m3-on-surface)] shadow-sm">
+                    <span key={c} className="inline-flex items-center gap-2 bg-stone-900 border border-stone-800 px-4 py-2 rounded-full text-[10px] font-black text-white shadow-sm uppercase tracking-widest">
                       {c}
                       {isEditing && (
-                        <button onClick={() => removeCrop(c)} className="text-[var(--m3-on-surface-variant)] hover:text-[var(--m3-error)] transition-colors">
+                        <button onClick={() => removeCrop(c)} className="text-stone-500 hover:text-red-500 transition-colors">
                           <CloseIcon className="w-4 h-4" />
                         </button>
                       )}
@@ -488,18 +576,130 @@ const Profile: React.FC<ProfileProps> = ({ onLogout, onNavigate }) => {
           </div>
         </section>
 
+        <section className="space-y-3">
+          <SectionHeader title="Historical Performance" />
+          <div className="m3-card-filled p-6 bg-stone-950 border border-amber-500/5 shadow-sm">
+            <div className="flex items-center gap-4">
+              <div className="p-3 bg-stone-900 rounded-xl text-amber-500 border border-stone-800">
+                <History className="w-5 h-5" />
+              </div>
+              <div className="flex-1">
+                <div className="flex items-center justify-between mb-3">
+                  <p className="text-[9px] font-black text-stone-500 uppercase tracking-widest">Yield History</p>
+                  {isEditing && (
+                    <button onClick={addHistoryEntry} className="flex items-center gap-1.5 text-[9px] font-black text-amber-500 bg-amber-500/10 px-3 py-1.5 rounded-full active:scale-95 transition-all border border-amber-500/20 uppercase tracking-widest">
+                      <Plus className="w-3.5 h-3.5" /> Add Record
+                    </button>
+                  )}
+                </div>
+                <div className="space-y-2">
+                  {profile.cropHistory.map((h: any, i: number) => (
+                    <div key={i} className="flex items-center justify-between bg-stone-900/50 p-3 rounded-xl border border-stone-800">
+                      <div>
+                        <p className="text-xs font-black text-white uppercase tracking-wider">{h.crop}</p>
+                        <p className="text-[9px] text-stone-500 font-bold uppercase tracking-widest">{h.year} • {h.yield}</p>
+                      </div>
+                      {isEditing && (
+                        <button onClick={() => removeHistoryEntry(i)} className="p-2 text-stone-600 hover:text-red-500 transition-colors">
+                          <CloseIcon className="w-4 h-4" />
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                  {profile.cropHistory.length === 0 && (
+                    <p className="text-[10px] text-stone-600 font-medium italic">No historical records added.</p>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section className="space-y-3">
+          <SectionHeader title="Risk & Resilience" />
+          <div className="m3-card-filled p-6 bg-stone-950 border border-amber-500/5 shadow-sm">
+            <div className="flex items-center gap-4">
+              <div className="p-3 bg-stone-900 rounded-xl text-amber-500 border border-stone-800">
+                <AlertCircle className="w-5 h-5" />
+              </div>
+              <div className="flex-1">
+                <div className="flex items-center justify-between mb-3">
+                  <p className="text-[9px] font-black text-stone-500 uppercase tracking-widest">Past Issues</p>
+                  {isEditing && (
+                    <button onClick={addIssue} className="flex items-center gap-1.5 text-[9px] font-black text-amber-500 bg-amber-500/10 px-3 py-1.5 rounded-full active:scale-95 transition-all border border-amber-500/20 uppercase tracking-widest">
+                      <Plus className="w-3.5 h-3.5" /> Add Issue
+                    </button>
+                  )}
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {profile.pastIssues.map((issue: string, i: number) => (
+                    <span key={i} className="inline-flex items-center gap-2 bg-stone-900 border border-stone-800 px-4 py-2 rounded-full text-[10px] font-black text-white shadow-sm uppercase tracking-widest">
+                      {issue}
+                      {isEditing && (
+                        <button onClick={() => removeIssue(i)} className="text-stone-500 hover:text-red-500 transition-colors">
+                          <CloseIcon className="w-4 h-4" />
+                        </button>
+                      )}
+                    </span>
+                  ))}
+                  {profile.pastIssues.length === 0 && (
+                    <p className="text-[10px] text-stone-600 font-medium italic">No past issues recorded.</p>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section className="space-y-3">
+          <SectionHeader title="Data & Sharing" />
+          <div className="m3-card-filled p-2 bg-stone-950 divide-y divide-amber-500/5 border border-amber-500/5">
+            <button 
+              onClick={exportProfilePDF}
+              className="w-full flex items-center justify-between p-4 active:bg-stone-900 transition-colors group rounded-xl"
+            >
+              <div className="flex items-center gap-4 text-left">
+                <div className="p-3 bg-stone-900 rounded-xl text-stone-500 border border-stone-800">
+                  <Download className="w-5 h-5" />
+                </div>
+                <div>
+                  <p className="text-xs font-black text-white uppercase tracking-wider">Export Profile (PDF)</p>
+                  <p className="text-[9px] text-stone-500 font-bold uppercase tracking-widest">Download comprehensive farm report</p>
+                </div>
+              </div>
+              <ChevronRight className="w-5 h-5 text-stone-700 group-hover:text-amber-500 transition-colors" />
+            </button>
+            
+            <button 
+              onClick={shareProfile}
+              className="w-full flex items-center justify-between p-4 active:bg-stone-900 transition-colors group rounded-xl"
+            >
+              <div className="flex items-center gap-4 text-left">
+                <div className="p-3 bg-stone-900 rounded-xl text-stone-500 border border-stone-800">
+                  <Share2 className="w-5 h-5" />
+                </div>
+                <div>
+                  <p className="text-xs font-black text-white uppercase tracking-wider">Share Profile</p>
+                  <p className="text-[9px] text-stone-500 font-bold uppercase tracking-widest">Share via WhatsApp or SMS</p>
+                </div>
+              </div>
+              <ChevronRight className="w-5 h-5 text-stone-700 group-hover:text-amber-500 transition-colors" />
+            </button>
+          </div>
+        </section>
+
         {isEditing ? (
           <div className="grid grid-cols-1 gap-3 mt-8">
-            <button onClick={handleSave} className="w-full bg-[var(--m3-primary)] text-[var(--m3-on-primary)] font-medium py-4 rounded-full flex items-center justify-center gap-3 shadow-md active:scale-[0.98] transition-all">
+            <button onClick={handleSave} className="w-full bg-amber-600 text-black font-black py-4 rounded-full flex items-center justify-center gap-3 shadow-xl shadow-amber-900/20 active:scale-[0.98] transition-all uppercase text-[10px] tracking-widest">
               <CheckCircle2 className="w-5 h-5" /> Save Changes
             </button>
-            <button onClick={handleEditToggle} className="w-full bg-[var(--m3-surface-container-high)] text-[var(--m3-on-surface-variant)] font-medium py-4 rounded-full flex items-center justify-center gap-2 active:scale-[0.98] transition-all text-xs uppercase tracking-widest">
+            <button onClick={handleEditToggle} className="w-full bg-stone-900 text-stone-500 font-black py-4 rounded-full flex items-center justify-center gap-2 active:scale-[0.98] transition-all text-[10px] uppercase tracking-widest border border-stone-800">
               Discard Changes
             </button>
           </div>
         ) : (
           <div className="mt-8 space-y-4">
-            <button onClick={onLogout} className="w-full bg-[var(--m3-error-container)] text-[var(--m3-on-error-container)] font-medium py-4 rounded-full flex items-center justify-center gap-3 active:scale-[0.98] transition-all">
+            <button onClick={onLogout} className="w-full bg-red-600/10 text-red-500 font-black py-4 rounded-full flex items-center justify-center gap-3 active:scale-[0.98] transition-all border border-red-500/20 uppercase text-[10px] tracking-widest">
               <LogOut className="w-5 h-5" /> Sign Out
             </button>
           </div>
@@ -510,15 +710,15 @@ const Profile: React.FC<ProfileProps> = ({ onLogout, onNavigate }) => {
 };
 
 const SectionHeader: React.FC<{ title: string }> = ({ title }) => (
-  <h3 className="text-[10px] font-medium text-[var(--m3-on-surface-variant)] uppercase tracking-[0.15em] ml-1 mb-1">{title}</h3>
+  <h3 className="text-[10px] font-black text-amber-500/40 uppercase tracking-[0.3em] ml-1 mb-1">{title}</h3>
 );
 
 const StatsCard: React.FC<{ icon: React.ReactNode, label: string, value: string, color: string, textColor: string, isSmall?: boolean }> = ({ icon, label, value, color, textColor, isSmall }) => (
-  <div className={`${color} p-4 rounded-2xl border border-[var(--m3-outline-variant)] flex flex-col justify-between h-32 shadow-sm transition-all`}>
-    <div className={`p-2 w-fit rounded-xl bg-[var(--m3-surface-container-high)] ${textColor}`}>{icon}</div>
+  <div className={`${color} p-4 rounded-2xl border border-amber-500/5 flex flex-col justify-between h-32 shadow-sm transition-all`}>
+    <div className={`p-2 w-fit rounded-xl bg-stone-900 border border-stone-800 ${textColor}`}>{icon}</div>
     <div className="truncate">
-      <p className={`text-[9px] font-medium uppercase tracking-[0.1em] text-[var(--m3-on-surface-variant)] mb-1 truncate`}>{label}</p>
-      <p className={`${isSmall ? 'text-[11px]' : 'text-sm'} font-medium ${textColor} truncate`}>{value}</p>
+      <p className={`text-[8px] font-black uppercase tracking-[0.2em] text-stone-500 mb-1 truncate`}>{label}</p>
+      <p className={`${isSmall ? 'text-[10px]' : 'text-xs'} font-black ${textColor} truncate uppercase tracking-wider`}>{value}</p>
     </div>
   </div>
 );
@@ -532,20 +732,20 @@ const ProfileItem: React.FC<{
   onChange: (val: string) => void 
 }> = ({ icon, label, value, isEditing, type = "text", onChange }) => (
   <div className="flex items-center gap-4 py-4">
-    <div className="p-3 bg-[var(--m3-surface-container-high)] rounded-xl text-[var(--m3-on-surface-variant)]">
+    <div className="p-3 bg-stone-900 rounded-xl text-stone-500 border border-stone-800">
       {React.cloneElement(icon as React.ReactElement<any>, { className: 'w-5 h-5' })}
     </div>
     <div className="flex-1 min-w-0">
-      <p className="text-[10px] font-medium text-[var(--m3-on-surface-variant)] uppercase tracking-wider mb-1">{label}</p>
+      <p className="text-[9px] font-black text-stone-500 uppercase tracking-widest mb-1">{label}</p>
       {isEditing ? (
         <input 
           type={type}
           value={value} 
           onChange={e => onChange(e.target.value)}
-          className="w-full bg-[var(--m3-surface-container-high)] border-b border-[var(--m3-outline)] outline-none text-sm font-medium text-[var(--m3-on-surface)] p-2 rounded-t-lg focus:border-[var(--m3-primary)] transition-all"
+          className="w-full bg-stone-900 border-b border-amber-500/20 outline-none text-xs font-bold text-white p-2 rounded-t-lg focus:border-amber-500 transition-all"
         />
       ) : (
-        <p className="text-sm font-medium text-[var(--m3-on-surface)] truncate">{value || 'Not provided'}</p>
+        <p className="text-xs font-bold text-white truncate">{value || 'Not provided'}</p>
       )}
     </div>
   </div>

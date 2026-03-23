@@ -51,27 +51,27 @@ interface ToolsHubProps {
 }
 
 const TOOLS = [
-  { id: 'disease', icon: <Camera />, label: 'Disease Scan', view: AppView.DISEASE_SCANNER, category: 'Field', theme: 'emerald', desc: 'AI-powered crop diagnosis' },
+  { id: 'disease', icon: <Camera />, label: 'Disease Scan', view: AppView.DISEASE_SCANNER, category: 'Field', theme: 'amber', desc: 'AI-powered crop diagnosis' },
   { id: 'health', icon: <Activity />, label: 'Crop Health', view: AppView.CROP_HEALTH_MONITOR, category: 'Field', theme: 'orange', desc: 'Satellite & sensor monitoring' },
-  { id: 'registry', icon: <MapIcon />, label: 'Field Registry', view: AppView.FIELD_MAP, category: 'Field', theme: 'blue', desc: 'GIS-based parcel management' },
-  { id: 'ledger', icon: <Wallet />, label: 'Finance Ledger', view: AppView.FINANCE_LEDGER, category: 'Finance', theme: 'emerald', desc: 'P&L monitoring & audits', featured: true },
-  { id: 'mandi', icon: <TrendingUp />, label: 'Mandi Prices', view: AppView.MARKET_PRICES, category: 'Finance', theme: 'emerald', desc: 'Live market price tracking' },
-  { id: 'inputs', icon: <ShoppingCart />, label: 'Input Advisor', view: AppView.INPUT_ADVISOR, category: 'Finance', theme: 'blue', desc: 'Smart procurement advice' },
-  { id: 'advisor', icon: <Lightbulb />, label: 'Crop Advisor', view: AppView.CROP_ADVISOR, category: 'Daily', theme: 'emerald', desc: 'AI agronomy recommendations' },
-  { id: 'rotation', icon: <ArrowRightLeft />, label: 'Rotation', view: AppView.CROP_ROTATION_ADVISOR, category: 'Daily', theme: 'blue', desc: 'Soil health optimization' },
-  { id: 'spraying', icon: <Beaker />, label: 'Spraying', view: AppView.SPRAYING_ADVISOR, category: 'Daily', theme: 'blue', desc: 'Pesticide dosage calculator' },
-  { id: 'irrigation', icon: <Droplets />, label: 'Irrigation', view: AppView.IRRIGATION_HUB, category: 'Daily', theme: 'emerald', desc: 'Water management hub' },
-  { id: 'harvest', icon: <Calendar />, label: 'Harvest', view: AppView.HARVEST_SCHEDULER, category: 'Daily', theme: 'blue', desc: 'Optimal timing scheduler' },
-  { id: 'yield', icon: <Calculator />, label: 'Yield', view: AppView.YIELD_PREDICTOR, category: 'Daily', theme: 'emerald', desc: 'Production forecasting' },
-  { id: 'weather', icon: <CloudSun />, label: 'Weather', view: AppView.WEATHER_HUB, category: 'Daily', theme: 'blue', desc: 'Hyper-local forecasting' },
-  { id: 'soil', icon: <Microscope />, label: 'Soil Lab', view: AppView.SOIL_LAB, category: 'Daily', theme: 'emerald', desc: 'Nutrient & pH analysis' },
-  { id: 'pest', icon: <Bug />, label: 'Pest ID', view: AppView.PEST_LIBRARY, category: 'Daily', theme: 'blue', desc: 'Pest identification library' },
-  { id: 'carbon', icon: <Leaf />, label: 'Carbon Credits', view: AppView.CARBON_CREDIT_TRACKER, category: 'Learning', theme: 'emerald', desc: 'Eco-tracking & credits' },
-  { id: 'rental', icon: <Truck />, label: 'Equipment', view: AppView.EQUIPMENT_RENTAL, category: 'Learning', theme: 'blue', desc: 'Fleet & rental management' },
-  { id: 'academy', icon: <BookOpen />, label: 'Agri Academy', view: AppView.AGRI_ACADEMY, category: 'Learning', theme: 'emerald', desc: 'Modern farming courses' },
-  { id: 'news', icon: <Newspaper />, label: 'Agri News', view: AppView.AGRI_NEWS, category: 'Learning', theme: 'blue', desc: 'Latest industry updates' },
-  { id: 'livestock', icon: <Beef />, label: 'Livestock', view: AppView.LIVESTOCK_ASSISTANT, category: 'Learning', theme: 'emerald', desc: 'Animal health assistant' },
-  { id: 'sustainability', icon: <ShieldCheck />, label: 'Sustainability', view: AppView.SUSTAINABILITY_HUB, category: 'Learning', theme: 'blue', desc: 'Eco-farming protocols' },
+  { id: 'registry', icon: <MapIcon />, label: 'Field Registry', view: AppView.FIELD_MAP, category: 'Field', theme: 'amber', desc: 'GIS-based parcel management' },
+  { id: 'ledger', icon: <Wallet />, label: 'Finance Ledger', view: AppView.FINANCE_LEDGER, category: 'Finance', theme: 'amber', desc: 'P&L monitoring & audits', featured: true },
+  { id: 'mandi', icon: <TrendingUp />, label: 'Mandi Prices', view: AppView.MARKET_PRICES, category: 'Finance', theme: 'amber', desc: 'Live market price tracking' },
+  { id: 'inputs', icon: <ShoppingCart />, label: 'Input Advisor', view: AppView.INPUT_ADVISOR, category: 'Finance', theme: 'amber', desc: 'Smart procurement advice' },
+  { id: 'advisor', icon: <Lightbulb />, label: 'Crop Advisor', view: AppView.CROP_ADVISOR, category: 'Daily', theme: 'amber', desc: 'AI agronomy recommendations' },
+  { id: 'rotation', icon: <ArrowRightLeft />, label: 'Rotation', view: AppView.CROP_ROTATION_ADVISOR, category: 'Daily', theme: 'amber', desc: 'Soil health optimization' },
+  { id: 'spraying', icon: <Beaker />, label: 'Spraying', view: AppView.SPRAYING_ADVISOR, category: 'Daily', theme: 'amber', desc: 'Pesticide dosage calculator' },
+  { id: 'irrigation', icon: <Droplets />, label: 'Irrigation', view: AppView.IRRIGATION_HUB, category: 'Daily', theme: 'amber', desc: 'Water management hub' },
+  { id: 'harvest', icon: <Calendar />, label: 'Harvest', view: AppView.HARVEST_SCHEDULER, category: 'Daily', theme: 'amber', desc: 'Optimal timing scheduler' },
+  { id: 'yield', icon: <Calculator />, label: 'Yield', view: AppView.YIELD_PREDICTOR, category: 'Daily', theme: 'amber', desc: 'Production forecasting' },
+  { id: 'weather', icon: <CloudSun />, label: 'Weather', view: AppView.WEATHER_HUB, category: 'Daily', theme: 'amber', desc: 'Hyper-local forecasting' },
+  { id: 'soil', icon: <Microscope />, label: 'Soil Lab', view: AppView.SOIL_LAB, category: 'Daily', theme: 'amber', desc: 'Nutrient & pH analysis' },
+  { id: 'pest', icon: <Bug />, label: 'Pest ID', view: AppView.PEST_LIBRARY, category: 'Daily', theme: 'amber', desc: 'Pest identification library' },
+  { id: 'carbon', icon: <Leaf />, label: 'Carbon Credits', view: AppView.CARBON_CREDIT_TRACKER, category: 'Learning', theme: 'amber', desc: 'Eco-tracking & credits' },
+  { id: 'rental', icon: <Truck />, label: 'Equipment', view: AppView.EQUIPMENT_RENTAL, category: 'Learning', theme: 'amber', desc: 'Fleet & rental management' },
+  { id: 'academy', icon: <BookOpen />, label: 'Agri Academy', view: AppView.AGRI_ACADEMY, category: 'Learning', theme: 'amber', desc: 'Modern farming courses' },
+  { id: 'news', icon: <Newspaper />, label: 'Agri News', view: AppView.AGRI_NEWS, category: 'Learning', theme: 'amber', desc: 'Latest industry updates' },
+  { id: 'livestock', icon: <Beef />, label: 'Livestock', view: AppView.LIVESTOCK_ASSISTANT, category: 'Learning', theme: 'amber', desc: 'Animal health assistant' },
+  { id: 'sustainability', icon: <ShieldCheck />, label: 'Sustainability', view: AppView.SUSTAINABILITY_HUB, category: 'Learning', theme: 'amber', desc: 'Eco-farming protocols' },
 ];
 
 const ToolsHub: React.FC<ToolsHubProps> = ({ setView }) => {
@@ -92,33 +92,33 @@ const ToolsHub: React.FC<ToolsHubProps> = ({ setView }) => {
   const categories = Array.from(new Set(filteredTools.map(t => t.category)));
 
   return (
-    <div className="w-full flex flex-col pb-40 bg-[var(--m3-background)] min-h-screen">
+    <div className="w-full flex flex-col pb-40 bg-black min-h-screen">
       
       {/* Hero Header */}
       <section className="px-6 pt-16 pb-12 relative overflow-hidden">
-        <div className="absolute top-0 right-0 w-64 h-64 bg-emerald-500/5 rounded-full blur-3xl -mr-32 -mt-32" />
+        <div className="absolute top-0 right-0 w-64 h-64 bg-amber-500/5 rounded-full blur-3xl -mr-32 -mt-32" />
         <div className="relative z-10 space-y-8">
           <div className="space-y-2">
             <div className="flex items-center gap-2">
-              <span className="w-8 h-[2px] bg-emerald-600" />
-              <span className="text-[10px] font-black text-emerald-700 uppercase tracking-[0.4em]">Advanced Toolkit</span>
+              <span className="w-8 h-[2px] bg-amber-600" />
+              <span className="text-[10px] font-black text-amber-500 uppercase tracking-[0.4em]">Advanced Toolkit</span>
             </div>
-            <h2 className="text-6xl font-black text-stone-900 tracking-tighter leading-[0.9]">
-              Smart <span className="text-emerald-700">Farming</span><br/>
+            <h2 className="text-6xl font-black text-white tracking-tighter leading-[0.9]">
+              Smart <span className="text-amber-500">Farming</span><br/>
               <span className="italic font-serif font-light">Solutions.</span>
             </h2>
           </div>
           
           <div className="relative group max-w-md">
             <div className="absolute inset-y-0 left-6 flex items-center pointer-events-none">
-              <Search className="w-5 h-5 text-stone-300 group-focus-within:text-emerald-600 transition-colors" />
+              <Search className="w-5 h-5 text-stone-600 group-focus-within:text-amber-500 transition-colors" />
             </div>
             <input 
               type="text" 
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="Search tools, categories..."
-              className="w-full bg-white border border-stone-200 p-6 pl-16 rounded-[2rem] outline-none shadow-2xl shadow-stone-200/40 text-sm text-stone-900 focus:border-emerald-600/50 focus:ring-8 focus:ring-emerald-50/50 transition-all placeholder:text-stone-300 font-medium"
+              className="w-full bg-stone-950 border border-amber-500/10 p-6 pl-16 rounded-[2rem] outline-none shadow-2xl shadow-black/40 text-sm text-white focus:border-amber-600/50 focus:ring-8 focus:ring-amber-500/10 transition-all placeholder:text-stone-700 font-medium"
             />
           </div>
         </div>
@@ -130,10 +130,10 @@ const ToolsHub: React.FC<ToolsHubProps> = ({ setView }) => {
         {searchQuery === '' && (
           <section className="space-y-8">
             <div className="flex items-center justify-between">
-              <h3 className="text-[11px] font-black text-stone-400 uppercase tracking-[0.3em] flex items-center gap-3">
+              <h3 className="text-[11px] font-black text-amber-500/40 uppercase tracking-[0.3em] flex items-center gap-3">
                 <Star className="w-4 h-4 text-amber-400 fill-amber-400" /> Featured Intelligence
               </h3>
-              <div className="h-px flex-1 bg-stone-100 ml-6" />
+              <div className="h-px flex-1 bg-amber-500/10 ml-6" />
             </div>
             <div className="grid grid-cols-1 gap-6">
               <FeaturedTool 
@@ -141,8 +141,8 @@ const ToolsHub: React.FC<ToolsHubProps> = ({ setView }) => {
                 title="Finance Ledger" 
                 desc="Real-time P&L monitoring, automated expense tracking, and fiscal audits."
                 onClick={() => handleSetView(AppView.FINANCE_LEDGER)}
-                color="bg-emerald-900"
-                accent="text-emerald-400"
+                color="bg-stone-950"
+                accent="text-amber-500"
               />
             </div>
           </section>
@@ -153,10 +153,10 @@ const ToolsHub: React.FC<ToolsHubProps> = ({ setView }) => {
           <section key={category} className="space-y-8">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-4">
-                <span className="text-2xl font-black text-stone-200 font-mono">0{idx + 1}</span>
-                <h3 className="text-[11px] font-black text-stone-400 uppercase tracking-[0.3em]">{category} Tools</h3>
+                <span className="text-2xl font-black text-amber-900 font-mono">0{idx + 1}</span>
+                <h3 className="text-[11px] font-black text-amber-500/40 uppercase tracking-[0.3em]">{category} Tools</h3>
               </div>
-              <div className="h-px flex-1 bg-stone-100 ml-6" />
+              <div className="h-px flex-1 bg-amber-500/10 ml-6" />
             </div>
             
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
@@ -179,24 +179,24 @@ const ToolsHub: React.FC<ToolsHubProps> = ({ setView }) => {
           <section className="space-y-8">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-4">
-                <span className="text-2xl font-black text-rose-100 font-mono">XX</span>
-                <h3 className="text-[11px] font-black text-rose-400 uppercase tracking-[0.3em]">System Admin</h3>
+                <span className="text-2xl font-black text-amber-900 font-mono">XX</span>
+                <h3 className="text-[11px] font-black text-amber-500 uppercase tracking-[0.3em]">System Admin</h3>
               </div>
-              <div className="h-px flex-1 bg-rose-50 ml-6" />
+              <div className="h-px flex-1 bg-amber-500/10 ml-6" />
             </div>
             <div className="grid grid-cols-1 gap-4">
               <button 
                 onClick={() => handleSetView(AppView.ADMIN_PANEL)}
-                className="flex items-center gap-6 p-8 bg-stone-900 rounded-[2.5rem] border border-stone-800 active:scale-[0.98] transition-all group shadow-2xl shadow-stone-950/40 text-left"
+                className="flex items-center gap-6 p-8 bg-stone-950 rounded-[2.5rem] border border-amber-500/5 active:scale-[0.98] transition-all group shadow-2xl shadow-black/40 text-left"
               >
-                <div className="p-5 bg-rose-500/10 text-rose-500 rounded-2xl border border-rose-500/20 group-hover:bg-rose-500 group-hover:text-white transition-all">
+                <div className="p-5 bg-amber-500/10 text-amber-500 rounded-2xl border border-amber-500/20 group-hover:bg-amber-500 group-hover:text-black transition-all">
                   <ShieldCheck className="w-8 h-8" />
                 </div>
                 <div className="flex-1">
                   <h4 className="text-lg font-black text-white uppercase tracking-wider mb-1">Admin Control Center</h4>
                   <p className="text-[10px] text-stone-500 font-bold uppercase tracking-widest">System metrics, node logs & broadcasts</p>
                 </div>
-                <ArrowRight className="w-6 h-6 text-stone-700 group-hover:text-rose-500 group-hover:translate-x-2 transition-all" />
+                <ArrowRight className="w-6 h-6 text-stone-700 group-hover:text-amber-500 group-hover:translate-x-2 transition-all" />
               </button>
             </div>
           </section>
@@ -227,26 +227,26 @@ const ToolsHub: React.FC<ToolsHubProps> = ({ setView }) => {
   );
 };
 
-const ToolBentoCard: React.FC<{ icon: React.ReactNode, label: string, desc: string, onClick: () => void, theme: 'emerald' | 'orange' | 'blue' }> = ({ icon, label, desc, onClick, theme }) => {
+const ToolBentoCard: React.FC<{ icon: React.ReactNode, label: string, desc: string, onClick: () => void, theme: 'amber' | 'orange' | 'stone' }> = ({ icon, label, desc, onClick, theme }) => {
   const themes = {
-    emerald: 'bg-emerald-50 text-emerald-700 border-emerald-100/50',
-    orange: 'bg-orange-50 text-orange-600 border-orange-100/50',
-    blue: 'bg-blue-50 text-blue-600 border-blue-100/50'
+    amber: 'bg-amber-500/10 text-amber-500 border-amber-500/20',
+    orange: 'bg-orange-500/10 text-orange-500 border-orange-500/20',
+    stone: 'bg-stone-900 text-stone-400 border-stone-800'
   };
 
   return (
     <button 
       onClick={onClick}
-      className="bg-white p-6 rounded-[2.5rem] border border-stone-200 flex flex-col items-start text-left gap-6 active:scale-95 transition-all group shadow-sm hover:shadow-2xl hover:shadow-stone-200/40 hover:border-emerald-600/20"
+      className="bg-stone-950 p-6 rounded-[2.5rem] border border-amber-500/5 flex flex-col items-start text-left gap-6 active:scale-95 transition-all group shadow-sm hover:shadow-2xl hover:shadow-black/40 hover:border-amber-500/20"
     >
       <div className={`${themes[theme]} p-5 rounded-2xl border transition-all group-hover:scale-110 group-hover:rotate-6`}>
         {React.cloneElement(icon as React.ReactElement, { className: 'w-6 h-6' } as any)}
       </div>
       <div className="space-y-1">
-        <h4 className="text-xs font-black text-stone-900 uppercase tracking-wider group-hover:text-emerald-700 transition-colors">
+        <h4 className="text-xs font-black text-white uppercase tracking-wider group-hover:text-amber-500 transition-colors">
           {label}
         </h4>
-        <p className="text-[9px] text-stone-400 font-bold uppercase tracking-widest leading-tight opacity-0 group-hover:opacity-100 transition-opacity">
+        <p className="text-[9px] text-stone-600 font-bold uppercase tracking-widest leading-tight opacity-0 group-hover:opacity-100 transition-opacity">
           {desc}
         </p>
       </div>
@@ -257,7 +257,7 @@ const ToolBentoCard: React.FC<{ icon: React.ReactNode, label: string, desc: stri
 const FeaturedTool: React.FC<{ icon: React.ReactNode, title: string, desc: string, onClick: () => void, color: string, accent: string }> = ({ icon, title, desc, onClick, color, accent }) => (
   <button 
     onClick={onClick}
-    className={`w-full ${color} p-12 rounded-[3rem] border border-stone-800 shadow-2xl shadow-stone-950/40 relative overflow-hidden group active:scale-[0.98] transition-all text-left`}
+    className={`w-full ${color} p-12 rounded-[3rem] border border-amber-500/5 shadow-2xl shadow-black/40 relative overflow-hidden group active:scale-[0.98] transition-all text-left`}
   >
     <div className="absolute top-0 right-0 p-12 opacity-[0.03] group-hover:opacity-[0.08] transition-opacity">
       {React.cloneElement(icon as React.ReactElement, { className: 'w-64 h-64 -mr-16 -mt-16 rotate-12' } as any)}

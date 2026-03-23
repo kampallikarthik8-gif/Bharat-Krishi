@@ -61,7 +61,7 @@ const Layout: React.FC<LayoutProps> = ({
   React.useEffect(() => {
     if (Capacitor.isNativePlatform()) {
       StatusBar.setStyle({ style: Style.Light });
-      StatusBar.setBackgroundColor({ color: '#fbfdf8' });
+      StatusBar.setBackgroundColor({ color: '#000000' });
     }
   }, []);
 
@@ -92,26 +92,26 @@ const Layout: React.FC<LayoutProps> = ({
   };
 
   return (
-    <div className="flex flex-col h-screen w-full bg-[var(--m3-background)] relative overflow-hidden mobile-container">
+    <div className="flex flex-col h-screen w-full bg-black relative overflow-hidden mobile-container">
       {/* Top App Bar */}
-      <header className="flex items-center justify-between px-4 py-3 sticky top-0 z-40 bg-[var(--m3-background)]/80 backdrop-blur-md pt-safe">
+      <header className="flex items-center justify-between px-4 py-3 sticky top-0 z-40 bg-black/80 backdrop-blur-md pt-safe border-b border-amber-500/5">
         <div className="flex items-center gap-2">
           {canGoBack && !isMainView ? (
             <button 
               onClick={handleBackClick}
-              className="w-12 h-12 rounded-full active:bg-[var(--m3-surface-container-high)] transition-all flex items-center justify-center"
+              className="w-12 h-12 rounded-full active:bg-stone-900 transition-all flex items-center justify-center border border-stone-800"
             >
-              <ChevronLeft className="w-6 h-6 text-[var(--m3-on-surface)]" />
+              <ChevronLeft className="w-6 h-6 text-white" />
             </button>
           ) : (
             <button 
               onClick={handleMenuClick}
-              className="w-12 h-12 rounded-full active:bg-[var(--m3-surface-container-high)] transition-all flex items-center justify-center"
+              className="w-12 h-12 rounded-full active:bg-stone-900 transition-all flex items-center justify-center border border-stone-800"
             >
-              <Menu className="w-6 h-6 text-[var(--m3-on-surface)]" />
+              <Menu className="w-6 h-6 text-white" />
             </button>
           )}
-          <h1 className="text-xl font-medium text-[var(--m3-on-surface)] m3-title-large">
+          <h1 className="text-xl font-black text-white uppercase tracking-tighter">
             {getViewTitle()}
           </h1>
         </div>
@@ -119,9 +119,9 @@ const Layout: React.FC<LayoutProps> = ({
         <div className="flex items-center gap-1">
           <button 
             onClick={() => handleNavClick(AppView.PROFILE)}
-            className="w-12 h-12 rounded-full flex items-center justify-center active:bg-[var(--m3-surface-container-high)] transition-all overflow-hidden"
+            className="w-12 h-12 rounded-full flex items-center justify-center active:bg-stone-900 transition-all overflow-hidden border border-stone-800"
           >
-            <User className="w-6 h-6 text-[var(--m3-on-surface-variant)]" />
+            <User className="w-6 h-6 text-stone-500" />
           </button>
         </div>
       </header>
@@ -143,7 +143,7 @@ const Layout: React.FC<LayoutProps> = ({
       </main>
 
       {/* Bottom Navigation Bar (M3) */}
-      <nav className="fixed bottom-0 left-0 right-0 bg-[var(--m3-surface-container)] px-2 py-3 pb-safe z-50 flex items-center justify-around max-w-[480px] mx-auto">
+      <nav className="fixed bottom-0 left-0 right-0 bg-stone-950 px-2 py-3 pb-safe z-50 flex items-center justify-around max-w-[480px] mx-auto border-t border-amber-500/5">
         <NavButton 
           icon={Home} 
           label="Home" 
@@ -173,12 +173,12 @@ const Layout: React.FC<LayoutProps> = ({
       {/* Navigation Drawer (M3) */}
       <div className={`fixed inset-0 z-[60] transition-all duration-300 max-w-[480px] mx-auto ${drawerOpen ? 'opacity-100 visible' : 'opacity-0 invisible pointer-events-none'}`}>
         <div className="absolute inset-0 bg-black/30" onClick={() => setDrawerOpen(false)} />
-        <aside className={`
-          absolute top-0 left-0 bottom-0 w-[85%] max-w-[360px] bg-[var(--m3-surface-container-low)] transition-transform duration-300 ease-[0.2,0,0,1] flex flex-col overflow-hidden rounded-r-3xl
+          <aside className={`
+          absolute top-0 left-0 bottom-0 w-[85%] max-w-[360px] bg-black transition-transform duration-300 ease-[0.2,0,0,1] flex flex-col overflow-hidden rounded-r-3xl border-r border-amber-500/10
           ${drawerOpen ? 'translate-x-0' : '-translate-x-full'}
         `}>
           <div className="p-6 pt-12">
-            <div className="w-16 h-16 bg-[var(--m3-primary-container)] rounded-2xl flex items-center justify-center mb-6 overflow-hidden">
+            <div className="w-16 h-16 bg-stone-950 rounded-2xl flex items-center justify-center mb-6 overflow-hidden border border-amber-500/20">
               <img 
                 src="https://image2url.com/r2/default/images/1773645978799-968d61a0-3ceb-48da-814f-71deb5b97303.png" 
                 alt="Logo" 
@@ -186,10 +186,10 @@ const Layout: React.FC<LayoutProps> = ({
                 referrerPolicy="no-referrer"
               />
             </div>
-            <h2 className="text-xl font-medium text-[var(--m3-on-surface)] mb-1">
+            <h2 className="text-xl font-black text-white mb-1 uppercase tracking-tighter">
               {profile?.name || 'Farmer Profile'}
             </h2>
-            <p className="text-sm text-[var(--m3-on-surface-variant)]">
+            <p className="text-[10px] font-bold text-amber-500/60 uppercase tracking-widest">
               {profile?.farmName || 'My Farm'}
             </p>
           </div>
@@ -204,11 +204,11 @@ const Layout: React.FC<LayoutProps> = ({
               <DrawerItem icon={Shield} label="Admin Panel" onClick={() => { handleNavClick(AppView.ADMIN_PANEL); setDrawerOpen(false); }} active={currentView === AppView.ADMIN_PANEL} />
             )}
             
-            <div className="my-4 h-px bg-[var(--m3-outline-variant)] mx-4" />
+            <div className="my-4 h-px bg-amber-500/10 mx-4" />
             
             <button 
               onClick={() => { triggerHaptic(); onLogout(); setDrawerOpen(false); }}
-              className="w-full flex items-center gap-3 px-4 py-3 text-[var(--m3-on-surface-variant)] font-medium text-sm rounded-full hover:bg-[var(--m3-surface-container-high)] transition-all"
+              className="w-full flex items-center gap-3 px-4 py-3 text-stone-500 font-black text-[10px] uppercase tracking-widest rounded-full hover:bg-amber-500/5 transition-all"
             >
               <LogOut className="w-6 h-6" />
               <span>Logout</span>
@@ -218,7 +218,7 @@ const Layout: React.FC<LayoutProps> = ({
           <div className="p-6 text-center">
             <p 
               onClick={handleVersionTap}
-              className="text-[10px] font-medium text-[var(--m3-on-surface-variant)] uppercase tracking-widest opacity-60 cursor-pointer select-none"
+              className="text-[10px] font-black text-stone-500 uppercase tracking-widest opacity-60 cursor-pointer select-none"
             >
               Bharat Kisan v2.5
             </p>
@@ -232,7 +232,7 @@ const Layout: React.FC<LayoutProps> = ({
 const DrawerItem: React.FC<{ icon: any, label: string, onClick: () => void, active: boolean }> = ({ icon: Icon, label, onClick, active }) => (
   <button
     onClick={() => { triggerHaptic(); onClick(); }}
-    className={`w-full flex items-center gap-3 px-4 py-3 rounded-full transition-all ${active ? 'bg-[var(--m3-secondary-container)] text-[var(--m3-on-secondary-container)]' : 'text-[var(--m3-on-surface-variant)] hover:bg-[var(--m3-surface-container-high)]'}`}
+    className={`w-full flex items-center gap-3 px-4 py-3 rounded-full transition-all ${active ? 'bg-amber-500/10 text-amber-500' : 'text-stone-400 hover:bg-amber-500/5'}`}
   >
     <Icon className="w-6 h-6" />
     <span className="font-medium text-sm">{label}</span>
@@ -246,11 +246,11 @@ const NavButton: React.FC<{ icon: any, label: string, active: boolean, onClick: 
   >
     <div className={`
       relative px-5 py-1 rounded-full transition-all duration-200 flex items-center justify-center
-      ${active ? 'bg-[var(--m3-secondary-container)] text-[var(--m3-on-secondary-container)]' : 'text-[var(--m3-on-surface-variant)] hover:bg-[var(--m3-surface-container-high)]'}
+      ${active ? 'bg-amber-500/10 text-amber-500' : 'text-stone-500 hover:bg-amber-500/5'}
     `}>
       <Icon className="w-6 h-6" />
     </div>
-    <span className={`text-[11px] font-medium transition-colors ${active ? 'text-[var(--m3-on-surface)]' : 'text-[var(--m3-on-surface-variant)]'}`}>
+    <span className={`text-[11px] font-black uppercase tracking-widest transition-colors ${active ? 'text-amber-500' : 'text-stone-600'}`}>
       {label}
     </span>
   </button>

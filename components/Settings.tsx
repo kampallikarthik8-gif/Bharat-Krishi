@@ -224,7 +224,7 @@ const Settings: React.FC<SettingsProps> = ({ language, setLanguage }) => {
       head: [['Setting/Data Key', 'Value (Preview)']],
       body: data,
       theme: 'striped',
-      headStyles: { fillColor: [45, 90, 39] }
+      headStyles: { fillColor: [255, 180, 0], textColor: [0, 0, 0] }
     });
 
     doc.save(`BharatKisan_Full_Export_${new Date().toISOString().split('T')[0]}.pdf`);
@@ -705,7 +705,7 @@ const Settings: React.FC<SettingsProps> = ({ language, setLanguage }) => {
               
               <div className="py-4">
                 <p className="text-[10px] font-medium text-[var(--m3-on-surface-variant)] uppercase tracking-widest mb-2">Debug Info</p>
-                <div className="bg-black/5 rounded-xl p-3 font-mono text-[10px] text-[var(--m3-on-surface-variant)] space-y-1">
+                <div className="bg-white/5 border border-stone-800 rounded-xl p-3 font-mono text-[10px] text-[var(--m3-on-surface-variant)] space-y-1">
                   <p>User ID: {user?.uid}</p>
                   <p>Farm ID: {activeFarmId}</p>
                   <p>Role: {profile?.role || 'user'}</p>

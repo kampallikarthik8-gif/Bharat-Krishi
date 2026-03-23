@@ -133,45 +133,45 @@ const FarmJournal: React.FC<FarmJournalProps> = ({ language }) => {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center py-20">
-        <Loader2 className="w-8 h-8 animate-spin text-emerald-600" />
+      <div className="flex items-center justify-center py-20 bg-black min-h-screen">
+        <Loader2 className="w-8 h-8 animate-spin text-amber-500" />
       </div>
     );
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
+    <div className="space-y-6 bg-black min-h-screen p-6">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <h2 className="text-2xl font-bold flex items-center gap-2">
-            <BookOpen className="text-emerald-600" />
+          <h2 className="text-2xl font-bold flex items-center gap-2 text-white">
+            <BookOpen className="text-amber-500" />
             Field Log ({language})
           </h2>
-          <p className="text-stone-500">Keep track of your farming activities and seasonal progress.</p>
+          <p className="text-stone-400 text-sm">Keep track of your farming activities and seasonal progress.</p>
         </div>
         <div className="flex items-center gap-3">
           <button 
             onClick={exportPDF}
-            className="bg-stone-100 text-stone-600 p-3 rounded-xl hover:bg-stone-200 transition-colors"
+            className="bg-stone-900 text-stone-400 p-3 rounded-xl hover:bg-stone-800 transition-colors border border-stone-800"
             title="Export PDF"
           >
             <Download className="w-5 h-5" />
           </button>
           <button 
             onClick={() => setShowForm(!showForm)}
-            className="bg-emerald-600 text-white font-bold px-6 py-3 rounded-xl hover:bg-emerald-700 transition-all flex items-center gap-2 shadow-lg shadow-emerald-200"
+            className="bg-amber-600 text-black font-bold px-6 py-3 rounded-xl hover:bg-amber-500 transition-all flex items-center gap-2 shadow-lg shadow-amber-900/20"
           >
-            {showForm ? <Trash2 className="w-4 h-4" /> : <Plus className="w-4 h-4" />}
+            {showForm ? <X className="w-4 h-4" /> : <Plus className="w-4 h-4" />}
             {showForm ? 'Cancel' : 'New Entry'}
           </button>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 gap-4">
         <button 
           onClick={handleAnalyze}
           disabled={entries.length < 2 || analyzing}
-          className="w-full bg-[#ffddb3] text-[#825500] font-black py-4 rounded-2xl flex items-center justify-center gap-3 border border-[#825500]/20 active:scale-95 transition-all disabled:opacity-50"
+          className="w-full bg-amber-500/10 text-amber-500 font-black py-4 rounded-2xl flex items-center justify-center gap-3 border border-amber-500/20 active:scale-95 transition-all disabled:opacity-50"
         >
           {analyzing ? <Loader2 className="animate-spin w-5 h-5" /> : <Sparkles className="w-5 h-5" />}
           Generate Seasonal Analysis
@@ -179,38 +179,38 @@ const FarmJournal: React.FC<FarmJournalProps> = ({ language }) => {
       </div>
 
       {analysis && (
-        <div className="fixed inset-0 z-[110] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-300">
-           <div className="w-full max-w-lg bg-white rounded-[3rem] p-8 shadow-2xl relative overflow-hidden animate-in zoom-in-95 duration-500 max-h-[80vh] flex flex-col">
-              <button onClick={() => setAnalysis(null)} className="absolute top-6 right-6 p-2 bg-stone-50 rounded-full hover:bg-stone-100">
-                 <X className="w-5 h-5 text-stone-500" />
+        <div className="fixed inset-0 z-[110] bg-black/80 backdrop-blur-md flex items-center justify-center p-4 animate-in fade-in duration-300">
+           <div className="w-full max-w-lg bg-stone-900 border border-stone-800 rounded-[2.5rem] p-8 shadow-2xl relative overflow-hidden animate-in zoom-in-95 duration-500 max-h-[80vh] flex flex-col">
+              <button onClick={() => setAnalysis(null)} className="absolute top-6 right-6 p-2 bg-stone-800 rounded-full hover:bg-stone-700 text-stone-400">
+                 <X className="w-5 h-5" />
               </button>
               
               <div className="flex items-center gap-3 mb-6">
-                 <div className="bg-[#ffddb3] p-3 rounded-2xl">
-                    <Sparkles className="text-[#825500] w-6 h-6" />
+                 <div className="bg-amber-500/20 p-3 rounded-2xl">
+                    <Sparkles className="text-amber-500 w-6 h-6" />
                  </div>
                  <div>
-                    <h3 className="text-xl font-black text-stone-900 leading-none">Strategic Intelligence</h3>
-                    <p className="text-[10px] text-[#825500] font-black uppercase tracking-widest mt-1">Grounded in your field log</p>
+                    <h3 className="text-xl font-black text-white leading-none">Strategic Intelligence</h3>
+                    <p className="text-[10px] text-amber-500 font-black uppercase tracking-widest mt-1">Grounded in your field log</p>
                  </div>
               </div>
 
               <div className="flex-1 overflow-y-auto pr-2 custom-scrollbar">
-                <div className="prose prose-stone max-w-none text-sm font-medium text-stone-700 leading-relaxed">
+                <div className="prose prose-invert prose-stone max-w-none text-sm font-medium text-stone-300 leading-relaxed">
                    <ReactMarkdown>{analysis}</ReactMarkdown>
                 </div>
               </div>
 
-              <div className="mt-8 pt-6 border-t border-stone-100 flex justify-end gap-3">
+              <div className="mt-8 pt-6 border-t border-stone-800 flex flex-col sm:flex-row justify-end gap-3">
                 <button 
                   onClick={shareOnWhatsApp}
-                  className="bg-[#25D366] text-white px-8 py-3 rounded-2xl font-black text-xs uppercase tracking-widest active:scale-95 transition-all flex items-center gap-2"
+                  className="bg-[#25D366] text-white px-8 py-3 rounded-2xl font-black text-xs uppercase tracking-widest active:scale-95 transition-all flex items-center justify-center gap-2"
                 >
                   <MessageCircle className="w-4 h-4" /> Share WhatsApp
                 </button>
                 <button 
                   onClick={() => setAnalysis(null)}
-                  className="bg-stone-900 text-white px-8 py-3 rounded-2xl font-black text-xs uppercase tracking-widest active:scale-95 transition-all"
+                  className="bg-amber-600 text-black px-8 py-3 rounded-2xl font-black text-xs uppercase tracking-widest active:scale-95 transition-all"
                 >
                   Dismiss Analysis
                 </button>
@@ -220,14 +220,14 @@ const FarmJournal: React.FC<FarmJournalProps> = ({ language }) => {
       )}
 
       {showForm && (
-        <form onSubmit={addEntry} className="bg-white p-6 rounded-3xl border border-stone-200 shadow-sm animate-in slide-in-from-top-4 duration-300">
+        <form onSubmit={addEntry} className="bg-stone-900 p-6 rounded-3xl border border-stone-800 shadow-xl animate-in slide-in-from-top-4 duration-300">
           <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
             <div className="space-y-1">
-              <label className="text-[10px] font-bold text-stone-400 ml-1">CATEGORY</label>
+              <label className="text-[10px] font-bold text-stone-500 ml-1 uppercase tracking-widest">Category</label>
               <select 
                 value={newEntry.category}
                 onChange={e => setNewEntry({...newEntry, category: e.target.value as any})}
-                className="w-full bg-stone-50 border border-stone-200 p-3 rounded-xl focus:ring-2 focus:ring-emerald-500 outline-none"
+                className="w-full bg-stone-800 border border-stone-700 p-3 rounded-xl focus:ring-2 focus:ring-amber-500 outline-none text-white text-sm"
               >
                 <option>Planting</option>
                 <option>Irrigation</option>
@@ -237,37 +237,37 @@ const FarmJournal: React.FC<FarmJournalProps> = ({ language }) => {
               </select>
             </div>
             <div className="space-y-1">
-              <label className="text-[10px] font-bold text-stone-400 ml-1">DATE</label>
+              <label className="text-[10px] font-bold text-stone-500 ml-1 uppercase tracking-widest">Date</label>
               <input 
                 type="date"
                 value={newEntry.date}
                 onChange={e => setNewEntry({...newEntry, date: e.target.value})}
-                className="w-full bg-stone-50 border border-stone-200 p-3 rounded-xl focus:ring-2 focus:ring-emerald-500 outline-none"
+                className="w-full bg-stone-800 border border-stone-700 p-3 rounded-xl focus:ring-2 focus:ring-amber-500 outline-none text-white text-sm"
               />
             </div>
             <div className="space-y-1 md:col-span-2">
-              <label className="text-[10px] font-bold text-stone-400 ml-1">CROP / FIELD</label>
+              <label className="text-[10px] font-bold text-stone-500 ml-1 uppercase tracking-widest">Crop / Field</label>
               <input 
                 type="text"
                 placeholder="e.g. Field A Tomatoes"
                 value={newEntry.crop}
                 onChange={e => setNewEntry({...newEntry, crop: e.target.value})}
-                className="w-full bg-stone-50 border border-stone-200 p-3 rounded-xl focus:ring-2 focus:ring-emerald-500 outline-none"
+                className="w-full bg-stone-800 border border-stone-700 p-3 rounded-xl focus:ring-2 focus:ring-amber-500 outline-none text-white text-sm placeholder:text-stone-600"
                 required
               />
             </div>
           </div>
           <div className="space-y-1 mb-6">
-            <label className="text-[10px] font-bold text-stone-400 ml-1">NOTES</label>
+            <label className="text-[10px] font-bold text-stone-500 ml-1 uppercase tracking-widest">Notes</label>
             <textarea 
               rows={3}
               placeholder="Record any details, observations or actions taken..."
               value={newEntry.notes}
               onChange={e => setNewEntry({...newEntry, notes: e.target.value})}
-              className="w-full bg-stone-50 border border-stone-200 p-3 rounded-xl focus:ring-2 focus:ring-emerald-500 outline-none resize-none"
+              className="w-full bg-stone-800 border border-stone-700 p-3 rounded-xl focus:ring-2 focus:ring-amber-500 outline-none resize-none text-white text-sm placeholder:text-stone-600"
             />
           </div>
-          <button type="submit" className="w-full bg-emerald-600 text-white font-bold py-3 rounded-xl hover:bg-emerald-700 transition-colors">
+          <button type="submit" className="w-full bg-amber-600 text-black font-bold py-4 rounded-xl hover:bg-amber-500 transition-colors shadow-lg shadow-amber-900/20">
             Save Journal Entry
           </button>
         </form>
@@ -275,41 +275,41 @@ const FarmJournal: React.FC<FarmJournalProps> = ({ language }) => {
 
       <div className="space-y-4">
         {entries.length === 0 ? (
-          <div className="bg-white p-12 rounded-3xl border border-stone-200 text-center flex flex-col items-center">
-            <div className="bg-stone-50 p-4 rounded-full mb-4">
-              <BookOpen className="w-8 h-8 text-stone-300" />
+          <div className="bg-stone-900 p-12 rounded-3xl border border-stone-800 text-center flex flex-col items-center">
+            <div className="bg-stone-800 p-4 rounded-full mb-4">
+              <BookOpen className="w-8 h-8 text-stone-600" />
             </div>
             <p className="text-stone-500 font-medium">No records yet. Start your farm journal today!</p>
           </div>
         ) : (
           entries.map(entry => (
-            <div key={entry.id} className="bg-white p-6 rounded-2xl border border-stone-200 shadow-sm flex flex-col md:flex-row gap-6 group hover:border-emerald-200 transition-all">
+            <div key={entry.id} className="bg-stone-900 p-6 rounded-2xl border border-stone-800 shadow-sm flex flex-col md:flex-row gap-6 group hover:border-amber-500/30 transition-all">
               <div className="md:w-48 shrink-0">
-                <div className="flex items-center gap-2 text-stone-400 text-xs font-bold mb-1">
+                <div className="flex items-center gap-2 text-stone-500 text-[10px] font-bold uppercase tracking-widest mb-2">
                   <Calendar className="w-3 h-3" />
                   {new Date(entry.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
                 </div>
                 <div className={`
-                  inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-bold uppercase
-                  ${entry.category === 'Planting' ? 'bg-emerald-100 text-emerald-700' : 
-                    entry.category === 'Harvest' ? 'bg-amber-100 text-amber-700' :
-                    entry.category === 'Irrigation' ? 'bg-blue-100 text-blue-700' :
-                    'bg-stone-100 text-stone-600'}
+                  inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider
+                  ${entry.category === 'Planting' ? 'bg-amber-500/10 text-amber-500' : 
+                    entry.category === 'Harvest' ? 'bg-orange-500/10 text-orange-500' :
+                    entry.category === 'Irrigation' ? 'bg-blue-500/10 text-blue-400' :
+                    'bg-stone-800 text-stone-400'}
                 `}>
                   <Tag className="w-2.5 h-2.5" />
                   {entry.category}
                 </div>
               </div>
               <div className="flex-1">
-                <h4 className="font-bold text-stone-900 mb-2 flex items-center gap-2">
-                  <FileText className="w-4 h-4 text-emerald-500" />
+                <h4 className="font-bold text-white mb-2 flex items-center gap-2">
+                  <FileText className="w-4 h-4 text-amber-500" />
                   {entry.crop}
                 </h4>
-                <p className="text-stone-600 text-sm leading-relaxed">{entry.notes}</p>
+                <p className="text-stone-400 text-sm leading-relaxed">{entry.notes}</p>
               </div>
               <button 
                 onClick={() => deleteEntry(entry.id)}
-                className="opacity-0 group-hover:opacity-100 p-2 text-stone-300 hover:text-red-500 transition-all self-start"
+                className="opacity-0 group-hover:opacity-100 p-2 text-stone-600 hover:text-red-500 transition-all self-start"
               >
                 <Trash2 className="w-4 h-4" />
               </button>

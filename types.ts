@@ -205,3 +205,14 @@ export interface UserProfile {
   createdAt?: string;
   phone?: string;
 }
+
+export interface Alert {
+  id: string;
+  type: 'Spray' | 'Weather' | 'Market';
+  title: string;
+  desc: string;
+  time: string;
+  active: boolean;
+  priority: 'High' | 'Medium' | 'Low';
+  createdAt?: string;
+}

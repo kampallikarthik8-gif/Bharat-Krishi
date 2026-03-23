@@ -152,26 +152,26 @@ const FinanceLedger: React.FC = () => {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-stone-50 flex items-center justify-center">
-        <Loader2 className="w-12 h-12 animate-spin text-emerald-500" />
+      <div className="min-h-screen bg-black flex items-center justify-center">
+        <Loader2 className="w-12 h-12 animate-spin text-amber-500" />
       </div>
     );
   }
 
   return (
-    <div className="space-y-6 pb-12 animate-in fade-in slide-in-from-bottom-6 duration-700">
+    <div className="space-y-6 pb-12 animate-in fade-in slide-in-from-bottom-6 duration-700 bg-black min-h-screen p-4">
       <div className="flex items-center justify-between px-2">
         <div>
-          <h2 className="text-2xl font-black text-stone-900 flex items-center gap-3">
-            <Wallet className="w-6 h-6 text-emerald-600" />
+          <h2 className="text-2xl font-black text-white flex items-center gap-3">
+            <Wallet className="w-6 h-6 text-amber-500" />
             Finance Ledger
           </h2>
-          <p className="text-[10px] text-stone-400 font-black uppercase tracking-widest mt-1">Cashflow & P&L Tracker</p>
+          <p className="text-[10px] text-stone-500 font-black uppercase tracking-widest mt-1">Cashflow & P&L Tracker</p>
         </div>
         <div className="flex items-center gap-2">
           <button 
             onClick={exportPDF}
-            className="bg-stone-100 text-stone-600 p-3 rounded-2xl hover:bg-stone-200 transition-colors"
+            className="bg-stone-900 text-stone-400 p-3 rounded-2xl hover:bg-stone-800 transition-colors border border-stone-800"
             title="Export PDF"
           >
             <Download className="w-6 h-6" />
@@ -185,7 +185,7 @@ const FinanceLedger: React.FC = () => {
           </button>
           <button 
             onClick={() => setShowAdd(true)}
-            className="bg-emerald-600 text-white p-3 rounded-2xl shadow-xl active:scale-90 transition-transform"
+            className="bg-amber-600 text-black p-3 rounded-2xl shadow-xl active:scale-90 transition-transform"
           >
             <Plus className="w-6 h-6" />
           </button>
@@ -193,16 +193,16 @@ const FinanceLedger: React.FC = () => {
       </div>
 
       <div className="grid grid-cols-1 gap-4 px-2">
-         <div className="bg-stone-900 rounded-[2.5rem] p-8 text-white shadow-2xl relative overflow-hidden">
-            <div className="absolute top-0 right-0 p-8 opacity-10">
-               <DollarSign className="w-32 h-32" />
+         <div className="bg-stone-900 rounded-[2.5rem] p-8 text-white shadow-2xl relative overflow-hidden border border-amber-500/5">
+            <div className="absolute top-0 right-0 p-8 opacity-5">
+               <DollarSign className="w-32 h-32 text-amber-500" />
             </div>
             <div className="relative z-10">
                <p className="text-[10px] font-black uppercase tracking-widest text-stone-500 mb-2">Net Cash Position</p>
-               <h3 className="text-4xl font-black tracking-tighter mb-8">₹{balance.toLocaleString()}</h3>
-               <div className="grid grid-cols-2 gap-8 border-t border-white/10 pt-6">
+               <h3 className="text-4xl font-black tracking-tighter mb-8 text-amber-500">₹{balance.toLocaleString()}</h3>
+               <div className="grid grid-cols-2 gap-8 border-t border-white/5 pt-6">
                   <div>
-                     <p className="text-[9px] font-black uppercase tracking-widest text-emerald-400 mb-1">Total Yield Value</p>
+                     <p className="text-[9px] font-black uppercase tracking-widest text-amber-400 mb-1">Total Yield Value</p>
                      <p className="text-xl font-bold">₹{totals.income.toLocaleString()}</p>
                   </div>
                   <div>
@@ -214,26 +214,26 @@ const FinanceLedger: React.FC = () => {
          </div>
       </div>
 
-      <div className="bg-white rounded-[2.5rem] p-8 shadow-sm border border-stone-200">
-        <h3 className="text-[11px] font-black text-stone-400 uppercase tracking-[0.2em] mb-6 px-2">Audit Trail</h3>
+      <div className="bg-stone-950 rounded-[2.5rem] p-8 shadow-sm border border-amber-500/5">
+        <h3 className="text-[11px] font-black text-stone-500 uppercase tracking-[0.2em] mb-6 px-2">Audit Trail</h3>
         <div className="space-y-3">
            {transactions.map(tx => (
-             <div key={tx.id} className="p-5 bg-stone-50 border border-stone-100 rounded-[2rem] flex items-center gap-5 transition-all group hover:bg-white hover:border-emerald-100">
-                <div className={`p-4 rounded-2xl shadow-inner ${tx.type === 'Income' ? 'bg-emerald-50 text-emerald-600' : 'bg-rose-50 text-rose-600'}`}>
+             <div key={tx.id} className="p-5 bg-stone-900 border border-stone-800 rounded-[2rem] flex items-center gap-5 transition-all group hover:bg-black hover:border-amber-500/20">
+                <div className={`p-4 rounded-2xl shadow-inner ${tx.type === 'Income' ? 'bg-amber-500/10 text-amber-500' : 'bg-rose-500/10 text-rose-500'}`}>
                    {tx.type === 'Income' ? <ArrowUpCircle className="w-6 h-6" /> : <ArrowDownCircle className="w-6 h-6" />}
                 </div>
                 <div className="flex-1 min-w-0">
-                   <h4 className="font-black text-stone-900 text-sm tracking-tight leading-none mb-1.5">{tx.note || tx.category}</h4>
+                   <h4 className="font-black text-white text-sm tracking-tight leading-none mb-1.5">{tx.note || tx.category}</h4>
                    <div className="flex gap-3">
-                      <span className="text-[9px] font-black uppercase text-stone-400">{tx.category}</span>
-                      <span className="text-[9px] font-black uppercase text-stone-400">{tx.date}</span>
+                      <span className="text-[9px] font-black uppercase text-stone-500">{tx.category}</span>
+                      <span className="text-[9px] font-black uppercase text-stone-500">{tx.date}</span>
                    </div>
                 </div>
                 <div className="text-right">
-                   <p className={`text-base font-black leading-none ${tx.type === 'Income' ? 'text-emerald-600' : 'text-stone-900'}`}>
+                   <p className={`text-base font-black leading-none ${tx.type === 'Income' ? 'text-amber-500' : 'text-white'}`}>
                      {tx.type === 'Income' ? '+' : '-'}₹{tx.amount.toLocaleString()}
                    </p>
-                   <button onClick={() => deleteTx(tx.id)} className="opacity-0 group-hover:opacity-100 p-1 text-stone-300 hover:text-rose-500 transition-all mt-1">
+                   <button onClick={() => deleteTx(tx.id)} className="opacity-0 group-hover:opacity-100 p-1 text-stone-600 hover:text-rose-500 transition-all mt-1">
                       <Trash2 className="w-3.5 h-3.5" />
                    </button>
                 </div>
@@ -243,40 +243,40 @@ const FinanceLedger: React.FC = () => {
       </div>
 
       {showAdd && (
-        <div className="fixed inset-0 z-[110] bg-black/60 backdrop-blur-sm flex items-end animate-in fade-in duration-300">
-           <div className="w-full max-w-md mx-auto bg-white rounded-t-[3rem] p-8 animate-in slide-in-from-bottom-full duration-500">
+        <div className="fixed inset-0 z-[110] bg-black/80 backdrop-blur-sm flex items-end animate-in fade-in duration-300">
+           <div className="w-full max-w-md mx-auto bg-stone-950 rounded-t-[3rem] p-8 animate-in slide-in-from-bottom-full duration-500 border-t border-amber-500/20">
               <div className="flex items-center justify-between mb-8">
-                 <h3 className="text-xl font-black text-stone-900">Log Transaction</h3>
-                 <button onClick={() => setShowAdd(false)} className="p-2 bg-stone-50 rounded-full">
+                 <h3 className="text-xl font-black text-white">Log Transaction</h3>
+                 <button onClick={() => setShowAdd(false)} className="p-2 bg-stone-900 rounded-full text-stone-400">
                     <X className="w-5 h-5" />
                  </button>
               </div>
 
               <form onSubmit={addTx} className="space-y-6">
-                 <div className="flex p-1.5 bg-stone-50 rounded-2xl border border-stone-100">
+                 <div className="flex p-1.5 bg-stone-900 rounded-2xl border border-stone-800">
                     <button 
                       type="button"
                       onClick={() => setNewTx({...newTx, type: 'Expense'})}
-                      className={`flex-1 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${newTx.type === 'Expense' ? 'bg-stone-900 text-white shadow-lg' : 'text-stone-400'}`}
+                      className={`flex-1 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${newTx.type === 'Expense' ? 'bg-amber-600 text-black shadow-lg' : 'text-stone-500'}`}
                     >
                        Expense
                     </button>
                     <button 
                       type="button"
                       onClick={() => setNewTx({...newTx, type: 'Income'})}
-                      className={`flex-1 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${newTx.type === 'Income' ? 'bg-emerald-600 text-white shadow-lg' : 'text-stone-400'}`}
+                      className={`flex-1 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${newTx.type === 'Income' ? 'bg-amber-600 text-black shadow-lg' : 'text-stone-500'}`}
                     >
                        Income
                     </button>
                  </div>
 
                  <div className="space-y-1">
-                    <label className="text-[10px] font-black text-stone-400 uppercase tracking-widest ml-2">Amount (₹)</label>
+                    <label className="text-[10px] font-black text-stone-500 uppercase tracking-widest ml-2">Amount (₹)</label>
                     <input 
                       autoFocus
                       type="number"
                       placeholder="0.00" 
-                      className="w-full bg-stone-50 border border-stone-100 p-4 rounded-2xl outline-none focus:ring-2 focus:ring-emerald-500 font-black text-xl"
+                      className="w-full bg-stone-900 border border-stone-800 p-4 rounded-2xl outline-none focus:ring-2 focus:ring-amber-500 font-black text-xl text-white placeholder:text-stone-700"
                       value={newTx.amount || ''}
                       onChange={e => setNewTx({...newTx, amount: parseFloat(e.target.value)})}
                     />
@@ -284,24 +284,24 @@ const FinanceLedger: React.FC = () => {
 
                  <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-1">
-                       <label className="text-[10px] font-black text-stone-400 uppercase tracking-widest ml-2">Category</label>
+                       <label className="text-[10px] font-black text-stone-500 uppercase tracking-widest ml-2">Category</label>
                        <select 
-                         className="w-full bg-stone-50 border border-stone-100 p-4 rounded-2xl outline-none appearance-none font-bold text-xs"
+                         className="w-full bg-stone-900 border border-stone-800 p-4 rounded-2xl outline-none appearance-none font-bold text-xs text-white"
                          value={newTx.category}
                          onChange={e => setNewTx({...newTx, category: e.target.value})}
                        >
                           {newTx.type === 'Expense' ? (
-                            ['Seeds', 'Fertilizer', 'Labor', 'Fuel', 'Machinery', 'Repairs', 'Other'].map(c => <option key={c}>{c}</option>)
+                            ['Seeds', 'Fertilizer', 'Labor', 'Fuel', 'Machinery', 'Repairs', 'Other'].map(c => <option key={c} className="bg-stone-900">{c}</option>)
                           ) : (
-                            ['Sales', 'Subsidy', 'Lease', 'Grants', 'Other'].map(c => <option key={c}>{c}</option>)
+                            ['Sales', 'Subsidy', 'Lease', 'Grants', 'Other'].map(c => <option key={c} className="bg-stone-900">{c}</option>)
                           )}
                        </select>
                     </div>
                     <div className="space-y-1">
-                       <label className="text-[10px] font-black text-stone-400 uppercase tracking-widest ml-2">Date</label>
+                       <label className="text-[10px] font-black text-stone-500 uppercase tracking-widest ml-2">Date</label>
                        <input 
                         type="date"
-                        className="w-full bg-stone-50 border border-stone-100 p-4 rounded-2xl outline-none font-bold text-xs"
+                        className="w-full bg-stone-900 border border-stone-800 p-4 rounded-2xl outline-none font-bold text-xs text-white"
                         value={newTx.date}
                         onChange={e => setNewTx({...newTx, date: e.target.value})}
                        />
@@ -309,10 +309,10 @@ const FinanceLedger: React.FC = () => {
                  </div>
 
                  <div className="space-y-1">
-                    <label className="text-[10px] font-black text-stone-400 uppercase tracking-widest ml-2">Note (Optional)</label>
+                    <label className="text-[10px] font-black text-stone-500 uppercase tracking-widest ml-2">Note (Optional)</label>
                     <input 
                       placeholder="e.g. Sold 20 tons of Paddy" 
-                      className="w-full bg-stone-50 border border-stone-100 p-4 rounded-2xl outline-none focus:ring-2 focus:ring-emerald-500 font-bold text-sm"
+                      className="w-full bg-stone-900 border border-stone-800 p-4 rounded-2xl outline-none focus:ring-2 focus:ring-amber-500 font-bold text-sm text-white placeholder:text-stone-700"
                       value={newTx.note || ''}
                       onChange={e => setNewTx({...newTx, note: e.target.value})}
                     />
@@ -320,7 +320,7 @@ const FinanceLedger: React.FC = () => {
 
                  <button 
                    type="submit"
-                   className="w-full bg-stone-900 text-white font-black py-5 rounded-[1.5rem] shadow-xl active:scale-95 transition-all flex items-center justify-center gap-3"
+                   className="w-full bg-amber-600 text-black font-black py-5 rounded-[1.5rem] shadow-xl active:scale-95 transition-all flex items-center justify-center gap-3 uppercase tracking-widest text-xs"
                  >
                     <CreditCard className="w-5 h-5" /> Register Transaction
                  </button>

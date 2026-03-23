@@ -180,19 +180,19 @@ const AdminPanel: React.FC = () => {
           sub="Global Registry"
         />
         <MetricCard 
-          icon={<Activity className="w-5 h-5 text-emerald-400" />} 
+          icon={<Activity className="w-5 h-5 text-amber-400" />} 
           label="System Health" 
           value="Optimal" 
           sub="All Nodes Online"
         />
         <MetricCard 
-          icon={<Database className="w-5 h-5 text-blue-400" />} 
+          icon={<Database className="w-5 h-5 text-orange-400" />} 
           label="DB Capacity" 
           value={`${stats.storageSize.toFixed(1)} KB`} 
           sub="Browser Partition"
         />
         <MetricCard 
-          icon={<Zap className="w-5 h-5 text-amber-400" />} 
+          icon={<Zap className="w-5 h-5 text-amber-500" />} 
           label="AI Inference" 
           value={`${stats.apiRequests}`} 
           sub="Total Tokens Ref."
@@ -330,14 +330,14 @@ const AdminPanel: React.FC = () => {
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
           placeholder="Search users by name, email or farm..."
-          className="w-full bg-stone-900 border border-white/10 rounded-2xl py-4 pl-12 pr-4 text-xs font-medium text-white outline-none focus:border-rose-500 transition-colors"
+          className="w-full bg-stone-900 border border-white/10 rounded-2xl py-4 pl-12 pr-4 text-xs font-medium text-white outline-none focus:border-amber-500 transition-colors"
         />
       </div>
 
       <div className="space-y-3">
         {loadingUsers ? (
           <div className="flex flex-col items-center justify-center py-12 gap-4">
-            <RefreshCw className="w-8 h-8 text-rose-500 animate-spin" />
+            <RefreshCw className="w-8 h-8 text-amber-500 animate-spin" />
             <p className="text-[10px] font-bold text-stone-500 uppercase tracking-widest">Accessing Secure Registry...</p>
           </div>
         ) : users.filter(u => 
@@ -347,7 +347,7 @@ const AdminPanel: React.FC = () => {
         ).map(user => (
           <div key={user.id} className="bg-stone-900 border border-white/5 p-4 rounded-[1.5rem] flex items-center justify-between group hover:bg-stone-800 transition-all">
             <div className="flex items-center gap-4">
-              <div className="w-12 h-12 rounded-full bg-rose-600/20 flex items-center justify-center text-rose-500 font-black text-lg border border-rose-500/20">
+              <div className="w-12 h-12 rounded-full bg-amber-600/20 flex items-center justify-center text-amber-500 font-black text-lg border border-amber-500/20">
                 {user.name?.charAt(0) || '?'}
               </div>
               <div>
@@ -360,7 +360,7 @@ const AdminPanel: React.FC = () => {
               <button className="p-2 bg-white/5 rounded-xl text-stone-400 hover:text-white transition-colors">
                 <FileJson className="w-4 h-4" />
               </button>
-              <button className="p-2 bg-white/5 rounded-xl text-stone-400 hover:text-rose-500 transition-colors">
+              <button className="p-2 bg-white/5 rounded-xl text-stone-400 hover:text-amber-500 transition-colors">
                 <ShieldCheck className="w-4 h-4" />
               </button>
             </div>
@@ -374,7 +374,7 @@ const AdminPanel: React.FC = () => {
     <div className="space-y-6 animate-in fade-in duration-500">
       <div className="bg-stone-900 rounded-[2rem] p-6 border border-white/5">
         <h3 className="text-xs font-black text-stone-500 uppercase tracking-widest mb-4 flex items-center gap-2">
-          <Radio className="w-4 h-4 text-rose-500" /> Global Alert Broadcast
+          <Radio className="w-4 h-4 text-amber-500" /> Global Alert Broadcast
         </h3>
         <p className="text-[10px] text-stone-400 mb-6 leading-relaxed">
           Broadcasting a message will inject it into the dashboard of all farmers in this local partition.
@@ -383,13 +383,13 @@ const AdminPanel: React.FC = () => {
           value={broadcastMessage}
           onChange={(e) => setBroadcastMessage(e.target.value)}
           placeholder="e.g. Extreme weather warning: Heavy hailstorm predicted for Northern District..."
-          className="w-full bg-black/40 border border-white/10 rounded-2xl p-4 text-xs font-medium text-white outline-none focus:border-rose-500 transition-colors resize-none mb-4"
+          className="w-full bg-black/40 border border-white/10 rounded-2xl p-4 text-xs font-medium text-white outline-none focus:border-amber-500 transition-colors resize-none mb-4"
           rows={5}
         />
         <button 
           onClick={handleSendBroadcast}
           disabled={!broadcastMessage.trim()}
-          className="w-full bg-rose-600 text-white font-black py-4 rounded-[1.25rem] shadow-xl shadow-rose-950/40 active:scale-95 transition-all flex items-center justify-center gap-2 disabled:opacity-20"
+          className="w-full bg-amber-600 text-white font-black py-4 rounded-[1.25rem] shadow-xl shadow-amber-950/40 active:scale-95 transition-all flex items-center justify-center gap-2 disabled:opacity-20"
         >
           <Send className="w-4 h-4" /> Initiate Transmission
         </button>
@@ -401,8 +401,8 @@ const AdminPanel: React.FC = () => {
     <div className="space-y-8 pb-12 bg-black -mx-4 -mt-2 p-6 min-h-screen text-stone-300">
       <header className="flex items-center justify-between pt-4">
         <div className="flex items-center gap-3">
-          <div className="p-2.5 bg-rose-600/20 rounded-xl border border-rose-500/20">
-            <Shield className="w-6 h-6 text-rose-500" />
+          <div className="p-2.5 bg-amber-600/20 rounded-xl border border-amber-500/20">
+            <Shield className="w-6 h-6 text-amber-500" />
           </div>
           <div>
             <h2 className="text-xl font-black text-white leading-none">Admin Panel</h2>
@@ -494,7 +494,7 @@ const TabButton: React.FC<{ active: boolean, onClick: () => void, icon: React.Re
   <button 
     onClick={onClick}
     className={`flex-shrink-0 flex items-center justify-center gap-2 py-3 px-4 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all
-      ${active ? 'bg-rose-600 text-white shadow-lg' : 'text-stone-500 hover:text-stone-300'}
+      ${active ? 'bg-amber-600 text-white shadow-lg' : 'text-stone-500 hover:text-stone-300'}
     `}
   >
     {icon} {label}
@@ -514,7 +514,7 @@ const FeatureStatusCard: React.FC<{ icon: React.ReactNode, name: string, count: 
       <p className="text-[10px] text-stone-500 font-medium mb-2">{desc}</p>
       <div className="flex items-center gap-2">
         <div className="h-1 flex-1 bg-white/5 rounded-full overflow-hidden">
-          <div className="h-full bg-rose-600" style={{ width: `${Math.min(count * 10, 100)}%` }} />
+          <div className="h-full bg-amber-600" style={{ width: `${Math.min(count * 10, 100)}%` }} />
         </div>
         <span className="text-[10px] font-mono text-stone-400">{count} units</span>
       </div>

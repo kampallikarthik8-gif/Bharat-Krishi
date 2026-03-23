@@ -110,6 +110,21 @@
         "joinedAt": { "type": "string", "description": "When the user joined" }
       },
       "required": ["farmId", "farmName", "role"]
+    },
+    "Alert": {
+      "title": "Smart Alert",
+      "description": "Represents a smart alert for the user.",
+      "type": "object",
+      "properties": {
+        "type": { "type": "string", "enum": ["Spray", "Weather", "Market"], "description": "Alert type" },
+        "title": { "type": "string", "description": "Alert title" },
+        "desc": { "type": "string", "description": "Alert description" },
+        "time": { "type": "string", "description": "Alert time (display string)" },
+        "active": { "type": "boolean", "description": "Whether the alert is active" },
+        "priority": { "type": "string", "enum": ["High", "Medium", "Low"], "description": "Alert priority" },
+        "createdAt": { "type": "string", "description": "Creation timestamp" }
+      },
+      "required": ["type", "title", "desc", "time", "active", "priority"]
     }
   },
   "firestore": {
@@ -136,6 +151,10 @@
     "/users/{userId}/transactions/{txId}": {
       "schema": "Transaction",
       "description": "User's financial transactions"
+    },
+    "/users/{userId}/alerts/{alertId}": {
+      "schema": "Alert",
+      "description": "User's smart alerts"
     }
   }
 }

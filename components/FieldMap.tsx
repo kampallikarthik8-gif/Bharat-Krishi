@@ -112,10 +112,10 @@ const ZONE_COLORS = [
 ];
 
 const STATUS_CONFIG: Record<Field['status'], { color: string, bg: string, text: string }> = {
-  'Active': { color: '#FF7E5F', bg: 'bg-amber-50', text: 'text-amber-700' },
-  'Fallow': { color: '#FEB47B', bg: 'bg-orange-50', text: 'text-orange-700' },
-  'Harvested': { color: '#FFD194', bg: 'bg-yellow-50', text: 'text-yellow-700' },
-  'Prepping': { color: '#FF9A8B', bg: 'bg-rose-50', text: 'text-rose-700' }
+  'Active': { color: '#FF7E5F', bg: 'bg-amber-500/10', text: 'text-amber-400' },
+  'Fallow': { color: '#FEB47B', bg: 'bg-orange-500/10', text: 'text-orange-400' },
+  'Harvested': { color: '#FFD194', bg: 'bg-yellow-500/10', text: 'text-yellow-400' },
+  'Prepping': { color: '#FF9A8B', bg: 'bg-rose-500/10', text: 'text-rose-400' }
 };
 
 const POI_STATUS_THEMES: Record<string, { ring: string, animate: string, label: string, badge: string }> = {
@@ -751,9 +751,9 @@ const FieldMap = ({ language, onBack }: { language: string, onBack: () => void }
   }
 
   return (
-    <div className="min-h-screen bg-stone-50 space-y-0 pb-40 animate-in fade-in duration-700 relative flex flex-col">
+    <div className="min-h-screen bg-black space-y-0 pb-40 animate-in fade-in duration-700 relative flex flex-col">
       {/* Standard Header */}
-      <section className="px-6 pt-8 pb-6 bg-stone-950 text-white relative overflow-hidden">
+      <section className="px-6 pt-8 pb-6 bg-black text-white relative overflow-hidden border-b border-white/5">
         <div className="absolute top-0 right-0 p-8 opacity-10 rotate-12">
           <MapIcon className="w-48 h-48" />
         </div>
@@ -793,58 +793,58 @@ const FieldMap = ({ language, onBack }: { language: string, onBack: () => void }
       <div className="relative -mt-6 px-4 z-20">
       {contextMenu && (
         <div 
-          className="absolute z-[2000] bg-white rounded-2xl shadow-2xl border border-stone-100 p-2 animate-in zoom-in-95"
+          className="absolute z-[2000] bg-stone-900 rounded-2xl shadow-2xl border border-white/10 p-2 animate-in zoom-in-95"
           style={{ left: `${contextMenu.x}px`, top: `${contextMenu.y}px`, transform: 'translate(-50%, -100%) translateY(-20px)' }}
         >
           <div className="flex items-center gap-1">
-             <button onClick={() => setContextMenu(null)} className="p-2 text-stone-400 hover:text-stone-900"><X className="w-4 h-4" /></button>
+             <button onClick={() => setContextMenu(null)} className="p-2 text-stone-500 hover:text-white"><X className="w-4 h-4" /></button>
              {contextMenu.type === 'field' && (
                 <div className="flex gap-1">
-                  <button onClick={() => { setActiveField(contextMenu.data); setContextMenu(null); }} className="px-4 py-2 bg-orange-50 text-orange-700 rounded-xl font-black text-[10px] uppercase">Analyze</button>
+                  <button onClick={() => { setActiveField(contextMenu.data); setContextMenu(null); }} className="px-4 py-2 bg-amber-500/10 text-amber-400 rounded-xl font-black text-[10px] uppercase">Analyze</button>
                   <button onClick={() => { 
                     setDrawingPoints(contextMenu.data.points); 
                     setActiveMode('Boundary'); 
                     setContextMenu(null); 
-                  }} className="px-4 py-2 bg-stone-900 text-white rounded-xl font-black text-[10px] uppercase">Redraw</button>
+                  }} className="px-4 py-2 bg-amber-500 text-stone-950 rounded-xl font-black text-[10px] uppercase">Redraw</button>
                 </div>
              )}
              {contextMenu.type === 'poi' && (
-                <button onClick={() => { setEditingPOI({ poi: contextMenu.data, fieldId: contextMenu.fieldId }); setContextMenu(null); }} className="px-4 py-2 bg-blue-50 text-blue-700 rounded-xl font-black text-[10px] uppercase">Refine</button>
+                <button onClick={() => { setEditingPOI({ poi: contextMenu.data, fieldId: contextMenu.fieldId }); setContextMenu(null); }} className="px-4 py-2 bg-amber-500/10 text-amber-400 rounded-xl font-black text-[10px] uppercase">Refine</button>
              )}
           </div>
-          <div className="absolute left-1/2 -bottom-2 -translate-x-1/2 w-4 h-4 bg-white border-b border-r border-stone-100 rotate-45" />
+          <div className="absolute left-1/2 -bottom-2 -translate-x-1/2 w-4 h-4 bg-stone-900 border-b border-r border-white/10 rotate-45" />
         </div>
       )}
 
       {editingPOI && (
         <div className="absolute inset-0 z-[6000] bg-black/85 backdrop-blur-2xl flex items-center justify-center p-6 animate-in fade-in">
-           <div className="bg-white w-full max-w-sm rounded-[3.5rem] p-10 shadow-2xl relative">
+           <div className="bg-stone-900 w-full max-w-sm rounded-[3.5rem] p-10 shadow-2xl relative border border-white/10">
               <div className="flex items-center gap-5 mb-10">
-                 <div className="p-4 bg-blue-50 rounded-2xl text-blue-600 shadow-inner">
+                 <div className="p-4 bg-amber-500/10 rounded-2xl text-amber-500 shadow-inner">
                     <Edit3 className="w-8 h-8" />
                  </div>
                  <div>
-                    <h3 className="text-2xl font-black text-stone-900 leading-none">Asset Intel</h3>
-                    <p className="text-[10px] font-bold text-stone-400 uppercase tracking-widest mt-1.5">Configure Marker</p>
+                    <h3 className="text-2xl font-black text-white leading-none">Asset Intel</h3>
+                    <p className="text-[10px] font-bold text-stone-500 uppercase tracking-widest mt-1.5">Configure Marker</p>
                  </div>
               </div>
               <div className="space-y-8 max-h-[60vh] overflow-y-auto no-scrollbar pr-2">
                  <div className="space-y-2">
-                    <label className="text-[10px] font-black text-stone-400 uppercase tracking-widest ml-4">Identifier</label>
+                    <label className="text-[10px] font-black text-stone-500 uppercase tracking-widest ml-4">Identifier</label>
                     <input 
                       value={editingPOI.poi.label}
                       onChange={e => setEditingPOI({ ...editingPOI, poi: { ...editingPOI.poi, label: e.target.value } })}
-                      className="w-full bg-stone-50 border border-stone-100 p-5 rounded-3xl font-black text-sm outline-none shadow-inner focus:ring-2 focus:ring-blue-500" 
+                      className="w-full bg-black border border-white/10 p-5 rounded-3xl font-black text-sm outline-none shadow-inner focus:ring-2 focus:ring-amber-500 text-white" 
                     />
                  </div>
                  <div className="space-y-2">
-                    <label className="text-[10px] font-black text-stone-400 uppercase tracking-widest ml-4">Status Severity</label>
+                    <label className="text-[10px] font-black text-stone-500 uppercase tracking-widest ml-4">Status Severity</label>
                     <div className="grid grid-cols-3 gap-2">
                        {Object.keys(POI_STATUS_THEMES).map(status => (
                          <button 
                            key={status}
                            onClick={() => setEditingPOI({ ...editingPOI, poi: { ...editingPOI.poi, status: status as any } })}
-                           className={`py-3 rounded-2xl text-[8px] font-black uppercase tracking-tighter transition-all border-2 ${editingPOI.poi.status === status ? 'bg-stone-900 border-stone-900 text-white' : 'bg-stone-50 border-stone-100 text-stone-400'}`}
+                           className={`py-3 rounded-2xl text-[8px] font-black uppercase tracking-tighter transition-all border-2 ${editingPOI.poi.status === status ? 'bg-amber-500 border-amber-500 text-stone-950' : 'bg-black border-white/10 text-stone-500'}`}
                          >
                             {status}
                          </button>
@@ -852,13 +852,13 @@ const FieldMap = ({ language, onBack }: { language: string, onBack: () => void }
                     </div>
                  </div>
                  <div className="space-y-2">
-                    <label className="text-[10px] font-black text-stone-400 uppercase tracking-widest ml-4">Asset Type</label>
+                    <label className="text-[10px] font-black text-stone-500 uppercase tracking-widest ml-4">Asset Type</label>
                     <div className="grid grid-cols-3 gap-2">
                       {POI_TYPES.map(type => (
                         <button 
                           key={type.type}
                           onClick={() => setEditingPOI({ ...editingPOI, poi: { ...editingPOI.poi, type: type.type } })}
-                          className={`flex flex-col items-center gap-2 p-4 rounded-2xl border-2 transition-all ${editingPOI.poi.type === type.type ? 'bg-stone-900 border-stone-900 text-white shadow-xl scale-105' : 'bg-stone-50 border-stone-100 text-stone-400'}`}
+                          className={`flex flex-col items-center gap-2 p-4 rounded-2xl border-2 transition-all ${editingPOI.poi.type === type.type ? 'bg-amber-500 border-amber-500 text-stone-950 shadow-xl scale-105' : 'bg-black border-white/10 text-stone-500'}`}
                         >
                           <div dangerouslySetInnerHTML={{ __html: `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">${type.svg}</svg>` }} />
                           <span className="text-[7px] font-black uppercase tracking-tighter">{type.label}</span>
@@ -868,7 +868,7 @@ const FieldMap = ({ language, onBack }: { language: string, onBack: () => void }
                  </div>
               </div>
               <div className="mt-8 flex gap-3">
-                 <button onClick={() => setEditingPOI(null)} className="flex-1 py-4 bg-stone-100 text-stone-400 rounded-2xl font-black text-[10px] uppercase tracking-widest">Cancel</button>
+                 <button onClick={() => setEditingPOI(null)} className="flex-1 py-4 bg-white/5 text-stone-500 rounded-2xl font-black text-[10px] uppercase tracking-widest hover:bg-white/10 transition-all">Cancel</button>
                  {editingPOI.fieldId && (
                    <button 
                      onClick={async () => {
@@ -887,18 +887,18 @@ const FieldMap = ({ language, onBack }: { language: string, onBack: () => void }
                          }
                        }
                      }}
-                     className="p-4 bg-rose-50 text-rose-500 rounded-2xl hover:bg-rose-500 hover:text-white transition-all"
+                     className="p-4 bg-rose-500/10 text-rose-500 rounded-2xl hover:bg-rose-500 hover:text-white transition-all border border-rose-500/20"
                    >
                      <Trash2 className="w-5 h-5" />
                    </button>
                  )}
-                 <button onClick={() => handlePOISave(editingPOI.poi)} className="flex-[2] bg-stone-900 text-white font-black py-4 rounded-2xl shadow-xl active:scale-95">Finalize</button>
+                 <button onClick={() => handlePOISave(editingPOI.poi)} className="flex-[2] bg-amber-500 text-stone-950 font-black py-4 rounded-2xl shadow-xl active:scale-95 shadow-amber-500/20">Finalize</button>
               </div>
            </div>
         </div>
       )}
 
-        <div className="bg-stone-900 rounded-[2.5rem] overflow-hidden border-4 border-stone-900 shadow-2xl relative h-[480px] ring-1 ring-white/10">
+        <div className="bg-stone-950 rounded-[2.5rem] overflow-hidden border-4 border-stone-900 shadow-2xl relative h-[480px] ring-1 ring-white/10">
           <div ref={mapContainerRef} className="w-full h-full z-0 grayscale-[0.2] contrast-[1.1]" />
           
           {/* Drawing Instructions Overlay */}

@@ -69,7 +69,7 @@ const Login: React.FC<LoginProps> = ({ onLogin, onSwitchToRegister }) => {
         className="w-full max-w-sm space-y-12 relative z-10"
       >
         <div className="text-center space-y-4">
-          <div className="inline-flex p-1 rounded-3xl bg-white shadow-lg overflow-hidden border-2 border-[var(--m3-outline-variant)]">
+          <div className="inline-flex p-1 rounded-3xl bg-stone-950 shadow-lg overflow-hidden border-2 border-amber-500/20">
             <img 
               src="https://image2url.com/r2/default/images/1773645978799-968d61a0-3ceb-48da-814f-71deb5b97303.png" 
               alt="Bharat Kisan Logo" 
@@ -78,24 +78,24 @@ const Login: React.FC<LoginProps> = ({ onLogin, onSwitchToRegister }) => {
             />
           </div>
           <div className="space-y-1">
-            <h1 className="text-4xl font-medium text-[var(--m3-on-surface)] m3-headline-large">
-              Bharat <span className="text-[var(--m3-primary)]">Kisan</span>
+            <h1 className="text-4xl font-black text-white m3-headline-large uppercase tracking-tighter">
+              Bharat <span className="text-amber-500">Kisan</span>
             </h1>
-            <p className="text-sm text-[var(--m3-on-surface-variant)] m3-body-medium">Precision Farming Hub</p>
+            <p className="text-[10px] font-black text-stone-500 uppercase tracking-[0.3em]">Precision Farming Hub</p>
             <div className="flex flex-wrap justify-center gap-2 mt-4">
               {['Paddy', 'Wheat', 'Sugarcane', 'Cotton', 'Maize'].map((crop) => (
-                <span key={crop} className="px-3 py-1 bg-[var(--m3-primary-container)] text-[var(--m3-on-primary-container)] text-[10px] font-bold rounded-full uppercase tracking-wider">
+                <span key={crop} className="px-3 py-1 bg-amber-500/10 text-amber-500 text-[10px] font-bold rounded-full uppercase tracking-wider border border-amber-500/20">
                   {crop}
                 </span>
               ))}
-              <span className="px-3 py-1 bg-[var(--m3-surface-container-high)] text-[var(--m3-on-surface-variant)] text-[10px] font-bold rounded-full uppercase tracking-wider">
+              <span className="px-3 py-1 bg-stone-900 text-stone-500 text-[10px] font-bold rounded-full uppercase tracking-wider border border-stone-800">
                 +15 More
               </span>
             </div>
           </div>
         </div>
 
-        <div className="m3-card-elevated p-8 bg-[var(--m3-surface-container-low)]">
+        <div className="m3-card-elevated p-8 bg-stone-950 border border-amber-500/5">
           <AnimatePresence mode="wait">
             {!showOtp ? (
               <motion.div 
@@ -106,8 +106,8 @@ const Login: React.FC<LoginProps> = ({ onLogin, onSwitchToRegister }) => {
                 className="space-y-8"
               >
                 <div className="space-y-1">
-                  <h2 className="text-2xl font-medium text-[var(--m3-on-surface)] m3-title-large">Welcome</h2>
-                  <p className="text-sm text-[var(--m3-on-surface-variant)] m3-body-medium">Sign in to continue</p>
+                  <h2 className="text-2xl font-black text-white uppercase tracking-tight">Welcome</h2>
+                  <p className="text-[10px] font-bold text-stone-500 uppercase tracking-widest">Sign in to continue</p>
                 </div>
 
                 <div className="space-y-6">
@@ -115,24 +115,24 @@ const Login: React.FC<LoginProps> = ({ onLogin, onSwitchToRegister }) => {
                     whileTap={{ scale: 0.98 }}
                     onClick={handleGoogleSignIn}
                     disabled={isLoading}
-                    className="w-full bg-white border border-[var(--m3-outline-variant)] text-[var(--m3-on-surface)] font-medium py-4 rounded-full flex items-center justify-center gap-3 active:bg-[var(--m3-surface-container-high)] transition-all"
+                    className="w-full bg-stone-900 border border-stone-800 text-white font-bold py-4 rounded-full flex items-center justify-center gap-3 active:bg-stone-800 transition-all uppercase text-[10px] tracking-widest"
                   >
-                    {isLoading ? <Loader2 className="w-5 h-5 animate-spin" /> : (
+                    {isLoading ? <Loader2 className="w-5 h-5 animate-spin text-amber-500" /> : (
                       <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" alt="Google" className="w-5 h-5" />
                     )}
                     Continue with Google
                   </motion.button>
 
-                  <div className="flex items-center gap-4 opacity-30">
-                    <div className="h-px flex-1 bg-[var(--m3-outline)]" />
+                  <div className="flex items-center gap-4 opacity-10">
+                    <div className="h-px flex-1 bg-white" />
                     <span className="text-xs font-medium uppercase tracking-widest">OR</span>
-                    <div className="h-px flex-1 bg-[var(--m3-outline)]" />
+                    <div className="h-px flex-1 bg-white" />
                   </div>
 
                   <div className="relative">
                     <div className="absolute left-4 top-1/2 -translate-y-1/2 flex items-center gap-2">
-                      <span className="text-[var(--m3-on-surface-variant)] font-medium">+91</span>
-                      <div className="w-px h-4 bg-[var(--m3-outline-variant)]" />
+                      <span className="text-amber-500 font-black text-xs">+91</span>
+                      <div className="w-px h-4 bg-amber-500/20" />
                     </div>
                     <input 
                       autoFocus
@@ -141,7 +141,7 @@ const Login: React.FC<LoginProps> = ({ onLogin, onSwitchToRegister }) => {
                       maxLength={10}
                       value={phone}
                       onChange={(e) => setPhone(e.target.value.replace(/\D/g, ''))}
-                      className="w-full bg-[var(--m3-surface-container-high)] border-b-2 border-[var(--m3-outline)] p-4 pl-16 rounded-t-xl outline-none focus:border-[var(--m3-primary)] transition-all font-medium text-[var(--m3-on-surface)]"
+                      className="w-full bg-stone-900 border-b-2 border-amber-500/20 p-4 pl-16 rounded-t-xl outline-none focus:border-amber-500 transition-all font-bold text-white placeholder:text-stone-700"
                     />
                   </div>
 
@@ -149,7 +149,7 @@ const Login: React.FC<LoginProps> = ({ onLogin, onSwitchToRegister }) => {
                     whileTap={{ scale: 0.98 }}
                     onClick={handleSendOtp}
                     disabled={phone.length !== 10 || isLoading}
-                    className="w-full bg-[var(--m3-primary)] text-[var(--m3-on-primary)] font-medium py-4 rounded-full flex items-center justify-center gap-2 shadow-md disabled:opacity-40 transition-all"
+                    className="w-full bg-amber-600 text-black font-black py-4 rounded-full flex items-center justify-center gap-2 shadow-xl shadow-amber-900/20 disabled:opacity-40 transition-all uppercase text-[10px] tracking-widest"
                   >
                     {isLoading ? <Loader2 className="w-5 h-5 animate-spin" /> : 'Get OTP'}
                     {!isLoading && <ArrowRight className="w-5 h-5" />}
@@ -166,16 +166,16 @@ const Login: React.FC<LoginProps> = ({ onLogin, onSwitchToRegister }) => {
               >
                 <button 
                   onClick={() => setShowOtp(false)}
-                  className="flex items-center gap-2 text-[var(--m3-on-surface-variant)]"
+                  className="flex items-center gap-2 text-stone-500 hover:text-amber-500 transition-colors"
                 >
                   <ChevronLeft className="w-5 h-5" />
-                  <span className="text-sm font-medium">Back</span>
+                  <span className="text-[10px] font-black uppercase tracking-widest">Back</span>
                 </button>
 
                 <div className="space-y-1">
-                  <h2 className="text-2xl font-medium text-[var(--m3-on-surface)] m3-title-large">Verify</h2>
-                  <p className="text-sm text-[var(--m3-on-surface-variant)] m3-body-medium">
-                    Code sent to <span className="text-[var(--m3-on-surface)] font-medium">+91 {phone}</span>
+                  <h2 className="text-2xl font-black text-white uppercase tracking-tight">Verify</h2>
+                  <p className="text-[10px] font-bold text-stone-500 uppercase tracking-widest">
+                    Code sent to <span className="text-amber-500">+91 {phone}</span>
                   </p>
                 </div>
 
@@ -189,7 +189,7 @@ const Login: React.FC<LoginProps> = ({ onLogin, onSwitchToRegister }) => {
                         maxLength={1}
                         value={digit}
                         onChange={(e) => handleOtpChange(idx, e.target.value)}
-                        className="w-12 h-16 bg-[var(--m3-surface-container-high)] border-b-2 border-[var(--m3-outline)] rounded-t-xl text-center text-2xl font-medium text-[var(--m3-on-surface)] outline-none focus:border-[var(--m3-primary)] transition-all"
+                        className="w-12 h-16 bg-stone-900 border-b-2 border-amber-500/20 rounded-t-xl text-center text-2xl font-black text-white outline-none focus:border-amber-500 transition-all"
                       />
                     ))}
                   </div>
@@ -198,7 +198,7 @@ const Login: React.FC<LoginProps> = ({ onLogin, onSwitchToRegister }) => {
                     whileTap={{ scale: 0.98 }}
                     onClick={handleVerifyOtp}
                     disabled={otp.some(d => !d) || isLoading}
-                    className="w-full bg-[var(--m3-primary)] text-[var(--m3-on-primary)] font-medium py-4 rounded-full flex items-center justify-center gap-2 shadow-md disabled:opacity-40 transition-all"
+                    className="w-full bg-amber-600 text-black font-black py-4 rounded-full flex items-center justify-center gap-2 shadow-xl shadow-amber-900/20 disabled:opacity-40 transition-all uppercase text-[10px] tracking-widest"
                   >
                     {isLoading ? <Loader2 className="w-5 h-5 animate-spin" /> : 'Verify & Enter'}
                     {!isLoading && <Lock className="w-5 h-5" />}

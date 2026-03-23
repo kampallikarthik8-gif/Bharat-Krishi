@@ -26,17 +26,17 @@ const CropHealthMonitor: React.FC = () => {
   };
 
   return (
-    <div className="w-full flex flex-col pb-40 bg-stone-950 min-h-screen text-white">
+    <div className="w-full flex flex-col pb-40 bg-black min-h-screen text-white">
       {/* Header */}
-      <section className="px-6 pt-12 pb-8 bg-stone-900/50 border-b border-white/5">
+      <section className="px-6 pt-12 pb-8 bg-stone-950 border-b border-amber-500/5">
         <div className="space-y-6">
           <div className="flex items-center gap-3">
-            <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-            <span className="text-[10px] font-black uppercase tracking-[0.4em] text-emerald-500/60">Satellite Telemetry</span>
+            <div className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" />
+            <span className="text-[10px] font-black uppercase tracking-[0.4em] text-amber-500/60">Satellite Telemetry</span>
           </div>
           <h1 className="text-5xl font-black tracking-tighter uppercase leading-none">
             Crop<br />
-            <span className="text-emerald-500 italic">Health.</span>
+            <span className="text-amber-500 italic">Health.</span>
           </h1>
           
           <div className="flex gap-2 overflow-x-auto no-scrollbar py-2">
@@ -44,7 +44,7 @@ const CropHealthMonitor: React.FC = () => {
               <button 
                 key={field}
                 onClick={() => setSelectedField(field)}
-                className={`px-6 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest whitespace-nowrap transition-all ${selectedField === field ? 'bg-emerald-500 text-stone-950 shadow-lg shadow-emerald-500/20' : 'bg-white/5 text-stone-500 border border-white/5'}`}
+                className={`px-6 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest whitespace-nowrap transition-all ${selectedField === field ? 'bg-amber-500 text-black shadow-lg shadow-amber-500/20' : 'bg-stone-900 text-stone-500 border border-white/5'}`}
               >
                 {field}
               </button>
@@ -57,24 +57,24 @@ const CropHealthMonitor: React.FC = () => {
       <div className="px-6 py-8 space-y-8">
         
         {/* NDVI Visualization (Simulated) */}
-        <div className="relative aspect-square bg-stone-900 rounded-[2.5rem] overflow-hidden border border-white/5 shadow-2xl">
+        <div className="relative aspect-square bg-stone-950 rounded-[2.5rem] overflow-hidden border border-amber-500/10 shadow-2xl">
           <div className="absolute inset-0 opacity-40">
-            <div className="absolute inset-0 bg-gradient-to-br from-emerald-900/50 via-stone-900 to-emerald-900/50" />
+            <div className="absolute inset-0 bg-gradient-to-br from-amber-900/30 via-black to-amber-900/30" />
             <div className="absolute inset-0 organic-grid opacity-20" />
           </div>
           
           {/* Simulated Heatmap Layers */}
-          <div className="absolute inset-12 rounded-[2rem] border-2 border-emerald-500/20 flex items-center justify-center">
+          <div className="absolute inset-12 rounded-[2rem] border-2 border-amber-500/20 flex items-center justify-center">
              <motion.div 
                animate={{ 
                  scale: [1, 1.05, 1],
                  opacity: [0.3, 0.6, 0.3]
                }}
                transition={{ duration: 4, repeat: Infinity }}
-               className="w-full h-full bg-emerald-500/10 blur-3xl rounded-full"
+               className="w-full h-full bg-amber-500/10 blur-3xl rounded-full"
              />
              <div className="absolute inset-0 flex items-center justify-center">
-                <div className="w-3/4 h-3/4 border border-emerald-500/30 rounded-full border-dashed animate-spin-slow" />
+                <div className="w-3/4 h-3/4 border border-amber-500/30 rounded-full border-dashed animate-spin-slow" />
              </div>
           </div>
 
@@ -84,19 +84,19 @@ const CropHealthMonitor: React.FC = () => {
               initial={{ top: '0%' }}
               animate={{ top: '100%' }}
               transition={{ duration: 2.5, ease: "linear" }}
-              className="absolute left-0 right-0 h-px bg-emerald-400 shadow-[0_0_15px_rgba(52,211,153,0.8)] z-10"
+              className="absolute left-0 right-0 h-px bg-amber-400 shadow-[0_0_15px_rgba(251,191,36,0.8)] z-10"
             />
           )}
 
           <div className="absolute bottom-8 left-8 right-8 flex justify-between items-end">
             <div className="space-y-1">
-              <p className="text-[8px] font-black text-emerald-500 uppercase tracking-widest">NDVI Index</p>
+              <p className="text-[8px] font-black text-amber-500 uppercase tracking-widest">NDVI Index</p>
               <p className="text-4xl font-black tracking-tighter">0.82</p>
             </div>
             <button 
               onClick={handleScan}
               disabled={isScanning}
-              className="p-4 bg-white text-stone-950 rounded-2xl shadow-xl active:scale-95 transition-all disabled:opacity-50"
+              className="p-4 bg-amber-500 text-black rounded-2xl shadow-xl active:scale-95 transition-all disabled:opacity-50"
             >
               <Activity className={`w-6 h-6 ${isScanning ? 'animate-pulse' : ''}`} />
             </button>
@@ -105,22 +105,22 @@ const CropHealthMonitor: React.FC = () => {
 
         {/* Metrics Grid */}
         <div className="grid grid-cols-2 gap-4">
-          <MetricCard icon={<Droplets />} label="Moisture" value="68%" status="Optimal" color="text-blue-400" />
-          <MetricCard icon={<Sun />} label="Chlorophyll" value="High" status="Healthy" color="text-emerald-400" />
+          <MetricCard icon={<Droplets />} label="Moisture" value="68%" status="Optimal" color="text-amber-400" />
+          <MetricCard icon={<Sun />} label="Chlorophyll" value="High" status="Healthy" color="text-amber-500" />
           <MetricCard icon={<Thermometer />} label="Surface Temp" value="24°C" status="Normal" color="text-orange-400" />
-          <MetricCard icon={<Layers />} label="Biomass" value="1.2t" status="Growing" color="text-purple-400" />
+          <MetricCard icon={<Layers />} label="Biomass" value="1.2t" status="Growing" color="text-amber-600" />
         </div>
 
         {/* Alerts Section */}
         <section className="space-y-6">
           <div className="flex items-center justify-between">
             <h3 className="text-[10px] font-black text-stone-500 uppercase tracking-[0.3em]">Health Alerts</h3>
-            <div className="h-px flex-1 bg-white/5 ml-6" />
+            <div className="h-px flex-1 bg-amber-500/10 ml-6" />
           </div>
           
           <div className="space-y-4">
-            <div className="bg-white/5 p-6 rounded-[2rem] border border-white/5 flex items-start gap-4">
-              <div className="p-3 bg-emerald-500/10 text-emerald-500 rounded-xl">
+            <div className="bg-stone-950 p-6 rounded-[2rem] border border-amber-500/5 flex items-start gap-4">
+              <div className="p-3 bg-amber-500/10 text-amber-500 rounded-xl">
                 <CheckCircle2 className="w-5 h-5" />
               </div>
               <div className="space-y-1">
@@ -131,7 +131,7 @@ const CropHealthMonitor: React.FC = () => {
               </div>
             </div>
 
-            <div className="bg-white/5 p-6 rounded-[2rem] border border-white/5 flex items-start gap-4">
+            <div className="bg-stone-950 p-6 rounded-[2rem] border border-amber-500/5 flex items-start gap-4">
               <div className="p-3 bg-orange-500/10 text-orange-500 rounded-xl">
                 <AlertTriangle className="w-5 h-5" />
               </div>
@@ -146,7 +146,7 @@ const CropHealthMonitor: React.FC = () => {
         </section>
 
         {/* Action Card */}
-        <div className="bg-emerald-500 p-8 rounded-[2.5rem] text-stone-950 space-y-4">
+        <div className="bg-amber-500 p-8 rounded-[2.5rem] text-black space-y-4">
           <div className="flex items-center gap-3">
             <Info className="w-5 h-5" />
             <span className="text-[10px] font-black uppercase tracking-widest">AI Recommendation</span>
@@ -165,8 +165,8 @@ const CropHealthMonitor: React.FC = () => {
 };
 
 const MetricCard: React.FC<{ icon: React.ReactNode, label: string, value: string, status: string, color: string }> = ({ icon, label, value, status, color }) => (
-  <div className="bg-white/5 p-6 rounded-[2rem] border border-white/5 space-y-3">
-    <div className={`p-3 bg-white/5 ${color} rounded-xl w-fit`}>
+  <div className="bg-stone-950 p-6 rounded-[2rem] border border-amber-500/5 space-y-3">
+    <div className={`p-3 bg-amber-500/5 ${color} rounded-xl w-fit`}>
       {icon}
     </div>
     <div>

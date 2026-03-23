@@ -4,8 +4,8 @@
   "description": "AI-powered agricultural assistant for disease detection, land marking, and farm management.",
   "start_url": ".",
   "display": "standalone",
-  "background_color": "#fbfdf8",
-  "theme_color": "#2d6a4f",
+  "background_color": "#000000",
+  "theme_color": "#000000",
   "orientation": "portrait",
   "icons": [
     {

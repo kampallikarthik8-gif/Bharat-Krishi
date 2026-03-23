@@ -272,18 +272,18 @@ const CropAdvisor: React.FC<CropAdvisorProps> = ({ language: initialLanguage }) 
 
   return (
     <div className="space-y-8 pb-32 animate-in fade-in">
-      <div className="bg-white rounded-[3rem] p-6 md:p-10 shadow-sm border border-stone-200">
+      <div className="bg-black rounded-[3rem] p-6 md:p-10 shadow-sm border border-white/10">
         <div className="flex justify-between items-start mb-10">
           <div>
-            <h2 className="text-3xl font-black mb-2 flex items-center gap-4 text-stone-900 tracking-tight">
-              <div className="bg-amber-500 p-3 rounded-2xl shadow-lg shadow-amber-500/20 text-white">
+            <h2 className="text-3xl font-black mb-2 flex items-center gap-4 text-white tracking-tight">
+              <div className="bg-amber-500 p-3 rounded-2xl shadow-lg shadow-amber-500/20 text-black">
                 <Lightbulb className="w-8 h-8" />
               </div>
               Precision Strategy
             </h2>
-            <p className="text-stone-500 text-sm font-medium">Personalized agronomy reports grounded in local field conditions.</p>
+            <p className="text-stone-400 text-sm font-medium">Personalized agronomy reports grounded in local field conditions.</p>
           </div>
-          <div className="bg-stone-50 p-2 rounded-2xl border border-stone-100 hidden sm:block">
+          <div className="bg-stone-900 p-2 rounded-2xl border border-white/5 hidden sm:block">
             <Zap className="w-5 h-5 text-amber-500 animate-pulse" />
           </div>
         </div>
@@ -291,50 +291,50 @@ const CropAdvisor: React.FC<CropAdvisorProps> = ({ language: initialLanguage }) 
         <form onSubmit={handleSubmit} className="space-y-8">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div className="space-y-2">
-              <label className="text-[10px] font-black text-stone-400 ml-4 uppercase tracking-[0.2em]">Crop Selection</label>
+              <label className="text-[10px] font-black text-stone-500 ml-4 uppercase tracking-[0.2em]">Crop Selection</label>
               <div className="relative group">
                 <input 
                   list="crop-options" 
                   placeholder="e.g. Paddy" 
                   value={formData.crop} 
                   onChange={e => setFormData({...formData, crop: e.target.value})} 
-                  className="w-full bg-stone-50 border-2 border-stone-100 p-5 rounded-[1.75rem] font-bold text-sm outline-none shadow-inner pl-14 focus:border-amber-500/50 focus:bg-white transition-all" 
+                  className="w-full bg-stone-900 border-2 border-white/5 p-5 rounded-[1.75rem] font-bold text-sm outline-none shadow-inner pl-14 focus:border-amber-500/50 focus:bg-stone-800 text-white transition-all" 
                 />
-                <Database className="absolute left-5 top-1/2 -translate-y-1/2 w-6 h-6 text-stone-300 group-focus-within:text-amber-500 transition-colors" />
+                <Database className="absolute left-5 top-1/2 -translate-y-1/2 w-6 h-6 text-stone-600 group-focus-within:text-amber-500 transition-colors" />
                 <datalist id="crop-options">
                   {INDIAN_CROPS.map(c => <option key={c} value={c} />)}
                 </datalist>
               </div>
             </div>
             <div className="space-y-2">
-              <label className="text-[10px] font-black text-stone-400 ml-4 uppercase tracking-[0.2em]">District / Region</label>
+              <label className="text-[10px] font-black text-stone-500 ml-4 uppercase tracking-[0.2em]">District / Region</label>
               <div className="relative group">
                 <input 
                   placeholder="e.g. Punjab" 
                   value={formData.location} 
                   onChange={e => setFormData({...formData, location: e.target.value})} 
-                  className="w-full bg-stone-50 border-2 border-stone-100 p-5 rounded-[1.75rem] font-bold text-sm outline-none shadow-inner pl-14 focus:border-amber-500/50 focus:bg-white transition-all" 
+                  className="w-full bg-stone-900 border-2 border-white/5 p-5 rounded-[1.75rem] font-bold text-sm outline-none shadow-inner pl-14 focus:border-amber-500/50 focus:bg-stone-800 text-white transition-all" 
                 />
-                <MapPin className="absolute left-5 top-1/2 -translate-y-1/2 w-6 h-6 text-stone-300 group-focus-within:text-amber-500 transition-colors" />
-                <button type="button" onClick={detectLocation} className="absolute right-4 top-1/2 -translate-y-1/2 p-2.5 bg-white rounded-xl shadow-md text-amber-600 active:scale-90 transition-all border border-stone-100">
+                <MapPin className="absolute left-5 top-1/2 -translate-y-1/2 w-6 h-6 text-stone-600 group-focus-within:text-amber-500 transition-colors" />
+                <button type="button" onClick={detectLocation} className="absolute right-4 top-1/2 -translate-y-1/2 p-2.5 bg-stone-800 rounded-xl shadow-md text-amber-500 active:scale-90 transition-all border border-white/5">
                   <Navigation className={`w-4 h-4 ${detecting ? 'animate-spin' : ''}`} />
                 </button>
               </div>
               {weatherData && (
-                <div className="flex items-center gap-4 mt-3 px-4 py-2 bg-stone-50 rounded-2xl border border-stone-100 w-fit animate-in fade-in slide-in-from-left-4">
+                <div className="flex items-center gap-4 mt-3 px-4 py-2 bg-stone-900 rounded-2xl border border-white/5 w-fit animate-in fade-in slide-in-from-left-4">
                   <div className="flex items-center gap-2">
                     <Sun className="w-4 h-4 text-amber-500" />
-                    <span className="text-[10px] font-black text-stone-600 uppercase tracking-widest">{weatherData.main.temp}°C</span>
+                    <span className="text-[10px] font-black text-stone-300 uppercase tracking-widest">{weatherData.main.temp}°C</span>
                   </div>
-                  <div className="w-px h-3 bg-stone-200" />
+                  <div className="w-px h-3 bg-white/10" />
                   <div className="flex items-center gap-2">
-                    <Droplets className="w-4 h-4 text-blue-500" />
-                    <span className="text-[10px] font-black text-stone-600 uppercase tracking-widest">{weatherData.main.humidity}%</span>
+                    <Droplets className="w-4 h-4 text-blue-400" />
+                    <span className="text-[10px] font-black text-stone-300 uppercase tracking-widest">{weatherData.main.humidity}%</span>
                   </div>
-                  <div className="w-px h-3 bg-stone-200" />
+                  <div className="w-px h-3 bg-white/10" />
                   <div className="flex items-center gap-2">
-                    <Wind className="w-4 h-4 text-stone-400" />
-                    <span className="text-[10px] font-black text-stone-600 uppercase tracking-widest">{Math.round(weatherData.wind.speed * 3.6)} km/h</span>
+                    <Wind className="w-4 h-4 text-stone-500" />
+                    <span className="text-[10px] font-black text-stone-300 uppercase tracking-widest">{Math.round(weatherData.wind.speed * 3.6)} km/h</span>
                   </div>
                 </div>
               )}
@@ -343,38 +343,38 @@ const CropAdvisor: React.FC<CropAdvisorProps> = ({ language: initialLanguage }) 
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div className="space-y-2">
-              <label className="text-[10px] font-black text-stone-400 ml-4 uppercase tracking-[0.2em]">Soil Health Metric</label>
+              <label className="text-[10px] font-black text-stone-500 ml-4 uppercase tracking-[0.2em]">Soil Health Metric</label>
               <div className="relative group">
-                <select value={formData.soil} onChange={e => setFormData({...formData, soil: e.target.value})} className="w-full bg-stone-50 border-2 border-stone-100 p-5 rounded-[1.75rem] font-bold text-sm outline-none appearance-none shadow-inner pl-14 focus:border-amber-500/50 focus:bg-white transition-all">
-                  <option value="">Select Soil Profile</option>
-                  <option value="Alluvial">Alluvial (High Fertility)</option>
-                  <option value="Black Cotton">Black Cotton (Rich Clay)</option>
-                  <option value="Red/Yellow">Red/Yellow (Iron Rich)</option>
-                  <option value="Laterite">Laterite (Weathered)</option>
-                  <option value="Desert/Sandy">Desert/Sandy (Loamy)</option>
+                <select value={formData.soil} onChange={e => setFormData({...formData, soil: e.target.value})} className="w-full bg-stone-900 border-2 border-white/5 p-5 rounded-[1.75rem] font-bold text-sm outline-none appearance-none shadow-inner pl-14 focus:border-amber-500/50 focus:bg-stone-800 text-white transition-all">
+                  <option value="" className="bg-stone-900">Select Soil Profile</option>
+                  <option value="Alluvial" className="bg-stone-900">Alluvial (High Fertility)</option>
+                  <option value="Black Cotton" className="bg-stone-900">Black Cotton (Rich Clay)</option>
+                  <option value="Red/Yellow" className="bg-stone-900">Red/Yellow (Iron Rich)</option>
+                  <option value="Laterite" className="bg-stone-900">Laterite (Weathered)</option>
+                  <option value="Desert/Sandy" className="bg-stone-900">Desert/Sandy (Loamy)</option>
                 </select>
-                <FlaskConical className="absolute left-5 top-1/2 -translate-y-1/2 w-6 h-6 text-stone-300 group-focus-within:text-amber-500 transition-colors pointer-events-none" />
+                <FlaskConical className="absolute left-5 top-1/2 -translate-y-1/2 w-6 h-6 text-stone-600 group-focus-within:text-amber-500 transition-colors pointer-events-none" />
               </div>
             </div>
             <div className="space-y-2">
-              <label className="text-[10px] font-black text-stone-400 ml-4 uppercase tracking-[0.2em]">Vernacular Delivery</label>
+              <label className="text-[10px] font-black text-stone-500 ml-4 uppercase tracking-[0.2em]">Vernacular Delivery</label>
               <div className="relative group">
                 <select 
                   value={language}
                   onChange={(e) => onLanguageChange(e.target.value)}
-                  className="w-full bg-stone-50 border-2 border-stone-100 p-5 rounded-[1.75rem] font-bold text-sm outline-none appearance-none shadow-inner pl-14 focus:border-amber-500/50 focus:bg-white transition-all"
+                  className="w-full bg-stone-900 border-2 border-white/5 p-5 rounded-[1.75rem] font-bold text-sm outline-none appearance-none shadow-inner pl-14 focus:border-amber-500/50 focus:bg-stone-800 text-white transition-all"
                 >
                   {LANGUAGES.map(l => (
-                    <option key={l.name} value={l.name}>{l.label}</option>
+                    <option key={l.name} value={l.name} className="bg-stone-900">{l.label}</option>
                   ))}
                 </select>
-                <LangIcon className="absolute left-5 top-1/2 -translate-y-1/2 w-6 h-6 text-stone-300 group-focus-within:text-[#825500] transition-colors pointer-events-none" />
+                <LangIcon className="absolute left-5 top-1/2 -translate-y-1/2 w-6 h-6 text-stone-600 group-focus-within:text-amber-500 transition-colors pointer-events-none" />
               </div>
             </div>
           </div>
 
-          <button type="submit" disabled={loading} className="w-full bg-stone-900 text-white font-black py-6 rounded-[2rem] shadow-2xl flex items-center justify-center gap-4 active:scale-[0.98] transition-all disabled:opacity-50 group">
-            {loading ? <Loader2 className="animate-spin w-6 h-6" /> : <Zap className="w-6 h-6 text-amber-400 group-hover:scale-110 transition-transform" />}
+          <button type="submit" disabled={loading} className="w-full bg-amber-500 text-black font-black py-6 rounded-[2rem] shadow-2xl flex items-center justify-center gap-4 active:scale-[0.98] transition-all disabled:opacity-50 group">
+            {loading ? <Loader2 className="animate-spin w-6 h-6" /> : <Zap className="w-6 h-6 text-black group-hover:scale-110 transition-transform" />}
             <span className="uppercase tracking-[0.2em] text-sm">Generate Biological Protocol</span>
           </button>
         </form>
@@ -384,21 +384,21 @@ const CropAdvisor: React.FC<CropAdvisorProps> = ({ language: initialLanguage }) 
             {/* Header / Actions */}
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-6 px-4">
                <div className="flex items-center gap-4">
-                  <div className="bg-emerald-500 p-2 rounded-full"><ShieldCheck className="w-5 h-5 text-white" /></div>
-                  <h3 className="text-stone-900 font-black text-2xl tracking-tighter">Protocol Finalized</h3>
+                  <div className="bg-amber-500 p-2 rounded-full"><ShieldCheck className="w-5 h-5 text-black" /></div>
+                  <h3 className="text-white font-black text-2xl tracking-tighter">Protocol Finalized</h3>
                </div>
                <div className="flex gap-3">
                  <button 
                   onClick={saveToArchive}
                   disabled={saveStatus === 'saved'}
-                  className={`flex items-center gap-3 px-6 py-3 rounded-2xl font-black text-[10px] uppercase tracking-widest transition-all shadow-lg ${saveStatus === 'saved' ? 'bg-emerald-500 text-white' : 'bg-stone-50 text-stone-700 hover:bg-stone-100 border border-stone-100'}`}
+                  className={`flex items-center gap-3 px-6 py-3 rounded-2xl font-black text-[10px] uppercase tracking-widest transition-all shadow-lg ${saveStatus === 'saved' ? 'bg-amber-500 text-black' : 'bg-stone-900 text-stone-300 hover:bg-stone-800 border border-white/5'}`}
                  >
                    {saveStatus === 'saved' ? <CheckCircle2 className="w-4 h-4" /> : <Archive className="w-4 h-4" />}
                    {saveStatus === 'saved' ? 'Archived' : 'Archive Plan'}
                  </button>
                  <button 
                   onClick={downloadReport}
-                  className="flex items-center gap-3 bg-[#825500] text-white px-6 py-3 rounded-2xl font-black text-[10px] uppercase tracking-widest hover:bg-black active:scale-95 transition-all shadow-xl"
+                  className="flex items-center gap-3 bg-amber-600 text-black px-6 py-3 rounded-2xl font-black text-[10px] uppercase tracking-widest hover:bg-amber-500 active:scale-95 transition-all shadow-xl"
                  >
                    <Download className="w-4 h-4" /> Export Document
                  </button>
@@ -413,15 +413,15 @@ const CropAdvisor: React.FC<CropAdvisorProps> = ({ language: initialLanguage }) 
 
             {/* Main Advisor Module */}
             <div className="relative">
-              <div className="absolute inset-0 bg-amber-50/30 rounded-[3.5rem] blur-3xl -z-10"></div>
-              <div className="bg-white border-2 border-amber-100/50 p-10 md:p-14 rounded-[3.5rem] shadow-sm relative overflow-hidden group">
+              <div className="absolute inset-0 bg-amber-500/10 rounded-[3.5rem] blur-3xl -z-10"></div>
+              <div className="bg-stone-950 border-2 border-amber-500/20 p-10 md:p-14 rounded-[3.5rem] shadow-sm relative overflow-hidden group">
                 <div className="absolute top-0 right-0 p-10 opacity-[0.03] group-hover:opacity-5 transition-opacity">
-                  <Sprout className="w-96 h-96 -mr-20 -mt-20 rotate-12" />
+                  <Sprout className="w-96 h-96 -mr-20 -mt-20 rotate-12 text-amber-500" />
                 </div>
-                <h3 className="text-amber-700 font-black text-[11px] uppercase mb-10 tracking-[0.4em] flex items-center gap-3 bg-amber-50 w-fit px-6 py-2.5 rounded-full border border-amber-100 shadow-sm">
+                <h3 className="text-amber-500 font-black text-[11px] uppercase mb-10 tracking-[0.4em] flex items-center gap-3 bg-amber-500/10 w-fit px-6 py-2.5 rounded-full border border-amber-500/20 shadow-sm">
                   <TrendingUp className="w-4 h-4" /> Regional Strategic Audit
                 </h3>
-                <div className="prose prose-stone max-w-none text-base md:text-lg font-medium text-stone-700 leading-relaxed italic">
+                <div className="prose prose-invert max-w-none text-base md:text-lg font-medium text-stone-300 leading-relaxed italic">
                   <Markdown>{advice}</Markdown>
                 </div>
               </div>
@@ -431,20 +431,20 @@ const CropAdvisor: React.FC<CropAdvisorProps> = ({ language: initialLanguage }) 
               <div className="space-y-20">
                  {/* Intelligence Briefs */}
                  <div className="grid grid-cols-1 md:grid-cols-2 gap-8 px-2">
-                    <div className="bg-emerald-950/95 p-10 rounded-[3rem] shadow-2xl relative overflow-hidden group border border-white/5">
-                       <Target className="absolute -right-8 -bottom-8 w-40 h-40 text-emerald-500/10 group-hover:scale-110 transition-transform" />
+                    <div className="bg-stone-900 p-10 rounded-[3rem] shadow-2xl relative overflow-hidden group border border-white/5">
+                       <Target className="absolute -right-8 -bottom-8 w-40 h-40 text-amber-500/10 group-hover:scale-110 transition-transform" />
                        <div className="relative z-10">
-                          <div className="bg-emerald-500 p-3 rounded-2xl w-fit mb-8 shadow-xl text-stone-900"><Target className="w-6 h-6" /></div>
-                          <h4 className="text-[10px] font-black text-emerald-400 uppercase tracking-[0.3em] mb-4">Focus Requirements</h4>
+                          <div className="bg-amber-500 p-3 rounded-2xl w-fit mb-8 shadow-xl text-black"><Target className="w-6 h-6" /></div>
+                          <h4 className="text-[10px] font-black text-amber-500 uppercase tracking-[0.3em] mb-4">Focus Requirements</h4>
                           <p className="text-lg font-black text-white leading-snug">{fertilizerPlan.cropRequirements}</p>
                        </div>
                     </div>
-                    <div className="bg-stone-100/50 p-10 rounded-[3rem] shadow-inner relative overflow-hidden group border border-stone-200">
-                       <Atom className="absolute -right-8 -bottom-8 w-40 h-40 text-stone-900/5 group-hover:scale-110 transition-transform" />
+                    <div className="bg-stone-900 p-10 rounded-[3rem] shadow-inner relative overflow-hidden group border border-white/5">
+                       <Atom className="absolute -right-8 -bottom-8 w-40 h-40 text-amber-500/10 group-hover:scale-110 transition-transform" />
                        <div className="relative z-10">
-                          <div className="bg-white p-3 rounded-2xl w-fit mb-8 shadow-md text-blue-500 border border-stone-100"><Atom className="w-6 h-6" /></div>
-                          <h4 className="text-[10px] font-black text-stone-400 uppercase tracking-[0.3em] mb-4">Soil Adjustments</h4>
-                          <p className="text-lg font-black text-stone-800 leading-snug">{fertilizerPlan.soilAdjustments}</p>
+                          <div className="bg-stone-800 p-3 rounded-2xl w-fit mb-8 shadow-md text-amber-500 border border-white/5"><Atom className="w-6 h-6" /></div>
+                          <h4 className="text-[10px] font-black text-stone-500 uppercase tracking-[0.3em] mb-4">Soil Adjustments</h4>
+                          <p className="text-lg font-black text-stone-300 leading-snug">{fertilizerPlan.soilAdjustments}</p>
                        </div>
                     </div>
                  </div>
@@ -452,27 +452,27 @@ const CropAdvisor: React.FC<CropAdvisorProps> = ({ language: initialLanguage }) 
                  {/* NUTRIENT MODULE */}
                  <div className="space-y-8">
                     <div className="flex flex-col gap-3 px-4">
-                      <div className="flex items-center gap-4 text-amber-600">
+                      <div className="flex items-center gap-4 text-amber-500">
                         <Beaker className="w-8 h-8" />
-                        <h3 className="text-2xl font-black tracking-tight text-stone-900">Nutrient Inventory</h3>
+                        <h3 className="text-2xl font-black tracking-tight text-white">Nutrient Inventory</h3>
                       </div>
-                      <p className="text-stone-400 text-xs font-bold uppercase tracking-widest ml-12">Precision Engineered Nutrient Matrix</p>
+                      <p className="text-stone-500 text-xs font-bold uppercase tracking-widest ml-12">Precision Engineered Nutrient Matrix</p>
                     </div>
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                        {fertilizerPlan.fertilizers.map((f, i) => (
-                         <div key={i} className="bg-white border-2 border-stone-50 p-8 rounded-[3rem] shadow-[0_30px_60px_-15px_rgba(0,0,0,0.08)] relative overflow-hidden group hover:border-amber-400 transition-all">
+                         <div key={i} className="bg-stone-900 border-2 border-white/5 p-8 rounded-[3rem] shadow-2xl relative overflow-hidden group hover:border-amber-500 transition-all">
                             <div className="absolute top-0 right-0 p-6 opacity-5 group-hover:rotate-6 transition-transform">
-                               {f.isOrganic ? <Leaf className="w-24 h-24 text-emerald-600" /> : <Zap className="w-24 h-24 text-amber-500" />}
+                               {f.isOrganic ? <Leaf className="w-24 h-24 text-amber-500" /> : <Zap className="w-24 h-24 text-amber-500" />}
                             </div>
                             <div className="relative z-10">
-                               <div className={`w-fit px-4 py-1.5 rounded-xl text-[9px] font-black uppercase tracking-widest mb-6 border-2 ${f.isOrganic ? 'bg-emerald-50 text-emerald-700 border-emerald-100' : 'bg-orange-50 text-orange-700 border-orange-100'}`}>
+                               <div className={`w-fit px-4 py-1.5 rounded-xl text-[9px] font-black uppercase tracking-widest mb-6 border-2 ${f.isOrganic ? 'bg-amber-500/10 text-amber-500 border-amber-500/20' : 'bg-amber-600/10 text-amber-600 border-amber-600/20'}`}>
                                  {f.isOrganic ? 'Biological Base' : 'High Efficiency Synthetics'}
                                </div>
-                               <h4 className="font-black text-2xl mb-4 text-stone-900 tracking-tighter leading-none">{f.name}</h4>
-                               <div className="bg-stone-900 rounded-[1.25rem] px-6 py-3 w-fit mb-8 shadow-xl">
-                                  <span className="text-xs font-black tracking-[0.2em] text-amber-400 uppercase">NPK {f.npk}</span>
+                               <h4 className="font-black text-2xl mb-4 text-white tracking-tighter leading-none">{f.name}</h4>
+                               <div className="bg-black rounded-[1.25rem] px-6 py-3 w-fit mb-8 shadow-xl border border-white/5">
+                                  <span className="text-xs font-black tracking-[0.2em] text-amber-500 uppercase">NPK {f.npk}</span>
                                </div>
-                               <p className="text-sm font-medium text-stone-500 leading-relaxed italic border-l-4 border-stone-100 pl-4">"{f.description}"</p>
+                               <p className="text-sm font-medium text-stone-400 leading-relaxed italic border-l-4 border-amber-500/30 pl-4">"{f.description}"</p>
                             </div>
                          </div>
                        ))}
@@ -482,49 +482,49 @@ const CropAdvisor: React.FC<CropAdvisorProps> = ({ language: initialLanguage }) 
                  {/* APPLICATION TIMELINE */}
                  <div className="space-y-12">
                     <div className="flex flex-col gap-3 px-4">
-                      <div className="flex items-center gap-4 text-emerald-600">
+                      <div className="flex items-center gap-4 text-amber-500">
                         <CalendarCheck className="w-8 h-8" />
-                        <h3 className="text-2xl font-black tracking-tight text-stone-900">Deployment Schedule</h3>
+                        <h3 className="text-2xl font-black tracking-tight text-white">Deployment Schedule</h3>
                       </div>
-                      <p className="text-stone-400 text-xs font-bold uppercase tracking-widest ml-12">Critical Operations Timeline</p>
+                      <p className="text-stone-500 text-xs font-bold uppercase tracking-widest ml-12">Critical Operations Timeline</p>
                     </div>
-                    <div className="relative pl-8 md:pl-16 space-y-16 before:absolute before:left-[16px] md:before:left-[44px] before:top-4 before:bottom-4 before:w-1 before:bg-gradient-to-b before:from-amber-400 before:via-emerald-500 before:to-stone-200 before:rounded-full">
+                    <div className="relative pl-8 md:pl-16 space-y-16 before:absolute before:left-[16px] md:before:left-[44px] before:top-4 before:bottom-4 before:w-1 before:bg-gradient-to-b before:from-amber-500 before:via-amber-600 before:to-stone-800 before:rounded-full">
                        {fertilizerPlan.schedule.map((s, i) => (
                          <div key={i} className="relative group">
-                            <div className={`absolute -left-[24px] md:-left-[52px] top-1.5 w-12 h-12 rounded-[1.5rem] border-4 border-white z-10 shadow-2xl transition-all group-hover:scale-125 flex items-center justify-center ${i === 0 ? 'bg-amber-500 animate-pulse' : 'bg-stone-900'}`}>
-                                {i === 0 ? <Clock className="w-5 h-5 text-white" /> : <CheckCircle2 className="w-5 h-5 text-emerald-400" />}
+                            <div className={`absolute -left-[24px] md:-left-[52px] top-1.5 w-12 h-12 rounded-[1.5rem] border-4 border-black z-10 shadow-2xl transition-all group-hover:scale-125 flex items-center justify-center ${i === 0 ? 'bg-amber-500 animate-pulse' : 'bg-stone-800'}`}>
+                                {i === 0 ? <Clock className="w-5 h-5 text-black" /> : <CheckCircle2 className="w-5 h-5 text-amber-500" />}
                             </div>
-                            <div className="bg-white border-2 border-stone-100 rounded-[3rem] p-8 md:p-10 shadow-sm group-hover:border-emerald-300 group-hover:shadow-2xl transition-all relative">
-                               <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-8 pb-8 border-b border-stone-50">
+                            <div className="bg-stone-900 border-2 border-white/5 rounded-[3rem] p-8 md:p-10 shadow-sm group-hover:border-amber-500/50 group-hover:shadow-2xl transition-all relative">
+                               <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-8 pb-8 border-b border-white/5">
                                   <div className="flex items-center gap-6">
-                                     <div className="w-14 h-14 rounded-2xl bg-emerald-50 flex items-center justify-center text-emerald-600 text-xl font-black shadow-inner">
+                                     <div className="w-14 h-14 rounded-2xl bg-stone-800 flex items-center justify-center text-amber-500 text-xl font-black shadow-inner">
                                         0{i + 1}
                                      </div>
                                      <div>
-                                        <h4 className="text-xl font-black text-stone-900 tracking-tight leading-none mb-2">{s.stage}</h4>
+                                        <h4 className="text-xl font-black text-white tracking-tight leading-none mb-2">{s.stage}</h4>
                                         <div className="flex items-center gap-2">
-                                           <div className="w-1.5 h-1.5 rounded-full bg-amber-400"></div>
-                                           <p className="text-[11px] font-black text-stone-400 uppercase tracking-widest">{s.timing}</p>
+                                           <div className="w-1.5 h-1.5 rounded-full bg-amber-500"></div>
+                                           <p className="text-[11px] font-black text-stone-500 uppercase tracking-widest">{s.timing}</p>
                                         </div>
                                      </div>
                                   </div>
-                                  <div className="bg-stone-900 px-6 py-2.5 rounded-2xl shadow-xl">
+                                  <div className="bg-black px-6 py-2.5 rounded-2xl shadow-xl border border-white/5">
                                      <span className="text-[10px] font-black text-white uppercase tracking-[0.2em]">Deployment Cycle</span>
                                   </div>
                                </div>
                                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                  <div className="bg-stone-50 p-6 rounded-[2rem] border border-stone-100 flex items-center gap-6 group/item hover:bg-white transition-colors">
-                                     <div className="p-4 bg-white rounded-2xl shadow-sm text-amber-600 group-hover/item:scale-110 transition-transform"><Beaker className="w-6 h-6" /></div>
+                                  <div className="bg-stone-800 p-6 rounded-[2rem] border border-white/5 flex items-center gap-6 group/item hover:bg-stone-700 transition-colors">
+                                     <div className="p-4 bg-stone-900 rounded-2xl shadow-sm text-amber-500 group-hover/item:scale-110 transition-transform"><Beaker className="w-6 h-6" /></div>
                                      <div>
-                                        <p className="text-[10px] font-black text-stone-400 uppercase tracking-widest mb-1">Target Dosage</p>
-                                        <p className="text-base font-black text-stone-800">{s.dosage}</p>
+                                        <p className="text-[10px] font-black text-stone-500 uppercase tracking-widest mb-1">Target Dosage</p>
+                                        <p className="text-base font-black text-white">{s.dosage}</p>
                                      </div>
                                   </div>
-                                  <div className="bg-stone-50 p-6 rounded-[2rem] border border-stone-100 flex items-center gap-6 group/item hover:bg-white transition-colors">
-                                     <div className="p-4 bg-white rounded-2xl shadow-sm text-blue-500 group-hover/item:scale-110 transition-transform"><Droplets className="w-6 h-6" /></div>
+                                  <div className="bg-stone-800 p-6 rounded-[2rem] border border-white/5 flex items-center gap-6 group/item hover:bg-stone-700 transition-colors">
+                                     <div className="p-4 bg-stone-900 rounded-2xl shadow-sm text-blue-400 group-hover/item:scale-110 transition-transform"><Droplets className="w-6 h-6" /></div>
                                      <div>
-                                        <p className="text-[10px] font-black text-stone-400 uppercase tracking-widest mb-1">Application Method</p>
-                                        <p className="text-base font-black text-stone-800">{s.method}</p>
+                                        <p className="text-[10px] font-black text-stone-500 uppercase tracking-widest mb-1">Application Method</p>
+                                        <p className="text-base font-black text-white">{s.method}</p>
                                      </div>
                                   </div>
                                </div>
@@ -538,19 +538,19 @@ const CropAdvisor: React.FC<CropAdvisorProps> = ({ language: initialLanguage }) 
                  {fertilizerPlan.micronutrients && fertilizerPlan.micronutrients.length > 0 && (
                    <div className="space-y-10">
                       <div className="flex flex-col gap-3 px-4">
-                        <div className="flex items-center gap-4 text-indigo-600">
+                        <div className="flex items-center gap-4 text-amber-500">
                           <ShieldCheck className="w-8 h-8" />
-                          <h3 className="text-2xl font-black tracking-tight text-stone-900">Bio-Fortification</h3>
+                          <h3 className="text-2xl font-black tracking-tight text-white">Bio-Fortification</h3>
                         </div>
-                        <p className="text-stone-400 text-xs font-bold uppercase tracking-widest ml-12">Essential Micro-Elements Cluster</p>
+                        <p className="text-stone-500 text-xs font-bold uppercase tracking-widest ml-12">Essential Micro-Elements Cluster</p>
                       </div>
-                      <div className="bg-indigo-950 p-10 md:p-14 rounded-[4rem] flex flex-wrap justify-center gap-4 shadow-2xl relative overflow-hidden border-8 border-indigo-900/50">
-                         <div className="absolute inset-0 bg-gradient-to-br from-indigo-900/50 to-transparent"></div>
-                         <Sparkles className="absolute top-0 left-0 w-64 h-64 text-white/5 -ml-20 -mt-20" />
+                      <div className="bg-stone-900 p-10 md:p-14 rounded-[4rem] flex flex-wrap justify-center gap-4 shadow-2xl relative overflow-hidden border-8 border-stone-800/50">
+                         <div className="absolute inset-0 bg-gradient-to-br from-amber-500/5 to-transparent"></div>
+                         <Sparkles className="absolute top-0 left-0 w-64 h-64 text-amber-500/5 -ml-20 -mt-20" />
                          {fertilizerPlan.micronutrients.map((micro, i) => (
-                           <div key={i} className="bg-white/10 backdrop-blur-xl px-8 py-4 rounded-[1.75rem] border border-white/10 flex items-center gap-4 animate-in zoom-in group hover:bg-white hover:border-white transition-all shadow-xl relative z-10">
-                              <div className="w-3 h-3 rounded-full bg-indigo-400 shadow-[0_0_15px_rgba(129,140,248,1)] group-hover:bg-indigo-600" />
-                              <span className="text-sm font-black text-white group-hover:text-indigo-950 uppercase tracking-[0.15em]">{micro}</span>
+                           <div key={i} className="bg-white/5 backdrop-blur-xl px-8 py-4 rounded-[1.75rem] border border-white/10 flex items-center gap-4 animate-in zoom-in group hover:bg-amber-500 hover:border-amber-500 transition-all shadow-xl relative z-10">
+                              <div className="w-3 h-3 rounded-full bg-amber-500 shadow-[0_0_15px_rgba(245,158,11,1)] group-hover:bg-black" />
+                              <span className="text-sm font-black text-white group-hover:text-black uppercase tracking-[0.15em]">{micro}</span>
                            </div>
                          ))}
                       </div>
@@ -559,18 +559,18 @@ const CropAdvisor: React.FC<CropAdvisorProps> = ({ language: initialLanguage }) 
 
                  {/* EXPERT GUIDANCE: TIPS */}
                  {fertilizerPlan.tips && fertilizerPlan.tips.length > 0 && (
-                    <div className="bg-stone-950 rounded-[4rem] p-10 md:p-16 text-white shadow-2xl relative overflow-hidden border-t-8 border-emerald-600/30">
+                    <div className="bg-stone-950 rounded-[4rem] p-10 md:p-16 text-white shadow-2xl relative overflow-hidden border-t-8 border-amber-500/30">
                        <div className="absolute top-0 right-0 p-12 opacity-10">
-                          <ClipboardList className="w-48 h-48 rotate-12" />
+                          <ClipboardList className="w-48 h-48 rotate-12 text-amber-500" />
                        </div>
                        <div className="relative z-10 max-w-4xl">
-                          <h4 className="text-emerald-400 font-black text-[11px] uppercase tracking-[0.5em] mb-12 flex items-center gap-4 bg-white/5 w-fit px-8 py-3 rounded-full border border-white/10">
-                             <CheckCircle2 className="w-5 h-5 text-amber-400" /> Expert Management Directives
+                          <h4 className="text-amber-500 font-black text-[11px] uppercase tracking-[0.5em] mb-12 flex items-center gap-4 bg-white/5 w-fit px-8 py-3 rounded-full border border-white/10">
+                             <CheckCircle2 className="w-5 h-5 text-amber-500" /> Expert Management Directives
                           </h4>
                           <div className="grid grid-cols-1 md:grid-cols-2 gap-x-12 gap-y-8">
                              {fertilizerPlan.tips.map((tip, i) => (
                                <div key={i} className="flex gap-6 items-start group">
-                                  <div className="mt-2.5 w-2 h-2 rounded-full bg-emerald-500 shrink-0 group-hover:scale-150 transition-all shadow-[0_0_15px_#10b981]" />
+                                  <div className="mt-2.5 w-2 h-2 rounded-full bg-amber-500 shrink-0 group-hover:scale-150 transition-all shadow-[0_0_15px_#f59e0b]" />
                                   <p className="text-sm md:text-base font-medium text-stone-300 leading-relaxed italic opacity-80 group-hover:opacity-100 transition-opacity">"{tip}"</p>
                                </div>
                              ))}
@@ -593,40 +593,40 @@ const CropAdvisor: React.FC<CropAdvisorProps> = ({ language: initialLanguage }) 
         <div className="px-4 space-y-6">
           <div className="flex items-center justify-between px-2">
              <div className="flex items-center gap-3">
-                <History className="w-5 h-5 text-stone-400" />
-                <h3 className="text-xs font-black text-stone-400 uppercase tracking-[0.2em]">Strategy Archives</h3>
+                <History className="w-5 h-5 text-stone-500" />
+                <h3 className="text-xs font-black text-stone-500 uppercase tracking-[0.2em]">Strategy Archives</h3>
              </div>
-             <span className="text-[10px] font-bold text-stone-300 uppercase">{savedStrategies.length} Entries</span>
+             <span className="text-[10px] font-bold text-stone-600 uppercase">{savedStrategies.length} Entries</span>
           </div>
           <div className="grid grid-cols-1 gap-4">
              {savedStrategies.map(s => (
                <div 
                 key={s.id} 
                 onClick={() => loadArchived(s)}
-                className="bg-white border border-stone-100 p-6 rounded-[2.5rem] flex items-center justify-between group active:scale-[0.98] transition-all hover:shadow-xl hover:border-amber-200 cursor-pointer shadow-sm"
+                className="bg-stone-900 border border-white/5 p-6 rounded-[2.5rem] flex items-center justify-between group active:scale-[0.98] transition-all hover:shadow-xl hover:border-amber-500/30 cursor-pointer shadow-sm"
                >
                   <div className="flex items-center gap-6">
-                    <div className="w-16 h-16 rounded-3xl bg-stone-50 flex items-center justify-center shadow-inner text-stone-400 group-hover:bg-amber-50 group-hover:text-amber-600 transition-all">
+                    <div className="w-16 h-16 rounded-3xl bg-stone-800 flex items-center justify-center shadow-inner text-stone-500 group-hover:bg-amber-500/10 group-hover:text-amber-500 transition-all">
                        <GripVertical className="w-6 h-6 opacity-20 group-hover:opacity-50" />
                        <FileText className="w-7 h-7 absolute" />
                     </div>
                     <div className="text-left">
-                       <p className="font-black text-stone-900 text-lg tracking-tighter leading-none mb-1.5">{s.crop}</p>
+                       <p className="font-black text-white text-lg tracking-tighter leading-none mb-1.5">{s.crop}</p>
                        <div className="flex items-center gap-3">
-                          <p className="text-[10px] text-stone-400 font-black uppercase tracking-widest">{s.soil} Profile</p>
-                          <div className="w-1 h-1 bg-stone-200 rounded-full" />
-                          <p className="text-[10px] text-stone-300 font-bold uppercase">{new Date(s.timestamp).toLocaleDateString()}</p>
+                          <p className="text-[10px] text-stone-500 font-black uppercase tracking-widest">{s.soil} Profile</p>
+                          <div className="w-1 h-1 bg-stone-700 rounded-full" />
+                          <p className="text-[10px] text-stone-600 font-bold uppercase">{new Date(s.timestamp).toLocaleDateString()}</p>
                        </div>
                     </div>
                   </div>
                   <div className="flex items-center gap-3">
                     <button 
                       onClick={(e) => deleteArchived(s.id, e)}
-                      className="p-3 bg-stone-50 rounded-2xl text-stone-300 hover:text-rose-500 hover:bg-rose-50 transition-all border border-transparent hover:border-rose-100 shadow-sm"
+                      className="p-3 bg-stone-800 rounded-2xl text-stone-500 hover:text-rose-500 hover:bg-rose-500/10 transition-all border border-transparent hover:border-rose-500/20 shadow-sm"
                     >
                        <Trash2 className="w-5 h-5" />
                     </button>
-                    <div className="p-3 bg-stone-50 rounded-2xl text-stone-200 group-hover:text-amber-600 group-hover:bg-amber-50 transition-all shadow-sm">
+                    <div className="p-3 bg-stone-800 rounded-2xl text-stone-600 group-hover:text-amber-500 group-hover:bg-amber-500/10 transition-all shadow-sm">
                        <ChevronRight className="w-6 h-6" />
                     </div>
                   </div>

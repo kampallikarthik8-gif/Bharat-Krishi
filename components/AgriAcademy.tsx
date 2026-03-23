@@ -53,32 +53,32 @@ const COURSES = [
 
 const AgriAcademy: React.FC = () => {
   return (
-    <div className="space-y-6 pb-32 animate-in fade-in slide-in-from-bottom-6 duration-700">
+    <div className="space-y-6 pb-32 animate-in fade-in slide-in-from-bottom-6 duration-700 bg-black min-h-screen">
       {/* Header */}
       <section className="px-6 pt-8 pb-4">
         <div className="flex flex-col gap-6">
           <div className="space-y-1">
             <div className="flex items-center gap-2">
-              <div className="w-1.5 h-1.5 bg-emerald-600 rounded-full shadow-sm"></div>
-              <span className="text-[9px] font-bold text-stone-400 uppercase tracking-[0.2em]">Learning Hub</span>
+              <div className="w-1.5 h-1.5 bg-amber-600 rounded-full shadow-sm"></div>
+              <span className="text-[9px] font-bold text-stone-500 uppercase tracking-[0.2em]">Learning Hub</span>
             </div>
-            <h2 className="text-4xl font-bold text-stone-900 tracking-tight font-serif leading-none">
-              Kisan<br /><span className="text-emerald-700 italic">Academy.</span>
+            <h2 className="text-4xl font-bold text-white tracking-tight font-serif leading-none">
+              Kisan<br /><span className="text-amber-500 italic">Academy.</span>
             </h2>
           </div>
           
           <div className="flex gap-3">
             <div className="relative flex-1 group">
               <div className="absolute inset-y-0 left-4 flex items-center pointer-events-none">
-                <Search className="w-4 h-4 text-stone-300 group-focus-within:text-emerald-600 transition-colors" />
+                <Search className="w-4 h-4 text-stone-600 group-focus-within:text-amber-500 transition-colors" />
               </div>
               <input 
                 type="text" 
                 placeholder="Search for courses..." 
-                className="w-full bg-white border border-stone-200 p-4 pl-10 rounded-2xl outline-none shadow-sm font-bold text-xs text-stone-900 focus:ring-4 focus:ring-emerald-50 transition-all placeholder:text-stone-300"
+                className="w-full bg-stone-900 border border-stone-800 p-4 pl-10 rounded-2xl outline-none shadow-sm font-bold text-xs text-white focus:ring-4 focus:ring-amber-500/10 transition-all placeholder:text-stone-700"
               />
             </div>
-            <button className="bg-white border border-stone-200 p-4 rounded-2xl shadow-sm text-stone-400 hover:text-emerald-600 transition-colors">
+            <button className="bg-stone-900 border border-stone-800 p-4 rounded-2xl shadow-sm text-stone-500 hover:text-amber-500 transition-colors">
               <Filter className="w-4 h-4" />
             </button>
           </div>
@@ -89,21 +89,21 @@ const AgriAcademy: React.FC = () => {
       <section className="px-6">
         <motion.div 
           whileTap={{ scale: 0.98 }}
-          className="bg-stone-900 rounded-[2.5rem] p-8 text-white shadow-2xl relative overflow-hidden group"
+          className="bg-stone-900 rounded-[2.5rem] p-8 text-white shadow-2xl relative overflow-hidden group border border-stone-800"
         >
           <div className="absolute top-0 right-0 p-8 opacity-10 group-hover:opacity-20 transition-opacity">
             <Award className="w-48 h-48 -mr-12 -mt-12 rotate-12" />
           </div>
           <div className="relative z-10 space-y-6">
-            <div className="bg-emerald-600 w-fit px-3 py-1 rounded-full">
+            <div className="bg-amber-600 w-fit px-3 py-1 rounded-full">
               <span className="text-[8px] font-bold text-white uppercase tracking-widest">Featured Course</span>
             </div>
             <div className="space-y-2">
-              <h3 className="text-3xl font-bold tracking-tight font-serif leading-none text-emerald-400">Sustainable<br />Soil Health</h3>
+              <h3 className="text-3xl font-bold tracking-tight font-serif leading-none text-amber-500">Sustainable<br />Soil Health</h3>
               <p className="text-white/60 text-xs font-medium leading-tight max-w-[200px]">Master the art of soil regeneration and nutrient management.</p>
             </div>
             <div className="flex items-center gap-4">
-              <button className="bg-white text-stone-900 px-6 py-3 rounded-xl font-bold text-[10px] uppercase tracking-widest shadow-xl active:scale-95 transition-all">
+              <button className="bg-amber-500 text-black px-6 py-3 rounded-xl font-bold text-[10px] uppercase tracking-widest shadow-xl active:scale-95 transition-all">
                 Start Learning
               </button>
               <div className="flex items-center gap-2 text-white/40">
@@ -118,15 +118,15 @@ const AgriAcademy: React.FC = () => {
       {/* Course List */}
       <section className="px-6 space-y-4">
         <div className="flex items-center justify-between px-2">
-          <h3 className="text-[10px] font-bold text-stone-400 uppercase tracking-[0.3em]">Popular Courses</h3>
-          <div className="h-px flex-1 bg-stone-100 mx-4" />
+          <h3 className="text-[10px] font-bold text-stone-500 uppercase tracking-[0.3em]">Popular Courses</h3>
+          <div className="h-px flex-1 bg-stone-900 mx-4" />
         </div>
 
         {COURSES.map((course) => (
           <motion.div 
             key={course.id}
             whileTap={{ scale: 0.98 }}
-            className="bg-white rounded-3xl border border-stone-200 p-4 shadow-sm flex gap-4 group hover:border-emerald-600/20 transition-colors"
+            className="bg-stone-900 rounded-3xl border border-stone-800 p-4 shadow-sm flex gap-4 group hover:border-amber-500/20 transition-colors"
           >
             <div className="w-24 h-24 rounded-2xl overflow-hidden shrink-0 relative">
               <img 
@@ -143,25 +143,25 @@ const AgriAcademy: React.FC = () => {
             <div className="flex-1 flex flex-col justify-between py-1">
               <div>
                 <div className="flex items-center justify-between">
-                  <span className="text-[8px] font-bold text-emerald-700 uppercase tracking-widest">{course.category}</span>
-                  <Bookmark className="w-3.5 h-3.5 text-stone-300 hover:text-emerald-600 transition-colors cursor-pointer" />
+                  <span className="text-[8px] font-bold text-amber-500 uppercase tracking-widest">{course.category}</span>
+                  <Bookmark className="w-3.5 h-3.5 text-stone-600 hover:text-amber-500 transition-colors cursor-pointer" />
                 </div>
-                <h4 className="text-sm font-bold text-stone-900 tracking-tight uppercase mt-1">{course.title}</h4>
-                <p className="text-[9px] font-bold text-stone-400 mt-0.5">{course.instructor}</p>
+                <h4 className="text-sm font-bold text-white tracking-tight uppercase mt-1">{course.title}</h4>
+                <p className="text-[9px] font-bold text-stone-500 mt-0.5">{course.instructor}</p>
               </div>
               
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
                   <div className="flex items-center gap-1">
-                    <Star className="w-3 h-3 text-emerald-600 fill-emerald-600" />
-                    <span className="text-[9px] font-bold text-stone-900">{course.rating}</span>
+                    <Star className="w-3 h-3 text-amber-500 fill-amber-500" />
+                    <span className="text-[9px] font-bold text-white">{course.rating}</span>
                   </div>
-                  <div className="flex items-center gap-1 text-stone-400">
+                  <div className="flex items-center gap-1 text-stone-600">
                     <Users className="w-3 h-3" />
                     <span className="text-[9px] font-bold">{course.students}</span>
                   </div>
                 </div>
-                <span className="text-[8px] font-bold text-stone-400 uppercase tracking-tighter">{course.level}</span>
+                <span className="text-[8px] font-bold text-stone-600 uppercase tracking-tighter">{course.level}</span>
               </div>
             </div>
           </motion.div>
@@ -170,15 +170,15 @@ const AgriAcademy: React.FC = () => {
 
       {/* Learning Progress */}
       <section className="px-6">
-        <div className="bg-emerald-50 border border-emerald-100 rounded-3xl p-6 flex items-center justify-between">
+        <div className="bg-amber-500/5 border border-amber-500/10 rounded-3xl p-6 flex items-center justify-between">
           <div className="space-y-1">
-            <p className="text-[9px] font-bold text-emerald-700 uppercase tracking-widest">Your Progress</p>
-            <h4 className="text-sm font-bold text-stone-900 uppercase">Continue: Soil Health</h4>
-            <div className="w-32 h-1.5 bg-emerald-100 rounded-full mt-2 overflow-hidden">
-              <div className="w-[65%] h-full bg-emerald-600 rounded-full" />
+            <p className="text-[9px] font-bold text-amber-500 uppercase tracking-widest">Your Progress</p>
+            <h4 className="text-sm font-bold text-white uppercase">Continue: Soil Health</h4>
+            <div className="w-32 h-1.5 bg-stone-900 rounded-full mt-2 overflow-hidden">
+              <div className="w-[65%] h-full bg-amber-500 rounded-full" />
             </div>
           </div>
-          <button className="w-10 h-10 bg-white rounded-xl shadow-sm flex items-center justify-center text-emerald-600 hover:bg-emerald-600 hover:text-white transition-colors">
+          <button className="w-10 h-10 bg-stone-900 rounded-xl shadow-sm flex items-center justify-center text-amber-500 hover:bg-amber-500 hover:text-black transition-colors border border-stone-800">
             <ChevronRight className="w-5 h-5" />
           </button>
         </div>

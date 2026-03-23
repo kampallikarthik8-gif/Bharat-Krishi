@@ -1,7 +1,7 @@
 
 {
   "appId": "com.agriassist.app",
-  "appName": "AgriAssist",
+  "appName": "Bharat Kisan",
   "webDir": "dist",
   "bundledWebRuntime": false,
   "server": {

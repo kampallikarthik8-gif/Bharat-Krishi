@@ -120,33 +120,33 @@ const AgriNews: React.FC<AgriNewsProps> = ({ language: initialLanguage }) => {
   const preferredLanguage = localStorage.getItem('agri_language') || 'English';
 
   return (
-    <div className="space-y-6 pb-20 animate-in fade-in duration-700">
+    <div className="space-y-6 pb-20 animate-in fade-in duration-700 bg-black min-h-screen">
       {/* Location & Contextual Hub */}
-      <div className="bg-white rounded-[2.5rem] p-6 shadow-sm border border-stone-200 flex flex-col gap-5">
+      <div className="bg-stone-900 rounded-[2.5rem] p-6 shadow-sm border border-stone-800 flex flex-col gap-5">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-4">
             <div className="relative">
-              <div className={`p-3 rounded-2xl ${location ? 'bg-emerald-50 text-emerald-700' : 'bg-stone-50 text-stone-400'}`}>
+              <div className={`p-3 rounded-2xl ${location ? 'bg-amber-500/10 text-amber-500' : 'bg-stone-800 text-stone-600'}`}>
                 {detecting ? <Radio className="w-5 h-5 animate-pulse" /> : <Wifi className="w-5 h-5" />}
               </div>
-              {location && <span className="absolute -top-1 -right-1 w-3 h-3 bg-emerald-600 border-2 border-white rounded-full"></span>}
+              {location && <span className="absolute -top-1 -right-1 w-3 h-3 bg-amber-600 border-2 border-black rounded-full"></span>}
             </div>
             <div>
-              <p className="text-[10px] font-bold text-stone-400 uppercase tracking-widest">Target Region</p>
-              <h3 className="text-sm font-bold text-stone-900 truncate max-w-[140px]">
+              <p className="text-[10px] font-bold text-stone-500 uppercase tracking-widest">Target Region</p>
+              <h3 className="text-sm font-bold text-white truncate max-w-[140px]">
                 {detecting ? 'Syncing...' : location || 'Awaiting Signal...'}
               </h3>
             </div>
           </div>
           
           {weather && !detecting && (
-             <div className="bg-stone-50 px-4 py-2 rounded-2xl border border-stone-100 flex items-center gap-3 animate-in fade-in slide-in-from-right-4">
+             <div className="bg-stone-800 px-4 py-2 rounded-2xl border border-stone-700 flex items-center gap-3 animate-in fade-in slide-in-from-right-4">
                 <div className="text-right">
-                   <p className="text-[9px] font-bold text-stone-400 uppercase tracking-widest">Context</p>
-                   <p className="text-xs font-bold text-stone-900">{Math.round(weather.main.temp)}°C</p>
+                   <p className="text-[9px] font-bold text-stone-500 uppercase tracking-widest">Context</p>
+                   <p className="text-xs font-bold text-white">{Math.round(weather.main.temp)}°C</p>
                 </div>
-                <div className="bg-white p-2 rounded-xl shadow-sm">
-                   <CloudSun className="w-4 h-4 text-emerald-600" />
+                <div className="bg-stone-900 p-2 rounded-xl shadow-sm border border-stone-800">
+                   <CloudSun className="w-4 h-4 text-amber-500" />
                 </div>
              </div>
           )}
@@ -161,18 +161,18 @@ const AgriNews: React.FC<AgriNewsProps> = ({ language: initialLanguage }) => {
           </div>
         )}
 
-        <div className="flex flex-col gap-3 pt-2 border-t border-stone-100">
-          <div className="flex items-center gap-3 bg-stone-50 p-4 rounded-3xl border border-stone-100 group">
-            <LangIcon className="w-5 h-5 text-emerald-700" />
+        <div className="flex flex-col gap-3 pt-2 border-t border-stone-800">
+          <div className="flex items-center gap-3 bg-stone-800 p-4 rounded-3xl border border-stone-700 group">
+            <LangIcon className="w-5 h-5 text-amber-500" />
             <div className="flex-1">
-               <p className="text-[9px] font-bold text-stone-400 uppercase tracking-widest">Active Dialect</p>
+               <p className="text-[9px] font-bold text-stone-500 uppercase tracking-widest">Active Dialect</p>
                <select 
                  value={language}
                  onChange={(e) => onLanguageSelect(e.target.value)}
-                 className="bg-transparent w-full text-sm font-bold text-emerald-800 outline-none appearance-none cursor-pointer"
+                 className="bg-transparent w-full text-sm font-bold text-amber-400 outline-none appearance-none cursor-pointer"
                >
                  {LANGUAGES.map(l => (
-                   <option key={l.name} value={l.name}>
+                   <option key={l.name} value={l.name} className="bg-stone-900 text-white">
                      {l.label} {preferredLanguage === l.name ? '(Preferred)' : ''}
                    </option>
                  ))}
@@ -184,8 +184,8 @@ const AgriNews: React.FC<AgriNewsProps> = ({ language: initialLanguage }) => {
               disabled={saveStatus === 'saved' || language === preferredLanguage}
               className={`flex items-center gap-2 px-4 py-2.5 rounded-2xl text-[10px] font-bold uppercase tracking-widest transition-all
                 ${saveStatus === 'saved' || language === preferredLanguage
-                  ? 'bg-emerald-50 text-emerald-700 border border-emerald-100 cursor-default' 
-                  : 'bg-emerald-700 text-white hover:bg-emerald-800 active:scale-95 shadow-lg shadow-emerald-900/10'}
+                  ? 'bg-amber-500/10 text-amber-500 border border-amber-500/20 cursor-default' 
+                  : 'bg-amber-600 text-black hover:bg-amber-500 active:scale-95 shadow-lg shadow-amber-900/40'}
               `}
             >
               {saveStatus === 'saved' || language === preferredLanguage ? (
@@ -198,20 +198,20 @@ const AgriNews: React.FC<AgriNewsProps> = ({ language: initialLanguage }) => {
         </div>
       </div>
 
-      <div className="bg-white rounded-[2.5rem] p-7 shadow-sm border border-stone-200">
+      <div className="bg-stone-900 rounded-[2.5rem] p-7 shadow-sm border border-stone-800">
         <div className="flex flex-col gap-6 mb-8">
             <div className="flex justify-between items-start">
                 <div>
-                    <h2 className="text-2xl font-bold flex items-center gap-3 text-stone-900 font-serif">
-                      <Newspaper className="text-emerald-700 w-6 h-6" />
+                    <h2 className="text-2xl font-black flex items-center gap-3 text-white uppercase tracking-tighter">
+                      <Newspaper className="text-amber-500 w-6 h-6" />
                       Kisan Samachar
                     </h2>
-                    <p className="text-stone-500 text-sm font-medium mt-1 leading-relaxed">
-                       Regional intelligence for <span className="text-emerald-700 font-bold">{location || 'your region'}</span>.
+                    <p className="text-stone-500 text-[10px] font-bold uppercase tracking-widest mt-1 leading-relaxed">
+                       Regional intelligence for <span className="text-amber-500">{location || 'your region'}</span>.
                     </p>
                 </div>
                 {weather && (
-                  <div className="bg-emerald-50 text-emerald-700 px-3 py-1 rounded-lg text-[9px] font-bold uppercase tracking-widest border border-emerald-100">
+                  <div className="bg-amber-500/10 text-amber-500 px-3 py-1 rounded-lg text-[9px] font-bold uppercase tracking-widest border border-amber-500/20">
                     Contextual
                   </div>
                 )}
@@ -222,24 +222,24 @@ const AgriNews: React.FC<AgriNewsProps> = ({ language: initialLanguage }) => {
           <div className="relative">
             <input 
               placeholder="Search specific region..." 
-              className="w-full bg-stone-50 border border-stone-200 p-4 pl-12 rounded-[1.5rem] outline-none focus:border-emerald-600 transition-all font-semibold text-sm shadow-inner"
+              className="w-full bg-stone-800 border border-stone-700 p-4 pl-12 rounded-[1.5rem] outline-none focus:border-amber-600 transition-all font-bold text-sm text-white placeholder:text-stone-600"
               value={location}
               onChange={e => setLocation(e.target.value)}
             />
-            <MapPin className="absolute left-4 top-1/2 -translate-y-1/2 text-emerald-700 w-5 h-5" />
+            <MapPin className="absolute left-4 top-1/2 -translate-y-1/2 text-amber-500 w-5 h-5" />
             <button 
               type="button"
               onClick={detectLocation}
               disabled={detecting}
-              className="absolute right-3 top-1/2 -translate-y-1/2 p-2 hover:bg-stone-100 rounded-xl transition-colors text-stone-400"
+              className="absolute right-3 top-1/2 -translate-y-1/2 p-2 hover:bg-stone-700 rounded-xl transition-colors text-stone-500"
             >
-              <Navigation className={`w-4 h-4 ${detecting ? 'animate-spin text-emerald-700' : ''}`} />
+              <Navigation className={`w-4 h-4 ${detecting ? 'animate-spin text-amber-500' : ''}`} />
             </button>
           </div>
           <button 
             type="submit"
             disabled={loading || detecting}
-            className="bg-stone-900 text-white font-bold py-4.5 rounded-[1.5rem] flex items-center justify-center gap-2 hover:bg-stone-800 transition-all disabled:opacity-50 shadow-xl active:scale-[0.98]"
+            className="bg-amber-600 text-black font-black py-4.5 rounded-[1.5rem] flex items-center justify-center gap-2 hover:bg-amber-500 transition-all disabled:opacity-50 shadow-xl active:scale-[0.98] uppercase tracking-widest"
           >
             {loading ? <Loader2 className="animate-spin w-5 h-5" /> : <Search className="w-5 h-5" />}
             Refresh Regional Intel
@@ -247,40 +247,40 @@ const AgriNews: React.FC<AgriNewsProps> = ({ language: initialLanguage }) => {
         </form>
 
         {loading || detecting ? (
-          <div className="py-24 flex flex-col items-center justify-center text-emerald-700 space-y-5">
+          <div className="py-24 flex flex-col items-center justify-center text-amber-500 space-y-5">
             <div className="relative">
-                <div className="w-16 h-16 border-4 border-emerald-50 rounded-full"></div>
-                <div className="absolute inset-0 w-16 h-16 border-4 border-emerald-700 border-t-transparent rounded-full animate-spin"></div>
+                <div className="w-16 h-16 border-4 border-stone-800 rounded-full"></div>
+                <div className="absolute inset-0 w-16 h-16 border-4 border-amber-500 border-t-transparent rounded-full animate-spin"></div>
                 <div className="absolute inset-0 flex items-center justify-center">
                   <Globe className="w-6 h-6 animate-pulse" />
                 </div>
             </div>
             <div className="text-center">
-              <p className="font-bold uppercase tracking-[0.2em] text-[10px] animate-pulse">
+              <p className="font-black uppercase tracking-[0.2em] text-[10px] animate-pulse">
                 {detecting ? "Triangulating Region..." : `Synthesizing ${language} Bulletins...`}
               </p>
-              <p className="text-[9px] text-stone-400 mt-2 font-bold italic">Polling location-specific agricultural hubs</p>
+              <p className="text-[9px] text-stone-600 mt-2 font-bold uppercase tracking-widest">Polling location-specific agricultural hubs</p>
             </div>
           </div>
         ) : results ? (
           <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
-            <div className="prose prose-stone max-w-none bg-stone-50 p-7 rounded-[2rem] border border-stone-100 leading-relaxed shadow-inner">
+            <div className="prose prose-invert max-w-none bg-stone-800 p-7 rounded-[2rem] border border-stone-700 leading-relaxed shadow-inner">
               <div className="flex items-center justify-between mb-5">
-                <div className="flex items-center gap-2 text-emerald-700 font-bold text-[10px] uppercase tracking-widest">
+                <div className="flex items-center gap-2 text-amber-500 font-black text-[10px] uppercase tracking-widest">
                   <AlertCircle className="w-3 h-3" /> Grounded Analysis
                 </div>
-                <div className="text-[10px] font-bold text-stone-300 uppercase tracking-widest">
+                <div className="text-[10px] font-bold text-stone-500 uppercase tracking-widest">
                   Updated: {lastUpdated}
                 </div>
               </div>
-              <div className="text-sm font-medium text-stone-700 space-y-4 markdown-body">
+              <div className="text-sm font-medium text-stone-300 space-y-4 markdown-body">
                 <ReactMarkdown>{results.text || ''}</ReactMarkdown>
               </div>
             </div>
             
             <div className="space-y-4">
-              <h3 className="text-[10px] font-bold text-stone-400 uppercase tracking-[0.2em] px-2 flex items-center gap-2">
-                <div className="w-1.5 h-1.5 bg-emerald-600 rounded-full"></div>
+              <h3 className="text-[10px] font-black text-stone-500 uppercase tracking-[0.3em] px-2 flex items-center gap-2">
+                <div className="w-1.5 h-1.5 bg-amber-500 rounded-full"></div>
                 Verified News Citations
               </h3>
               <div className="grid grid-cols-1 gap-3">
@@ -291,15 +291,15 @@ const AgriNews: React.FC<AgriNewsProps> = ({ language: initialLanguage }) => {
                       href={src.web.uri} 
                       target="_blank" 
                       rel="noopener noreferrer"
-                      className="flex items-center justify-between bg-white border border-stone-200 p-4.5 rounded-[1.25rem] hover:border-emerald-600 hover:shadow-lg transition-all group"
+                      className="flex items-center justify-between bg-stone-900 border border-stone-800 p-4.5 rounded-[1.25rem] hover:border-amber-500/50 hover:shadow-2xl hover:shadow-black/40 transition-all group"
                     >
                       <div className="flex-1 min-w-0 pr-4">
-                        <div className="font-bold text-xs text-stone-800 truncate mb-1">{src.web.title}</div>
-                        <div className="text-[9px] font-bold text-stone-400 uppercase tracking-widest truncate">
+                        <div className="font-black text-xs text-white uppercase tracking-wider truncate mb-1">{src.web.title}</div>
+                        <div className="text-[9px] font-bold text-stone-500 uppercase tracking-widest truncate">
                           Source: {new URL(src.web.uri).hostname}
                         </div>
                       </div>
-                      <ExternalLink className="w-4 h-4 text-stone-300 group-hover:text-emerald-700 transition-colors" />
+                      <ExternalLink className="w-4 h-4 text-stone-700 group-hover:text-amber-500 transition-colors" />
                     </a>
                   )
                 ))}
@@ -307,9 +307,9 @@ const AgriNews: React.FC<AgriNewsProps> = ({ language: initialLanguage }) => {
             </div>
           </div>
         ) : (
-          <div className="py-24 text-center text-stone-300 opacity-30">
-            <Newspaper className="w-16 h-16 mx-auto mb-5" />
-            <p className="font-bold text-sm italic uppercase tracking-widest">Synchronize location for intelligence sync</p>
+          <div className="py-24 text-center text-stone-800">
+            <Newspaper className="w-16 h-16 mx-auto mb-5 opacity-20" />
+            <p className="font-black text-[10px] uppercase tracking-[0.4em]">Synchronize location for intelligence sync</p>
           </div>
         )}
       </div>
@@ -318,10 +318,10 @@ const AgriNews: React.FC<AgriNewsProps> = ({ language: initialLanguage }) => {
 };
 
 const WeatherBadge: React.FC<{ icon: React.ReactNode, label: string, value: string }> = ({ icon, label, value }) => (
-  <div className="bg-stone-50 border border-stone-100 p-2.5 rounded-2xl flex flex-col items-center">
-    <div className="text-stone-400 mb-1">{icon}</div>
-    <p className="text-[8px] font-black text-stone-300 uppercase tracking-tighter mb-0.5">{label}</p>
-    <p className="text-[10px] font-black text-stone-700 leading-none">{value}</p>
+  <div className="bg-stone-800 border border-stone-700 p-2.5 rounded-2xl flex flex-col items-center">
+    <div className="text-amber-500 mb-1">{icon}</div>
+    <p className="text-[8px] font-black text-stone-500 uppercase tracking-tighter mb-0.5">{label}</p>
+    <p className="text-[10px] font-black text-white leading-none">{value}</p>
   </div>
 );
 
