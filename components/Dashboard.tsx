@@ -21,9 +21,11 @@ import {
   LayoutGrid,
   Thermometer,
   ArrowUpRight,
-  Truck,
-  Leaf,
-  RefreshCw
+  RefreshCw,
+  Database,
+  Users,
+  ShoppingBag,
+  Sparkles
 } from 'lucide-react';
 import { useFirebase } from '../src/components/FirebaseProvider';
 import { db, auth } from '../src/firebase';
@@ -31,21 +33,121 @@ import { collection, query, onSnapshot, orderBy, limit, where } from 'firebase/f
 import { handleFirestoreError, OperationType } from '../src/utils/firestoreErrorHandler';
 
 import { triggerHaptic, triggerSelectionHaptic } from '../src/utils/haptics';
+import { fetchDailyAgriTip, DailyAgriTip } from '../services/geminiService';
 
 interface DashboardProps {
   setView: (view: AppView) => void;
+  language?: string;
 }
 
 const WEATHER_API_KEY = import.meta.env.VITE_WEATHER_API_KEY;
 
-const Dashboard: React.FC<DashboardProps> = ({ setView }) => {
+const Dashboard: React.FC<DashboardProps> = ({ setView, language }) => {
   const { profile, activeFarmId } = useFirebase();
   const [weather, setWeather] = React.useState<any>(null);
   const [loadingWeather, setLoadingWeather] = React.useState(true);
   const [tasks, setTasks] = React.useState<Task[]>([]);
   const [loadingTasks, setLoadingTasks] = React.useState(true);
+  const [latestReport, setLatestReport] = React.useState<any>(null);
+
+  const [agriTip, setAgriTip] = React.useState<DailyAgriTip | null>(null);
+  const [loadingTip, setLoadingTip] = React.useState(true);
 
   const farmerName = profile?.name?.split(' ')[0] || 'Farmer';
+
+  React.useEffect(() => {
+    const loadDailyTip = async () => {
+      setLoadingTip(true);
+      try {
+        const todayStr = new Date().toDateString();
+        const cachedTip = localStorage.getItem('agri_tip_cache');
+        const cachedDate = localStorage.getItem('agri_tip_date');
+        const cachedLang = localStorage.getItem('agri_tip_lang');
+
+        const locationStr = profile?.location || '';
+        const stateStr = profile?.state || '';
+        const districtStr = profile?.district || '';
+        const cropsList = profile?.mainCrops || [];
+        const currentLang = language || 'English';
+
+        if (cachedTip && cachedDate === todayStr && cachedLang === currentLang) {
+          setAgriTip(JSON.parse(cachedTip));
+          setLoadingTip(false);
+          return;
+        }
+
+        const freshTip = await fetchDailyAgriTip(
+          locationStr,
+          stateStr,
+          districtStr,
+          cropsList,
+          currentLang
+        );
+
+        if (freshTip && freshTip.title) {
+          setAgriTip(freshTip);
+          localStorage.setItem('agri_tip_cache', JSON.stringify(freshTip));
+          localStorage.setItem('agri_tip_date', todayStr);
+          localStorage.setItem('agri_tip_lang', currentLang);
+        }
+      } catch (err) {
+        console.error("Failed to load daily agri-tip:", err);
+      } finally {
+        setLoadingTip(false);
+      }
+    };
+
+    if (profile) {
+      loadDailyTip();
+    }
+  }, [profile, language]);
+
+  const handleRefreshTip = async (e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    triggerSelectionHaptic();
+    setLoadingTip(true);
+    try {
+      const locationStr = profile?.location || '';
+      const stateStr = profile?.state || '';
+      const districtStr = profile?.district || '';
+      const cropsList = profile?.mainCrops || [];
+      const currentLang = language || 'English';
+
+      const freshTip = await fetchDailyAgriTip(
+        locationStr,
+        stateStr,
+        districtStr,
+        cropsList,
+        currentLang
+      );
+
+      if (freshTip && freshTip.title) {
+        setAgriTip(freshTip);
+        const todayStr = new Date().toDateString();
+        localStorage.setItem('agri_tip_cache', JSON.stringify(freshTip));
+        localStorage.setItem('agri_tip_date', todayStr);
+        localStorage.setItem('agri_tip_lang', currentLang);
+      }
+    } catch (err) {
+      console.error("Failed to refresh daily agri-tip:", err);
+    } finally {
+      setLoadingTip(false);
+    }
+  };
+
+  React.useEffect(() => {
+    if (!activeFarmId) return;
+    const path = `users/${activeFarmId}/cropHealthReports`;
+    const q = query(collection(db, path), orderBy('timestamp', 'desc'), limit(1));
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      if (!snapshot.empty) {
+        setLatestReport(snapshot.docs[0].data());
+      }
+    }, (error) => {
+      console.warn("Could not fetch latestReport for dashboard stats:", error);
+    });
+    return () => unsubscribe();
+  }, [activeFarmId]);
 
   const handleSetView = (view: AppView) => {
     triggerSelectionHaptic();
@@ -58,17 +160,18 @@ const Dashboard: React.FC<DashboardProps> = ({ setView }) => {
     const path = `users/${activeFarmId}/tasks`;
     const q = query(
       collection(db, path), 
-      where('status', '==', 'Pending'),
-      orderBy('createdAt', 'desc'),
-      limit(3)
+      orderBy('createdAt', 'desc')
     );
 
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const taskList: Task[] = [];
       snapshot.forEach((doc) => {
-        taskList.push({ id: doc.id, ...doc.data() } as Task);
+        const t = { id: doc.id, ...doc.data() } as Task;
+        if (t.status === 'Pending') {
+          taskList.push(t);
+        }
       });
-      setTasks(taskList);
+      setTasks(taskList.slice(0, 3));
       setLoadingTasks(false);
     }, (error) => {
       handleFirestoreError(error, OperationType.LIST, path);
@@ -213,8 +316,10 @@ const Dashboard: React.FC<DashboardProps> = ({ setView }) => {
               <TrendingUp className="w-5 h-5" />
             </div>
             <div>
-              <p className="text-[8px] font-black text-stone-500 uppercase tracking-widest mb-1">Market Trend</p>
-              <h4 className="text-2xl font-black text-white tracking-tight">+12.4%</h4>
+              <p className="text-[8px] font-black text-stone-500 uppercase tracking-widest mb-1">Field NDVI Index</p>
+              <h4 className="text-2xl font-black text-white tracking-tight">
+                {latestReport ? latestReport.ndvi : '0.82'}
+              </h4>
             </div>
           </div>
 
@@ -224,7 +329,9 @@ const Dashboard: React.FC<DashboardProps> = ({ setView }) => {
             </div>
             <div>
               <p className="text-[8px] font-black text-stone-500 uppercase tracking-widest mb-1">Soil Moisture</p>
-              <h4 className="text-2xl font-black text-white tracking-tight">64%</h4>
+              <h4 className="text-2xl font-black text-white tracking-tight">
+                {latestReport ? latestReport.moisture : (weather ? `${weather.humidity - 6}%` : '64%')}
+              </h4>
             </div>
           </div>
         </div>
@@ -236,17 +343,92 @@ const Dashboard: React.FC<DashboardProps> = ({ setView }) => {
           <QuickActionPill icon={<Camera />} label="Scan" onClick={() => handleSetView(AppView.DISEASE_SCANNER)} />
           <QuickActionPill icon={<TrendingUp />} label="Prices" onClick={() => handleSetView(AppView.MARKET_PRICES)} />
           <QuickActionPill icon={<MapPin />} label="Map" onClick={() => handleSetView(AppView.FIELD_MAP)} />
-          <QuickActionPill icon={<Truck />} label="Rent" onClick={() => handleSetView(AppView.EQUIPMENT_RENTAL)} />
+          <QuickActionPill icon={<Database />} label="Ledger" onClick={() => handleSetView(AppView.PRODUCE_LEDGER)} />
+          <QuickActionPill icon={<Users />} label="DAO" onClick={() => handleSetView(AppView.COMMUNITY_DAO)} />
+          <QuickActionPill icon={<ShoppingBag />} label="Market" onClick={() => handleSetView(AppView.P2P_MARKETPLACE)} />
           <QuickActionPill icon={<LayoutGrid />} label="Tools" onClick={() => handleSetView(AppView.TOOLS_HUB)} />
         </div>
       </section>
 
-      {/* Recommended Intelligence */}
+      {/* Daily Agri-Tip Card */}
+      <section className="px-6 mb-12 space-y-6">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-4">
+            <span className="text-2xl font-black text-amber-950 font-mono">✦</span>
+            <h3 className="text-[11px] font-black text-amber-500/40 uppercase tracking-[0.3em]">Smart Agri-Tip</h3>
+          </div>
+          <div className="h-px flex-1 bg-amber-500/10 ml-6" />
+        </div>
+
+        <motion.div
+          initial={{ opacity: 0, y: 15 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="bg-stone-950 p-8 rounded-[3rem] border border-amber-500/10 relative overflow-hidden group shadow-2xl shadow-black/40"
+        >
+          {/* Subtle glow / visual effect */}
+          <div className="absolute top-0 right-0 w-64 h-64 bg-amber-500/5 rounded-full blur-[80px] -mr-24 -mt-24 pointer-events-none group-hover:bg-amber-500/10 transition-colors duration-500" />
+          
+          {loadingTip ? (
+            <div className="flex flex-col items-center justify-center py-8 space-y-4">
+              <Loader2 className="w-8 h-8 animate-spin text-amber-500/50" />
+              <p className="text-[10px] font-mono text-stone-500 uppercase tracking-widest animate-pulse">Consulting Gemini for localized advice...</p>
+            </div>
+          ) : agriTip ? (
+            <div className="space-y-6 relative z-10">
+              {/* Header inside tip */}
+              <div className="flex items-start justify-between">
+                <div className="space-y-1">
+                  <div className="flex items-center gap-2">
+                    <Sparkles className="w-4 h-4 text-amber-500 animate-pulse" />
+                    <span className="text-[9px] font-black text-amber-500 uppercase tracking-[0.2em]">{agriTip.category} • {agriTip.seasonalContext}</span>
+                  </div>
+                  <h4 className="text-xl font-black text-white tracking-tight leading-snug">{agriTip.title}</h4>
+                </div>
+                
+                <button
+                  onClick={handleRefreshTip}
+                  disabled={loadingTip}
+                  className="p-3 bg-stone-900/80 hover:bg-stone-900 text-stone-400 hover:text-amber-500 rounded-2xl border border-white/5 active:scale-90 transition-all"
+                  title="Generate fresh advice"
+                >
+                  <RefreshCw className="w-4 h-4" />
+                </button>
+              </div>
+
+              {/* Main tip advice text */}
+              <p className="text-xs text-stone-400 font-bold leading-relaxed">
+                {agriTip.advice}
+              </p>
+
+              {/* Specific priority action step */}
+              <div className="bg-stone-900/40 p-4 rounded-2xl border border-amber-500/5 space-y-2">
+                <span className="text-[8px] font-black text-amber-500/60 uppercase tracking-widest">Recommended Action Today</span>
+                <p className="text-[11px] text-stone-200 font-black flex items-start gap-2.5">
+                  <span className="text-amber-500 text-xs font-mono">•</span>
+                  <span>{agriTip.actionStep}</span>
+                </p>
+              </div>
+            </div>
+          ) : (
+            <div className="text-center py-6">
+              <p className="text-[10px] font-black text-stone-500 uppercase tracking-widest">No agri-tip loaded</p>
+              <button
+                onClick={handleRefreshTip}
+                className="mt-4 px-6 py-2.5 bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 border border-amber-500/20 rounded-full text-[10px] font-black uppercase tracking-widest transition-all"
+              >
+                Load Daily Tip
+              </button>
+            </div>
+          )}
+        </motion.div>
+      </section>
+
+      {/* Legacy Recommended */}
       <section className="px-6 mb-12 space-y-8">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-4">
             <span className="text-2xl font-black text-amber-900 font-mono">01</span>
-            <h3 className="text-[11px] font-black text-amber-500/40 uppercase tracking-[0.3em]">Recommended</h3>
+            <h3 className="text-[11px] font-black text-amber-500/40 uppercase tracking-[0.3em]">Advanced Planning</h3>
           </div>
           <div className="h-px flex-1 bg-amber-500/10 ml-6" />
         </div>
@@ -258,13 +440,6 @@ const Dashboard: React.FC<DashboardProps> = ({ setView }) => {
             sub="Optimize soil health with AI-driven rotation protocols."
             onClick={() => handleSetView(AppView.CROP_ROTATION_ADVISOR)}
             theme="amber"
-          />
-          <ActionCard 
-            icon={<Leaf className="w-6 h-6" />} 
-            label="Carbon Credit Tracker" 
-            sub="Monitor your eco-impact and unlock green revenue streams."
-            onClick={() => handleSetView(AppView.CARBON_CREDIT_TRACKER)}
-            theme="orange"
           />
         </div>
       </section>
@@ -317,6 +492,41 @@ const Dashboard: React.FC<DashboardProps> = ({ setView }) => {
                <p className="text-[10px] font-black text-stone-600 uppercase tracking-[0.3em]">All protocols completed</p>
             </div>
           )}
+        </div>
+      </section>
+
+      {/* Dapp Ecosystem */}
+      <section className="px-6 mb-12 space-y-8">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-4">
+            <span className="text-2xl font-black text-amber-900 font-mono">03</span>
+            <h3 className="text-[11px] font-black text-amber-500/40 uppercase tracking-[0.3em]">Dapp Ecosystem</h3>
+          </div>
+          <div className="h-px flex-1 bg-amber-500/10 ml-6" />
+        </div>
+        
+        <div className="grid grid-cols-1 gap-4">
+          <ActionCard 
+            icon={<Database className="w-6 h-6" />} 
+            label="Produce Ledger" 
+            sub="Immutable crop traceability for premium market access."
+            onClick={() => handleSetView(AppView.PRODUCE_LEDGER)}
+            theme="amber"
+          />
+          <ActionCard 
+            icon={<Users className="w-6 h-6" />} 
+            label="Farmer DAO" 
+            sub="Participate in community governance and local voting."
+            onClick={() => handleSetView(AppView.COMMUNITY_DAO)}
+            theme="orange"
+          />
+          <ActionCard 
+            icon={<ShoppingBag className="w-6 h-6" />} 
+            label="P2P Marketplace" 
+            sub="Buy and sell tools, seeds, and produce directly."
+            onClick={() => handleSetView(AppView.P2P_MARKETPLACE)}
+            theme="amber"
+          />
         </div>
       </section>
 

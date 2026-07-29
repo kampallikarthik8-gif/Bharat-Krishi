@@ -3,13 +3,18 @@
 import { GoogleGenAI, Type, GenerateContentResponse } from "@google/genai";
 import { DiseaseDiagnosis, SoilReport, PestIdentification, FertilizerPlan, JournalEntry, Task } from "../types";
 
-// Always initialize with named parameter and process.env.API_KEY
+// Always initialize with named parameter and process.env.GEMINI_API_KEY or fallback
 export const getAIClient = () => {
-  return new GoogleGenAI({ apiKey: process.env.API_KEY });
+  const apiKey = process.env.GEMINI_API_KEY || process.env.API_KEY || (import.meta as any).env?.VITE_GEMINI_API_KEY || "";
+  if (!apiKey) {
+    console.error("[AI Service Error] Gemini API key is missing or empty! Ensure GEMINI_API_KEY is configured.");
+  }
+  return new GoogleGenAI({ apiKey });
 };
 
 /**
  * Robust retry wrapper with exponential backoff to handle 429 Resource Exhausted errors.
+ * Logs detailed error information to console for debugging.
  */
 const withRetry = async <T>(fn: () => Promise<T>, maxRetries = 5, baseDelay = 2000): Promise<T> => {
   let lastError: any;
@@ -23,13 +28,21 @@ const withRetry = async <T>(fn: () => Promise<T>, maxRetries = 5, baseDelay = 20
       
       if (isRateLimit && i < maxRetries - 1) {
         const delay = baseDelay * Math.pow(2, i);
-        console.warn(`Rate limit reached. Retrying in ${delay}ms... (Attempt ${i + 1}/${maxRetries})`);
+        console.warn(`[AI Service Warning] Rate limit reached. Retrying in ${delay}ms... (Attempt ${i + 1}/${maxRetries})`, errorMsg);
         await new Promise(resolve => setTimeout(resolve, delay));
         continue;
       }
+
+      console.error(`[AI Service Error] Call failed on attempt ${i + 1}/${maxRetries}:`, {
+        message: error?.message,
+        status: error?.status,
+        stack: error?.stack,
+        error
+      });
       throw error;
     }
   }
+  console.error(`[AI Service Error] All ${maxRetries} retries exhausted. Final error:`, lastError);
   throw lastError;
 };
 
@@ -46,7 +59,7 @@ export const getWeatherAdvisory = async (forecast: any, crops: string[], locatio
   CRITICAL: Provide the entire response in ${language}.`;
 
   const response = await withRetry<GenerateContentResponse>(() => ai.models.generateContent({
-    model: 'gemini-3-flash-preview', 
+    model: 'gemini-3.6-flash', 
     contents: prompt
   }));
   return response.text || "Continue standard operations.";
@@ -74,7 +87,7 @@ export const fetchSeasonalCalendar = async (location: string, crops: string[], p
   CRITICAL: All text fields (title, description) must be in ${language}.`;
 
   const response = await withRetry<GenerateContentResponse>(() => ai.models.generateContent({
-    model: 'gemini-3-flash-preview',
+    model: 'gemini-3.6-flash',
     contents: prompt,
     config: {
       responseMimeType: "application/json",
@@ -111,7 +124,7 @@ export const fetchSeasonalPlanning = async (location: string, crops: string[], l
   Keep the tone authoritative and strategic. Provide the entire response in ${language}.`;
 
   const response = await withRetry<GenerateContentResponse>(() => ai.models.generateContent({
-    model: 'gemini-3-flash-preview',
+    model: 'gemini-3.6-flash',
     contents: prompt,
     config: { tools: [{ googleSearch: {} }] }
   }));
@@ -130,7 +143,7 @@ export const suggestCropsForSeason = async (location: string, plantingDate: stri
   CRITICAL: All text fields in the JSON must be in ${language}.`;
 
   const response = await withRetry<GenerateContentResponse>(() => ai.models.generateContent({
-    model: 'gemini-3-flash-preview',
+    model: 'gemini-3.6-flash',
     contents: prompt,
     config: {
       responseMimeType: "application/json",
@@ -163,7 +176,7 @@ export const getCropRotationAdvice = async (location: string, currentCrops: stri
   Provide the response in ${language}. Use clear sections and professional tone.`;
 
   const response = await withRetry<GenerateContentResponse>(() => ai.models.generateContent({
-    model: 'gemini-3-flash-preview',
+    model: 'gemini-3.6-flash',
     contents: prompt
   }));
   return response.text;
@@ -172,7 +185,7 @@ export const getCropRotationAdvice = async (location: string, currentCrops: stri
 export const diagnosePlant = async (base64Image: string, language: string = 'English'): Promise<DiseaseDiagnosis> => {
   const ai = getAIClient();
   const response = await withRetry<GenerateContentResponse>(() => ai.models.generateContent({
-    model: 'gemini-3-flash-preview',
+    model: 'gemini-3.6-flash',
     contents: {
       parts: [
         { inlineData: { data: base64Image, mimeType: 'image/jpeg' } },
@@ -202,7 +215,7 @@ export const diagnosePlant = async (base64Image: string, language: string = 'Eng
 export const identifyPest = async (base64Image: string, language: string = 'English'): Promise<PestIdentification> => {
   const ai = getAIClient();
   const response = await withRetry<GenerateContentResponse>(() => ai.models.generateContent({
-    model: 'gemini-3-flash-preview',
+    model: 'gemini-3.6-flash',
     contents: {
       parts: [
         { inlineData: { data: base64Image, mimeType: 'image/jpeg' } },
@@ -235,7 +248,7 @@ export const identifyPest = async (base64Image: string, language: string = 'Engl
 export const analyzeSoil = async (base64Image: string, language: string = 'English'): Promise<SoilReport> => {
   const ai = getAIClient();
   const response = await withRetry<GenerateContentResponse>(() => ai.models.generateContent({
-    model: 'gemini-3-flash-preview',
+    model: 'gemini-3.6-flash',
     contents: {
       parts: [
         { inlineData: { data: base64Image, mimeType: 'image/jpeg' } },
@@ -275,7 +288,7 @@ export const analyzeFieldBoundary = async (points: { lat: number; lng: number }[
   CRITICAL: Provide the entire response in ${language}.`;
   
   const response = await withRetry<GenerateContentResponse>(() => ai.models.generateContent({
-    model: 'gemini-3-flash-preview', 
+    model: 'gemini-3.6-flash', 
     contents: prompt
   }));
   return response.text;
@@ -286,7 +299,7 @@ export const fetchAgriNews = async (location: string, language: string = 'Englis
   const prompt = `Find the latest agricultural news, Mandi prices, and government schemes (like PM-KISAN, Fasal Bima) specifically for farmers in ${location}. ${weatherContext ? `Current weather: ${weatherContext}.` : ''} Provide entire response in ${language}.`;
   
   const response = await withRetry<GenerateContentResponse>(() => ai.models.generateContent({
-    model: 'gemini-3-flash-preview',
+    model: 'gemini-3.6-flash',
     contents: prompt,
     config: { tools: [{ googleSearch: {} }] }
   }));
@@ -329,7 +342,7 @@ export const fetchInputPriceAdvisory = async (location: string, inputs: string[]
   }
 
   const response = await withRetry<GenerateContentResponse>(() => ai.models.generateContent({
-    model: 'gemini-2.5-flash',
+    model: 'gemini-3.6-flash',
     contents: prompt,
     config
   }));
@@ -353,9 +366,8 @@ export const fetchSprayingAdvice = async (data: { crop: string, pest: string, ch
   CRITICAL: Provide the entire response in ${language}.`;
 
   const response = await withRetry<GenerateContentResponse>(() => ai.models.generateContent({
-    model: 'gemini-3-pro-preview',
-    contents: prompt,
-    config: { thinkingConfig: { thinkingBudget: 2000 } }
+    model: 'gemini-3.6-flash',
+    contents: prompt
   }));
   return response.text;
 };
@@ -366,9 +378,8 @@ export const predictHarvest = async (data: { crop: string, variety: string, plan
   CRITICAL: Provide the entire response in ${language}.`;
   
   const response = await withRetry<GenerateContentResponse>(() => ai.models.generateContent({
-    model: 'gemini-3-pro-preview',
-    contents: prompt,
-    config: { thinkingConfig: { thinkingBudget: 2000 } }
+    model: 'gemini-3.6-flash',
+    contents: prompt
   }));
   return response.text;
 };
@@ -376,7 +387,7 @@ export const predictHarvest = async (data: { crop: string, variety: string, plan
 export const diagnoseLivestock = async (base64Image: string, animalType: string, language: string = 'English') => {
   const ai = getAIClient();
   const response = await withRetry<GenerateContentResponse>(() => ai.models.generateContent({
-    model: 'gemini-3-flash-preview',
+    model: 'gemini-3.6-flash',
     contents: {
       parts: [
         { inlineData: { data: base64Image, mimeType: 'image/jpeg' } },
@@ -405,7 +416,7 @@ export const diagnoseLivestock = async (base64Image: string, animalType: string,
 export const fetchFieldMap = async (lat: number, lon: number, query: string) => {
   const ai = getAIClient();
   const response = await withRetry<GenerateContentResponse>(() => ai.models.generateContent({
-    model: 'gemini-2.5-flash',
+    model: 'gemini-3.6-flash',
     contents: `Identify ${query} near lat ${lat}, lon ${lon}. Focus on Mandis, KVK centers, and Seed stores.`,
     config: {
       tools: [{ googleMaps: {} }],
@@ -425,17 +436,16 @@ export const estimateYield = async (data: { crop: string, area: string, unit: st
   CRITICAL: Provide the entire response in ${language}.`;
   
   const response = await withRetry<GenerateContentResponse>(() => ai.models.generateContent({
-    model: 'gemini-3-pro-preview',
-    contents: prompt,
-    config: { thinkingConfig: { thinkingBudget: 3000 } }
+    model: 'gemini-3.6-flash',
+    contents: prompt
   }));
   return response.text;
-};
+}
 
 export const fetchMarketPrices = async (crop: string, location: string, language: string = 'English') => {
   const ai = getAIClient();
   const response = await withRetry<GenerateContentResponse>(() => ai.models.generateContent({
-    model: 'gemini-3-flash-preview',
+    model: 'gemini-3.6-flash',
     contents: `Analyze current Mandi prices and 6-month trends for ${crop} in ${location} (India). Include MSP context. Provide the data as a clean JSON object containing summary, currentPrice, currency, unit, and trend (array of {month, price}). CRITICAL: The "summary" field and month names in "trend" must be in ${language}.`,
     config: {
       tools: [{ googleSearch: {} }]
@@ -459,18 +469,17 @@ export const getCropAdvice = async (crop: string, location: string, soilType: st
   const ai = getAIClient();
   const weatherInfo = weatherContext ? `Current weather conditions: ${weatherContext}.` : '';
   const response = await withRetry<GenerateContentResponse>(() => ai.models.generateContent({
-    model: 'gemini-3-pro-preview',
-    contents: `Give comprehensive Indian farming advice for ${crop} in ${location} with ${soilType} soil. ${weatherInfo} Include season (Kharif/Rabi), irrigation, and IPM. Provide the entire response in ${language}.`,
-    config: { thinkingConfig: { thinkingBudget: 2000 } }
+    model: 'gemini-3.6-flash',
+    contents: `Give comprehensive Indian farming advice for ${crop} in ${location} with ${soilType} soil. ${weatherInfo} Include season (Kharif/Rabi), irrigation, and IPM. Provide the entire response in ${language}.`
   }));
   return response.text;
-};
+}
 
 export const getFertilizerAdvice = async (crop: string, location: string, soilType: string, language: string = 'English', weatherContext?: string): Promise<FertilizerPlan> => {
   const ai = getAIClient();
   const weatherInfo = weatherContext ? `Consider these current weather conditions for application timing and nutrient leaching risks: ${weatherContext}.` : '';
   const response = await withRetry<GenerateContentResponse>(() => ai.models.generateContent({
-    model: 'gemini-3-pro-preview',
+    model: 'gemini-3.6-flash',
     contents: `Provide detailed fertilizer plan for ${crop} in ${location} with ${soilType} soil (Indian context). ${weatherInfo} Adhere to Soil Health Card guidelines. Provide all descriptive text and instructions in ${language}.`,
     config: {
       responseMimeType: "application/json",
@@ -504,8 +513,7 @@ export const getFertilizerAdvice = async (crop: string, location: string, soilTy
           tips: { type: Type.ARRAY, items: { type: Type.STRING } }
         },
         required: ["cropRequirements", "soilAdjustments", "fertilizers", "schedule", "micronutrients", "tips"]
-      },
-      thinkingConfig: { thinkingBudget: 2000 }
+      }
     }
   }));
 
@@ -529,7 +537,7 @@ export const chatWithExpert = async (message: string, history: any[], language: 
   ` : '';
 
   const chat = ai.chats.create({
-    model: 'gemini-3-flash-preview',
+    model: 'gemini-3.6-flash',
     config: {
       systemInstruction: `You are KrishiExpert, a senior Indian agricultural advisor. You know Mandi trends, government schemes, and localized soil health card parameters. 
       ${profileContext}
@@ -541,12 +549,12 @@ export const chatWithExpert = async (message: string, history: any[], language: 
   return response.text;
 };
 
-// gemini-2.5-flash-image for standard image generation
+// gemini-3.1-flash-lite-image for standard image generation
 export const generatePestVisual = async (pestName: string, cropType?: string, lifecycleStage?: string): Promise<string> => {
   const ai = getAIClient();
   const prompt = `Educational illustration of ${pestName} in India${cropType ? ` on ${cropType}` : ''}. Macro botanical style.`;
   const response = await withRetry<GenerateContentResponse>(() => ai.models.generateContent({
-    model: 'gemini-2.5-flash-image',
+    model: 'gemini-3.1-flash-lite-image',
     contents: { parts: [{ text: prompt }] },
     config: { imageConfig: { aspectRatio: "1:1" } }
   }));
@@ -561,7 +569,7 @@ export const analyzeJournal = async (entries: JournalEntry[], language: string =
   const dataString = entries.map(e => `[${e.date}] ${e.category} (${e.crop}): ${e.notes}`).join('\n');
   const prompt = `Review these Indian farm log entries. Provide seasonal insights based on Monsoon and regional crop cycles. Journal: ${dataString}. CRITICAL: Provide the entire analysis in ${language}.`;
   const response = await withRetry<GenerateContentResponse>(() => ai.models.generateContent({
-    model: 'gemini-3-flash-preview',
+    model: 'gemini-3.6-flash',
     contents: prompt
   }));
   return response.text;
@@ -571,7 +579,7 @@ export const suggestTasks = async (context: { weather: string, crops: string[], 
   const ai = getAIClient();
   const prompt = `Based on Indian agricultural calendar (${context.date}), current monsoon/weather (${context.weather}), and crops (${context.crops.join(', ')}), suggest 4 urgent farm tasks. Return JSON array. CRITICAL: All titles and descriptions must be in ${language}.`;
   const response = await withRetry<GenerateContentResponse>(() => ai.models.generateContent({
-    model: 'gemini-3-flash-preview',
+    model: 'gemini-3.6-flash',
     contents: prompt,
     config: {
       responseMimeType: "application/json",
@@ -600,7 +608,7 @@ export const evaluateSustainability = async (practices: string[], language: stri
   CRITICAL: Provide the entire response in ${language}.`;
   
   const response = await withRetry<GenerateContentResponse>(() => ai.models.generateContent({
-    model: 'gemini-3-flash-preview',
+    model: 'gemini-3.6-flash',
     contents: prompt
   }));
   return response.text;
@@ -614,9 +622,101 @@ export const translateText = async (text: string, targetLanguage: string): Promi
   ${text}`;
   
   const response = await withRetry<GenerateContentResponse>(() => ai.models.generateContent({
-    model: 'gemini-3-flash-preview',
+    model: 'gemini-3.6-flash',
     contents: prompt
   }));
 
   return response.text || text;
 };
+
+export const fetchSatelliteReport = async (fieldName: string, crop: string, language: string = 'English') => {
+  const ai = getAIClient();
+  const prompt = `Act as an ESA/ISRO crop monitoring model. Generate a daily telemetry audit for field '${fieldName}' growing '${crop}'.
+  We need 5 metrics:
+  1. NDVI (Normalized Difference Vegetation Index, a float between 0.2 and 0.9)
+  2. Soil Moisture percentage/description (e.g. "Optimal (64%)" or "Stressed (42%)")
+  3. Chlorophyll level (e.g. "Low", "Medium", "High")
+  4. Surface Temperature (e.g. "23.4°C" or "28.1°C")
+  5. Canopy Biomass (e.g. "12.4 t/ha")
+  
+  Also provide an agronomist recommendation for this field's state.
+  Return a JSON object with fields: ndvi (number), moisture (string), chlorophyll (string), temp (string), biomass (string), recommendation (string).
+  CRITICAL: The recommendation field must be in ${language}.`;
+
+  const response = await withRetry<GenerateContentResponse>(() => ai.models.generateContent({
+    model: 'gemini-3.6-flash',
+    contents: prompt,
+    config: {
+      responseMimeType: "application/json",
+      responseSchema: {
+        type: Type.OBJECT,
+        properties: {
+          ndvi: { type: Type.NUMBER },
+          moisture: { type: Type.STRING },
+          chlorophyll: { type: Type.STRING },
+          temp: { type: Type.STRING },
+          biomass: { type: Type.STRING },
+          recommendation: { type: Type.STRING }
+        },
+        required: ["ndvi", "moisture", "chlorophyll", "temp", "biomass", "recommendation"]
+      }
+    }
+  }));
+
+  return JSON.parse(response.text || '{}');
+};
+
+export interface DailyAgriTip {
+  title: string;
+  category: string;
+  advice: string;
+  actionStep: string;
+  seasonalContext: string;
+}
+
+export const fetchDailyAgriTip = async (
+  location: string, 
+  state: string, 
+  district: string, 
+  crops: string[], 
+  language: string = 'English'
+): Promise<DailyAgriTip> => {
+  const ai = getAIClient();
+  const currentMonth = new Date().toLocaleString('default', { month: 'long' });
+  
+  const prompt = `Provide a highly localized, seasonal "Daily Agri-Tip" for a farmer in India.
+  Location Context:
+  - Region/City: ${location || 'North India'}
+  - State: ${state || 'Punjab'}
+  - District: ${district || 'Amritsar'}
+  - Current Month: ${currentMonth}
+  - Crops Cultivated: ${crops && crops.length > 0 ? crops.join(', ') : 'General seasonal crops'}
+  
+  Consider typical Indian cropping seasons (Kharif, Rabi, Zaid) appropriate for ${currentMonth} in ${state || 'this region'}.
+  Provide actionable, highly practical agronomical advice suitable for today.
+  
+  Return a JSON object.
+  CRITICAL: All text fields in the JSON response must be in ${language}.`;
+
+  const response = await withRetry<GenerateContentResponse>(() => ai.models.generateContent({
+    model: 'gemini-3.6-flash',
+    contents: prompt,
+    config: {
+      responseMimeType: "application/json",
+      responseSchema: {
+        type: Type.OBJECT,
+        properties: {
+          title: { type: Type.STRING, description: "A catchy, positive 4-7 word title for the daily tip." },
+          category: { type: Type.STRING, description: "One word category: Soil, Pest, Weather, Irrigation, Nutrient, Harvest, or Safety" },
+          advice: { type: Type.STRING, description: "Detailed agronomical advice in 2-3 clear sentences." },
+          actionStep: { type: Type.STRING, description: "One high-priority, specific action item the farmer can do on the field today." },
+          seasonalContext: { type: Type.STRING, description: "The seasonal context, e.g., 'Early Rabi Prep', 'Mid-Kharif Moisture management'." }
+        },
+        required: ["title", "category", "advice", "actionStep", "seasonalContext"]
+      }
+    }
+  }));
+
+  return JSON.parse(response.text || '{}');
+};
+

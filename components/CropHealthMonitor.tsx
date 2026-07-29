@@ -1,6 +1,12 @@
 
 import React from 'react';
 import { motion } from 'motion/react';
+import { db } from '../src/firebase';
+import { collection, addDoc, deleteDoc, doc, onSnapshot, query, orderBy, serverTimestamp } from 'firebase/firestore';
+import { handleFirestoreError, OperationType } from '../src/utils/firestoreErrorHandler';
+import { useFirebase } from '../src/components/FirebaseProvider';
+import { useDialogs } from '../src/components/DialogProvider';
+import { fetchSatelliteReport } from '../services/geminiService';
 import { 
   Activity, 
   Layers, 
@@ -11,19 +17,139 @@ import {
   ArrowRight,
   Droplets,
   Sun,
-  Thermometer
+  Thermometer,
+  History,
+  Trash2,
+  Search,
+  Satellite
 } from 'lucide-react';
 
+interface HealthReport {
+  id: string;
+  fieldName: string;
+  ndvi: number;
+  moisture: string;
+  chlorophyll: string;
+  temp: string;
+  biomass: string;
+  recommendation: string;
+  timestamp: any;
+}
+
 const CropHealthMonitor: React.FC = () => {
+  const { activeFarmId, profile } = useFirebase();
+  const { confirm } = useDialogs();
   const [selectedField, setSelectedField] = React.useState('North Parcel');
   const [isScanning, setIsScanning] = React.useState(false);
+  const [history, setHistory] = React.useState<HealthReport[]>([]);
+  const [activeReport, setActiveReport] = React.useState<HealthReport | null>(null);
 
-  const fields = ['North Parcel', 'South Ridge', 'East Meadow', 'West Orchard'];
+  const [fields, setFields] = React.useState<{ name: string; cropType?: string }[]>([
+    { name: 'North Parcel', cropType: 'Wheat' },
+    { name: 'South Ridge', cropType: 'Rice' },
+    { name: 'East Meadow', cropType: 'Cotton' },
+    { name: 'West Orchard', cropType: 'Sugarcane' }
+  ]);
 
-  const handleScan = () => {
+  React.useEffect(() => {
+    if (!activeFarmId) return;
+    const path = `users/${activeFarmId}/fields`;
+    const q = query(collection(db, path), orderBy('createdAt', 'desc'));
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      if (!snapshot.empty) {
+        const list: { name: string; cropType?: string }[] = [];
+        snapshot.forEach((doc) => {
+          const data = doc.data();
+          if (data.name) {
+            list.push({ name: data.name, cropType: data.cropType || 'Wheat' });
+          }
+        });
+        setFields(list);
+        setSelectedField(list[0].name);
+      }
+    }, (error) => {
+      console.warn("Could not load dynamic fields list:", error);
+    });
+    return () => unsubscribe();
+  }, [activeFarmId]);
+
+  const currentFieldObj = fields.find(f => f.name === selectedField);
+  const currentCrop = currentFieldObj?.cropType || profile?.mainCrops?.[0] || 'Wheat';
+
+  React.useEffect(() => {
+    if (!activeFarmId) return;
+
+    const path = `users/${activeFarmId}/cropHealthReports`;
+    const q = query(collection(db, path), orderBy('timestamp', 'desc'));
+
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const records: HealthReport[] = [];
+      snapshot.forEach((doc) => {
+        records.push({ id: doc.id, ...doc.data() } as HealthReport);
+      });
+      setHistory(records);
+    }, (error) => {
+      handleFirestoreError(error, OperationType.LIST, path);
+    });
+
+    return () => unsubscribe();
+  }, [activeFarmId]);
+
+  const handleScan = async () => {
+    if (!activeFarmId) return;
     setIsScanning(true);
-    setTimeout(() => setIsScanning(false), 2500);
+    
+    try {
+      const data = await fetchSatelliteReport(selectedField, currentCrop, profile?.language || 'English');
+      const newReport = {
+        fieldName: selectedField,
+        ndvi: Number(data.ndvi) || 0.72,
+        moisture: data.moisture || 'Optimal (68%)',
+        chlorophyll: data.chlorophyll || 'High',
+        temp: data.temp || '24.5°C',
+        biomass: data.biomass || '12.4 t/ha',
+        recommendation: data.recommendation || 'Vegetative growth is strong.',
+        timestamp: serverTimestamp()
+      };
+      
+      const path = `users/${activeFarmId}/cropHealthReports`;
+      const docRef = await addDoc(collection(db, path), newReport);
+      setActiveReport({ id: docRef.id, ...newReport } as HealthReport);
+    } catch (error) {
+      console.error(error);
+      handleFirestoreError(error, OperationType.CREATE, `users/${activeFarmId}/cropHealthReports`);
+    } finally {
+      setIsScanning(false);
+    }
   };
+
+  const deleteReport = async (id: string) => {
+    if (!activeFarmId) return;
+
+    confirm({
+      title: 'Delete Health Report',
+      message: 'Are you sure you want to remove this satellite health report?',
+      type: 'danger',
+      onConfirm: async () => {
+        const path = `users/${activeFarmId}/cropHealthReports/${id}`;
+        try {
+          await deleteDoc(doc(db, path));
+          if (activeReport?.id === id) setActiveReport(null);
+        } catch (error) {
+          handleFirestoreError(error, OperationType.DELETE, path);
+        }
+      }
+    });
+  };
+
+  const selectedReportOrLatest = activeReport || history.find(h => h.fieldName === selectedField) || history[0];
+
+  const displayNdvi = selectedReportOrLatest ? selectedReportOrLatest.ndvi : 0.72;
+  const displayMoisture = selectedReportOrLatest ? selectedReportOrLatest.moisture : 'Optimal (68%)';
+  const displayChlorophyll = selectedReportOrLatest ? selectedReportOrLatest.chlorophyll : 'High';
+  const displayTemp = selectedReportOrLatest ? selectedReportOrLatest.temp : '24.5°C';
+  const displayBiomass = selectedReportOrLatest ? selectedReportOrLatest.biomass : '12.4 t/ha';
+  const displayRecommendation = selectedReportOrLatest ? selectedReportOrLatest.recommendation : 'Apply targeted nitrogen enrichment to boost vegetative cellular structure during current humidity indexes.';
 
   return (
     <div className="w-full flex flex-col pb-40 bg-black min-h-screen text-white">
@@ -42,11 +168,11 @@ const CropHealthMonitor: React.FC = () => {
           <div className="flex gap-2 overflow-x-auto no-scrollbar py-2">
             {fields.map(field => (
               <button 
-                key={field}
-                onClick={() => setSelectedField(field)}
-                className={`px-6 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest whitespace-nowrap transition-all ${selectedField === field ? 'bg-amber-500 text-black shadow-lg shadow-amber-500/20' : 'bg-stone-900 text-stone-500 border border-white/5'}`}
+                key={field.name}
+                onClick={() => setSelectedField(field.name)}
+                className={`px-6 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest whitespace-nowrap transition-all ${selectedField === field.name ? 'bg-amber-500 text-black shadow-lg shadow-amber-500/20' : 'bg-stone-900 text-stone-500 border border-white/5'}`}
               >
-                {field}
+                {field.name}
               </button>
             ))}
           </div>
@@ -91,7 +217,7 @@ const CropHealthMonitor: React.FC = () => {
           <div className="absolute bottom-8 left-8 right-8 flex justify-between items-end">
             <div className="space-y-1">
               <p className="text-[8px] font-black text-amber-500 uppercase tracking-widest">NDVI Index</p>
-              <p className="text-4xl font-black tracking-tighter">0.82</p>
+              <p className="text-4xl font-black tracking-tighter">{displayNdvi}</p>
             </div>
             <button 
               onClick={handleScan}
@@ -105,10 +231,10 @@ const CropHealthMonitor: React.FC = () => {
 
         {/* Metrics Grid */}
         <div className="grid grid-cols-2 gap-4">
-          <MetricCard icon={<Droplets />} label="Moisture" value="68%" status="Optimal" color="text-amber-400" />
-          <MetricCard icon={<Sun />} label="Chlorophyll" value="High" status="Healthy" color="text-amber-500" />
-          <MetricCard icon={<Thermometer />} label="Surface Temp" value="24°C" status="Normal" color="text-orange-400" />
-          <MetricCard icon={<Layers />} label="Biomass" value="1.2t" status="Growing" color="text-amber-600" />
+          <MetricCard icon={<Droplets />} label="Moisture" value={displayMoisture} status={Number(displayNdvi) > 0.6 ? "Optimal" : "Check Lines"} color="text-amber-400" />
+          <MetricCard icon={<Sun />} label="Chlorophyll" value={displayChlorophyll} status={displayChlorophyll === 'High' ? "Healthy" : "Deficient"} color="text-amber-500" />
+          <MetricCard icon={<Thermometer />} label="Surface Temp" value={displayTemp} status="Normal" color="text-orange-400" />
+          <MetricCard icon={<Layers />} label="Biomass" value={displayBiomass} status="Growing" color="text-amber-600" />
         </div>
 
         {/* Alerts Section */}
@@ -126,7 +252,7 @@ const CropHealthMonitor: React.FC = () => {
               <div className="space-y-1">
                 <h4 className="text-[10px] font-black uppercase tracking-widest">Uniform Growth</h4>
                 <p className="text-[9px] font-bold text-stone-500 uppercase leading-relaxed tracking-widest">
-                  92% of the parcel shows consistent vegetation density. No immediate action required.
+                  {Number(displayNdvi) > 0.7 ? "Excellent canopy thickness and dense cellular coverage." : "Consistent growth, monitor nutrient dispersion patterns."}
                 </p>
               </div>
             </div>
@@ -136,9 +262,9 @@ const CropHealthMonitor: React.FC = () => {
                 <AlertTriangle className="w-5 h-5" />
               </div>
               <div className="space-y-1">
-                <h4 className="text-[10px] font-black uppercase tracking-widest">Low Moisture Zone</h4>
+                <h4 className="text-[10px] font-black uppercase tracking-widest">Water Monitor</h4>
                 <p className="text-[9px] font-bold text-stone-500 uppercase leading-relaxed tracking-widest">
-                  South-east corner (0.4 Ac) shows signs of water stress. Check irrigation lines.
+                  Current Moisture index stands at {displayMoisture}. Keep irrigation lines fully pressurized.
                 </p>
               </div>
             </div>
@@ -152,12 +278,52 @@ const CropHealthMonitor: React.FC = () => {
             <span className="text-[10px] font-black uppercase tracking-widest">AI Recommendation</span>
           </div>
           <p className="text-lg font-black tracking-tight leading-tight uppercase">
-            Apply nitrogen-rich fertilizer to the North-West quadrant to boost late-stage growth.
+            {displayRecommendation}
           </p>
           <button className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest group">
             View Protocol <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
           </button>
         </div>
+
+        {history.length > 0 && (
+          <div className="mt-12 space-y-6">
+            <h3 className="text-xl font-black flex items-center gap-3 text-white uppercase tracking-tighter">
+              <History className="text-amber-500 w-5 h-5" />
+              Satellite History
+            </h3>
+            <div className="space-y-4">
+              {history.map((report) => (
+                <div key={report.id} className="bg-stone-950 rounded-[2rem] p-6 border border-white/5 flex items-center justify-between group">
+                  <div className="flex items-center gap-4">
+                    <div className="p-3 bg-white/5 rounded-2xl text-amber-500 border border-white/5">
+                      <Satellite className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <h4 className="font-black text-white text-sm uppercase tracking-tight">{report.fieldName}</h4>
+                      <p className="text-[10px] font-bold text-stone-500 uppercase tracking-widest">
+                        {report.timestamp?.toDate ? report.timestamp.toDate().toLocaleDateString() : 'Recent'} • NDVI: {report.ndvi}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button 
+                      onClick={() => setActiveReport(report)}
+                      className="p-3 bg-white/5 rounded-xl border border-white/5 text-stone-400 hover:text-amber-500 transition-all"
+                    >
+                      <Search className="w-4 h-4" />
+                    </button>
+                    <button 
+                      onClick={() => deleteReport(report.id)}
+                      className="p-3 bg-white/5 rounded-xl border border-white/5 text-stone-400 hover:text-red-500 transition-all opacity-0 group-hover:opacity-100"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
 
       </div>
     </div>

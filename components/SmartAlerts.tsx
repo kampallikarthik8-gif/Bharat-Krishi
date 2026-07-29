@@ -24,10 +24,12 @@ import { db } from '../src/firebase';
 import { useFirebase } from '../src/components/FirebaseProvider';
 import { handleFirestoreError, OperationType } from '../src/utils/firestoreErrorHandler';
 import { showToast } from '../src/utils/toast';
+import { useDialogs } from '../src/components/DialogProvider';
 import { Alert } from '../types';
 
 const SmartAlerts: React.FC = () => {
   const { user, activeFarmId } = useFirebase();
+  const { confirm } = useDialogs();
   const [alerts, setAlerts] = useState<Alert[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -65,13 +67,21 @@ const SmartAlerts: React.FC = () => {
 
   const deleteAlert = async (id: string) => {
     if (!user || !activeFarmId) return;
-    const path = `users/${activeFarmId}/alerts/${id}`;
-    try {
-      await deleteDoc(doc(db, path));
-      showToast('Alert deleted');
-    } catch (error) {
-      handleFirestoreError(error, OperationType.DELETE, path);
-    }
+
+    confirm({
+      title: 'Delete Alert',
+      message: 'Are you sure you want to remove this alert protocol?',
+      type: 'danger',
+      onConfirm: async () => {
+        const path = `users/${activeFarmId}/alerts/${id}`;
+        try {
+          await deleteDoc(doc(db, path));
+          showToast('Alert deleted');
+        } catch (error) {
+          handleFirestoreError(error, OperationType.DELETE, path);
+        }
+      }
+    });
   };
 
   const addProtocol = async (type: 'Spray' | 'Weather' | 'Market') => {

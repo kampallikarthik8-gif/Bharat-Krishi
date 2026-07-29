@@ -25,6 +25,8 @@ import { collection, addDoc, deleteDoc, doc, onSnapshot, query, orderBy } from '
 import { handleFirestoreError, OperationType } from '../src/utils/firestoreErrorHandler';
 
 import { useFirebase } from '../src/components/FirebaseProvider';
+import { ResponsiveContainer, PieChart as RePieChart, Pie, Cell, Tooltip } from 'recharts';
+import { motion, AnimatePresence } from 'motion/react';
 
 const FinanceLedger: React.FC = () => {
   const { activeFarmId } = useFirebase();
@@ -150,6 +152,93 @@ const FinanceLedger: React.FC = () => {
 
   const balance = totals.income - totals.expense;
 
+  // Monthly breakdown calculations
+  const currentMonthExpenses = React.useMemo(() => {
+    const now = new Date();
+    const currentYear = now.getFullYear();
+    const currentMonth = now.getMonth();
+
+    return transactions.filter(tx => {
+      if (tx.type !== 'Expense') return false;
+      const txDate = new Date(tx.date);
+      return txDate.getFullYear() === currentYear && txDate.getMonth() === currentMonth;
+    });
+  }, [transactions]);
+
+  const currentMonthData = React.useMemo(() => {
+    const counts: Record<string, number> = {};
+    currentMonthExpenses.forEach(tx => {
+      counts[tx.category] = (counts[tx.category] || 0) + tx.amount;
+    });
+
+    return Object.entries(counts).map(([name, value]) => ({
+      name,
+      value
+    })).sort((a, b) => b.value - a.value);
+  }, [currentMonthExpenses]);
+
+  const currentMonthTotalSpend = currentMonthExpenses.reduce((sum, tx) => sum + tx.amount, 0);
+
+  const CATEGORY_COLORS: Record<string, string> = {
+    Seeds: '#F59E0B',      // Amber
+    Fertilizer: '#10B981', // Emerald
+    Labor: '#3B82F6',      // Blue
+    Fuel: '#EF4444',       // Red
+    Machinery: '#8B5CF6',  // Purple
+    Repairs: '#EC4899',    // Pink
+    Other: '#78716C',      // Stone
+  };
+
+  const currentMonthName = new Date().toLocaleString('default', { month: 'long' });
+
+  const CustomTooltip = ({ active, payload }: any) => {
+    if (active && payload && payload.length) {
+      const data = payload[0].payload;
+      return (
+        <div className="bg-stone-950/90 border border-stone-800 p-4 rounded-2xl shadow-xl backdrop-blur-md">
+          <p className="text-[10px] font-black uppercase tracking-widest text-stone-500 mb-1">{data.name}</p>
+          <p className="text-sm font-black text-amber-500">₹{data.value.toLocaleString()}</p>
+        </div>
+      );
+    }
+    return null;
+  };
+
+  const chartContainerVariants: any = {
+    hidden: { opacity: 0, scale: 0.95, y: 15 },
+    visible: {
+      opacity: 1,
+      scale: 1,
+      y: 0,
+      transition: {
+        duration: 0.5,
+        ease: [0.16, 1, 0.3, 1],
+        staggerChildren: 0.08
+      }
+    },
+    exit: {
+      opacity: 0,
+      scale: 0.95,
+      y: -15,
+      transition: {
+        duration: 0.3
+      }
+    }
+  };
+
+  const chartItemVariants: any = {
+    hidden: { opacity: 0, y: 10 },
+    visible: { 
+      opacity: 1, 
+      y: 0, 
+      transition: { 
+        type: 'spring', 
+        stiffness: 100, 
+        damping: 15 
+      } 
+    }
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen bg-black flex items-center justify-center">
@@ -213,6 +302,141 @@ const FinanceLedger: React.FC = () => {
             </div>
          </div>
       </div>
+
+      {/* Spending Breakdown Chart Card */}
+      <motion.div 
+        initial="hidden"
+        animate="visible"
+        exit="exit"
+        variants={chartContainerVariants}
+        className="grid grid-cols-1 gap-4 px-2"
+      >
+        <div className="bg-stone-900 rounded-[2.5rem] p-8 text-white shadow-2xl relative overflow-hidden border border-amber-500/5">
+          <div className="relative z-10 flex flex-col md:flex-row gap-8 items-center">
+            
+            {/* Left description / summary */}
+            <div className="flex-1 space-y-4 w-full">
+              <motion.div variants={chartItemVariants}>
+                <span className="text-[9px] font-black uppercase tracking-widest text-amber-500 bg-amber-500/10 px-3 py-1 rounded-full font-mono">
+                  {currentMonthName} Analysis
+                </span>
+                <h3 className="text-2xl font-black tracking-tight mt-2 text-white font-sans">Monthly Spending</h3>
+                <p className="text-xs text-stone-400 mt-1">Breakdown of operational expenses for the current month.</p>
+              </motion.div>
+
+              <AnimatePresence mode="wait">
+                {currentMonthTotalSpend > 0 ? (
+                  <motion.div 
+                    key="spend-data"
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -10 }}
+                    transition={{ duration: 0.3 }}
+                    className="space-y-3 pt-2"
+                  >
+                    <motion.div variants={chartItemVariants} className="bg-stone-950/40 p-4 rounded-2xl border border-white/5">
+                      <p className="text-[9px] font-black uppercase tracking-widest text-stone-500 mb-1 font-mono">Total Current Month Spend</p>
+                      <p className="text-2xl font-black text-amber-500 font-sans">₹{currentMonthTotalSpend.toLocaleString()}</p>
+                    </motion.div>
+
+                    {/* Legend list of values */}
+                    <motion.div 
+                      variants={chartContainerVariants}
+                      className="grid grid-cols-2 gap-2 text-[11px]"
+                    >
+                      {currentMonthData.map((entry) => {
+                        const color = CATEGORY_COLORS[entry.name] || '#78716C';
+                        const pct = ((entry.value / currentMonthTotalSpend) * 100).toFixed(0);
+                        return (
+                          <motion.div 
+                            key={entry.name}
+                            variants={chartItemVariants}
+                            whileHover={{ scale: 1.02 }}
+                            className="flex items-center gap-2 bg-stone-950/20 p-2 rounded-xl border border-stone-800/50 cursor-default"
+                          >
+                            <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: color }} />
+                            <span className="text-stone-400 font-bold truncate flex-1">{entry.name}</span>
+                            <span className="text-stone-200 font-black">{pct}%</span>
+                          </motion.div>
+                        );
+                      })}
+                    </motion.div>
+                  </motion.div>
+                ) : (
+                  <motion.div 
+                    key="spend-empty"
+                    initial={{ opacity: 0, scale: 0.95 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    exit={{ opacity: 0, scale: 0.95 }}
+                    transition={{ duration: 0.3 }}
+                    className="bg-stone-950/30 border border-stone-800/40 p-6 rounded-3xl text-center"
+                  >
+                    <p className="text-xs text-stone-500 font-bold">No expenses logged for {currentMonthName} yet.</p>
+                    <p className="text-[10px] text-stone-600 uppercase tracking-wider mt-1 font-mono">Use the "+" button to register transactions</p>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
+
+            {/* Right Pie Chart */}
+            <motion.div 
+              variants={chartItemVariants}
+              className="w-full md:w-64 h-56 flex items-center justify-center relative shrink-0"
+            >
+              <AnimatePresence mode="wait">
+                {currentMonthTotalSpend > 0 ? (
+                  <motion.div 
+                    key="pie-chart-active"
+                    initial={{ opacity: 0, scale: 0.8 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    exit={{ opacity: 0, scale: 0.8 }}
+                    transition={{ type: 'spring', damping: 20, stiffness: 80 }}
+                    className="w-full h-full"
+                  >
+                    <ResponsiveContainer width="100%" height="100%">
+                      <RePieChart>
+                        <Pie
+                          data={currentMonthData}
+                          cx="50%"
+                          cy="50%"
+                          innerRadius={55}
+                          outerRadius={80}
+                          paddingAngle={4}
+                          dataKey="value"
+                          isAnimationActive={true}
+                          animationBegin={0}
+                          animationDuration={800}
+                        >
+                          {currentMonthData.map((entry, index) => {
+                            const color = CATEGORY_COLORS[entry.name] || '#78716C';
+                            return <Cell key={`cell-${index}`} fill={color} stroke="#1c1917" strokeWidth={2} />;
+                          })}
+                        </Pie>
+                        <Tooltip content={<CustomTooltip />} />
+                      </RePieChart>
+                    </ResponsiveContainer>
+                  </motion.div>
+                ) : (
+                  /* Simple mockup visual donut when empty */
+                  <motion.div 
+                    key="pie-chart-empty"
+                    initial={{ opacity: 0, rotate: -45 }}
+                    animate={{ opacity: 1, rotate: 0 }}
+                    exit={{ opacity: 0, rotate: 45 }}
+                    transition={{ duration: 0.5 }}
+                    className="relative w-40 h-40 rounded-full border-8 border-stone-800 flex items-center justify-center"
+                  >
+                    <div className="absolute inset-2 rounded-full border border-dashed border-stone-700/50 flex items-center justify-center">
+                      <PieChart className="w-8 h-8 text-stone-700" />
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </motion.div>
+
+          </div>
+        </div>
+      </motion.div>
 
       <div className="bg-stone-950 rounded-[2.5rem] p-8 shadow-sm border border-amber-500/5">
         <h3 className="text-[11px] font-black text-stone-500 uppercase tracking-[0.2em] mb-6 px-2">Audit Trail</h3>

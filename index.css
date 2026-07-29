@@ -67,24 +67,25 @@ body {
   max-width: 480px;
   margin: 0 auto;
   height: 100vh;
+  height: 100dvh;
   position: relative;
   background: var(--m3-background);
-  box-shadow: 0 0 40px rgba(0,0,0,0.05);
+  box-shadow: 0 0 40px rgba(0,0,0,0.5);
 }
 
 @media (min-width: 481px) {
   body {
-    background-color: #f0f0f0;
+    background-color: #0f0f11;
   }
 }
 
 /* Safe Area Padding */
 .pb-safe {
-  padding-bottom: env(safe-area-inset-bottom);
+  padding-bottom: max(0.5rem, env(safe-area-inset-bottom));
 }
 
 .pt-safe {
-  padding-top: env(safe-area-inset-top);
+  padding-top: max(0.5rem, env(safe-area-inset-top));
 }
 
 /* Custom Scrollbar */

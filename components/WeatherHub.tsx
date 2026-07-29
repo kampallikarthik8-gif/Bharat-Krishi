@@ -27,10 +27,12 @@ import {
   LocateFixed,
   MapPin,
   Search,
-  X
+  X,
+  AlertCircle
 } from 'lucide-react';
 import { getWeatherAdvisory } from '../services/geminiService';
 import Markdown from 'react-markdown';
+import { motion, AnimatePresence } from 'motion/react';
 
 const WEATHER_API_KEY = import.meta.env.VITE_WEATHER_API_KEY;
 
@@ -61,6 +63,11 @@ const WeatherHub: React.FC<WeatherHubProps> = ({ language: initialLanguage }) =>
   const [advisory, setAdvisory] = React.useState('');
   const [advisoryLoading, setAdvisoryLoading] = React.useState(false);
   const [language, setLanguage] = React.useState(initialLanguage);
+  const [alertDialog, setAlertDialog] = React.useState<{
+    isOpen: boolean;
+    title: string;
+    message: string;
+  }>({ isOpen: false, title: '', message: '' });
   const [locationSource, setLocationSource] = React.useState<'GPS' | 'IP' | 'Default' | 'Manual' | 'Cached' | null>(null);
   const [isDetecting, setIsDetecting] = React.useState(false);
   const [searchInput, setSearchInput] = React.useState('');
@@ -113,11 +120,20 @@ const WeatherHub: React.FC<WeatherHubProps> = ({ language: initialLanguage }) =>
         fetchWeather(lat, lon, 'Manual');
         setSearchInput('');
       } else {
-        alert("Location not found. Please try another city or region.");
+        setAlertDialog({
+          isOpen: true,
+          title: 'Location Not Found',
+          message: 'We couldn’t find the specified location. Please check the spelling or try a more prominent nearby city/district.'
+        });
         setLoading(false);
       }
     } catch (err) {
       console.error("Manual search failed", err);
+      setAlertDialog({
+        isOpen: true,
+        title: 'Search Error',
+        message: 'Could not connect to meteorological services. Please verify your internet connection and try again.'
+      });
       setLoading(false);
     } finally {
       setIsSearching(false);
@@ -478,6 +494,39 @@ const WeatherHub: React.FC<WeatherHubProps> = ({ language: initialLanguage }) =>
           © {new Date().getFullYear()} BHARAT KISAN SYSTEMS
         </p>
       </section>
+
+      {/* Custom Alert Dialog */}
+      <AnimatePresence>
+        {alertDialog.isOpen && (
+          <motion.div 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md"
+          >
+            <motion.div 
+              initial={{ scale: 0.9, opacity: 0, y: 20 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
+              exit={{ scale: 0.9, opacity: 0, y: 20 }}
+              className="bg-[#12141a] border border-white/10 rounded-[2.5rem] p-10 max-w-sm w-full shadow-2xl"
+            >
+              <div className="text-center">
+                <div className="w-20 h-20 bg-amber-500/10 text-amber-500 rounded-[1.5rem] flex items-center justify-center mb-8 mx-auto border border-amber-500/20">
+                  <AlertCircle className="w-10 h-10" />
+                </div>
+                <h3 className="text-2xl font-black text-white uppercase tracking-tighter mb-3">{alertDialog.title}</h3>
+                <p className="text-sm font-medium text-white/40 leading-relaxed mb-10 px-4">{alertDialog.message}</p>
+                <button 
+                  onClick={() => setAlertDialog({ ...alertDialog, isOpen: false })}
+                  className="w-full py-5 bg-amber-600 text-black rounded-2xl font-black text-[12px] uppercase tracking-[0.2em] shadow-xl hover:bg-amber-700 active:scale-95 transition-all"
+                >
+                  Understood
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 };

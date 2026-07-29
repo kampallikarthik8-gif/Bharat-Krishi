@@ -7,7 +7,6 @@ import {
   Beaker, 
   MapPin, 
   Calculator, 
-  BookOpen, 
   Calendar, 
   Maximize,
   ChevronRight,
@@ -21,12 +20,10 @@ import {
   TrendingUp,
   Microscope,
   ShoppingCart,
-  Truck,
   Lightbulb,
   Camera,
   Bug,
   Newspaper,
-  Beef,
   ClipboardCheck,
   Mic,
   Activity,
@@ -39,8 +36,8 @@ import {
   Settings as SettingsIcon,
   HelpCircle,
   Map as MapIcon,
-  Leaf,
-  ArrowRightLeft
+  ArrowRightLeft,
+  FileText
 } from 'lucide-react';
 
 import { triggerSelectionHaptic } from '../src/utils/haptics';
@@ -66,12 +63,8 @@ const TOOLS = [
   { id: 'weather', icon: <CloudSun />, label: 'Weather', view: AppView.WEATHER_HUB, category: 'Daily', theme: 'amber', desc: 'Hyper-local forecasting' },
   { id: 'soil', icon: <Microscope />, label: 'Soil Lab', view: AppView.SOIL_LAB, category: 'Daily', theme: 'amber', desc: 'Nutrient & pH analysis' },
   { id: 'pest', icon: <Bug />, label: 'Pest ID', view: AppView.PEST_LIBRARY, category: 'Daily', theme: 'amber', desc: 'Pest identification library' },
-  { id: 'carbon', icon: <Leaf />, label: 'Carbon Credits', view: AppView.CARBON_CREDIT_TRACKER, category: 'Learning', theme: 'amber', desc: 'Eco-tracking & credits' },
-  { id: 'rental', icon: <Truck />, label: 'Equipment', view: AppView.EQUIPMENT_RENTAL, category: 'Learning', theme: 'amber', desc: 'Fleet & rental management' },
-  { id: 'academy', icon: <BookOpen />, label: 'Agri Academy', view: AppView.AGRI_ACADEMY, category: 'Learning', theme: 'amber', desc: 'Modern farming courses' },
   { id: 'news', icon: <Newspaper />, label: 'Agri News', view: AppView.AGRI_NEWS, category: 'Learning', theme: 'amber', desc: 'Latest industry updates' },
-  { id: 'livestock', icon: <Beef />, label: 'Livestock', view: AppView.LIVESTOCK_ASSISTANT, category: 'Learning', theme: 'amber', desc: 'Animal health assistant' },
-  { id: 'sustainability', icon: <ShieldCheck />, label: 'Sustainability', view: AppView.SUSTAINABILITY_HUB, category: 'Learning', theme: 'amber', desc: 'Eco-farming protocols' },
+  { id: 'project_docs', icon: <FileText />, label: 'Project Specs', view: AppView.PROJECT_DOCS, category: 'Learning', theme: 'amber', desc: '30-Page SRS & System Architecture' },
 ];
 
 const ToolsHub: React.FC<ToolsHubProps> = ({ setView }) => {

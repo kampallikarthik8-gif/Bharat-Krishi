@@ -6,16 +6,21 @@ const STATIC_ASSETS = [
   '/index.css',
   'https://cdn.tailwindcss.com',
   'https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap',
-  'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css',
-  'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js'
+  'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css'
 ];
 
 // Install event - Cache static assets
 self.addEventListener('install', (event) => {
   event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => {
+    caches.open(CACHE_NAME).then(async (cache) => {
       console.log('SW: Pre-caching static assets');
-      return cache.addAll(STATIC_ASSETS);
+      for (const asset of STATIC_ASSETS) {
+        try {
+          await cache.add(asset);
+        } catch (err) {
+          console.warn(`SW: Failed to pre-cache asset: ${asset}`, err);
+        }
+      }
     })
   );
   self.skipWaiting();
@@ -62,11 +67,18 @@ self.addEventListener('fetch', (event) => {
           });
         }
         return networkResponse;
-      }).catch(() => {
-        // If network fails, we already have the cached version (if any)
       });
 
-      return cachedResponse || fetchPromise;
+      if (cachedResponse) {
+        // Fetch in background to update cache, catch silently
+        fetchPromise.catch((err) => {
+          console.warn('Background sync failed for:', event.request.url, err);
+        });
+        return cachedResponse;
+      }
+
+      // If no cached response exists, return the direct fetchPromise without swallowing errors as undefined
+      return fetchPromise;
     })
   );
 });

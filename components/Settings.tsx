@@ -29,10 +29,13 @@ import {
   LogOut,
   Users,
   UserPlus,
-  ShieldAlert
+  ShieldAlert,
+  AlertCircle
 } from 'lucide-react';
+import { motion, AnimatePresence } from 'motion/react';
 import { Geolocation } from '@capacitor/geolocation';
 import { useFirebase } from '../src/components/FirebaseProvider';
+import { useDialogs } from '../src/components/DialogProvider';
 import { db } from '../src/firebase';
 import { collection, query, onSnapshot, doc, updateDoc, addDoc, deleteDoc, setDoc } from 'firebase/firestore';
 import { handleFirestoreError, OperationType } from '../src/utils/firestoreErrorHandler';
@@ -68,7 +71,8 @@ interface SettingsProps {
 }
 
 const Settings: React.FC<SettingsProps> = ({ language, setLanguage }) => {
-  const { user, profile, logout, activeFarmId } = useFirebase();
+  const { user, profile, logout, activeFarmId, updateProfileLocal } = useFirebase();
+  const { confirm, alert, prompt } = useDialogs();
 
   const [settings, setSettings] = React.useState({
     farmName: profile?.farmName || 'Sunrise Acres',
@@ -101,7 +105,10 @@ const Settings: React.FC<SettingsProps> = ({ language, setLanguage }) => {
     if (tapCountRef.current >= 5) {
       setDevMode(!devMode);
       tapCountRef.current = 0;
-      alert(`Developer Mode ${!devMode ? 'Enabled' : 'Disabled'}`);
+      alert({
+        title: 'Developer Mode',
+        message: `Developer Mode ${!devMode ? 'Enabled' : 'Disabled'}. Advanced settings and diagnostics are now available.`
+      });
     } else {
       tapTimeoutRef.current = setTimeout(() => {
         tapCountRef.current = 0;
@@ -113,7 +120,10 @@ const Settings: React.FC<SettingsProps> = ({ language, setLanguage }) => {
     if (!user || !activeFarmId) return;
     try {
       await updateDoc(doc(db, 'users', activeFarmId), { role: 'admin' });
-      alert("You are now an Admin. Please restart the app or refresh to see changes.");
+      alert({
+        title: 'Admin Access',
+        message: 'You are now an Admin. Please restart the app or refresh to see changes to your dashboard permissions.'
+      });
     } catch (error) {
       handleFirestoreError(error, OperationType.UPDATE, `users/${activeFarmId}`);
     }
@@ -176,19 +186,25 @@ const Settings: React.FC<SettingsProps> = ({ language, setLanguage }) => {
       updateProfileField('location', cityRegion);
     } catch (err) {
       console.error("Location detection failed", err);
-      alert("GPS Access Denied or Location Error.");
+      alert({
+        title: 'GPS Error',
+        message: 'GPS Access Denied or Location Error. Please ensure location services are active for this app.'
+      });
     } finally {
       setIsLocating(false);
     }
   };
 
-  const updateProfileField = async (key: string, value: any) => {
+  const updateProfileField = (key: string, value: any) => {
     if (!user || !activeFarmId) return;
+    updateProfileLocal({ [key]: value });
     const path = `users/${activeFarmId}`;
     try {
-      await updateDoc(doc(db, 'users', activeFarmId), { [key]: value });
+      updateDoc(doc(db, 'users', activeFarmId), { [key]: value }).catch((err) => {
+        console.warn(`Background update warning for ${key}:`, err);
+      });
     } catch (error) {
-      handleFirestoreError(error, OperationType.UPDATE, path);
+      console.error(`Error updating profile field ${key}:`, error);
     }
   };
 
@@ -252,529 +268,512 @@ const Settings: React.FC<SettingsProps> = ({ language, setLanguage }) => {
   };
 
   const clearData = () => {
-    if (confirm("This will permanently delete your field logbook and all saved farm data. Continue?")) {
-      localStorage.clear();
-      window.location.reload();
-    }
+    confirm({
+      title: 'Danger Zone',
+      message: 'This will permanently delete your field logbook and all saved farm data. Continue?',
+      type: 'danger',
+      onConfirm: () => {
+        localStorage.clear();
+        window.location.reload();
+      }
+    });
   };
 
   const addTeamMember = async () => {
     if (!user || !activeFarmId) return;
-    const name = prompt("Enter Team Member Name:");
-    const email = prompt("Enter Team Member Email:");
-    const role = prompt("Enter Role (Manager/Worker):", "Worker");
-    const memberUid = prompt("Enter User ID (Optional - for secure access):");
-
-    if (name && email && role) {
-      const memberId = memberUid || `temp_${Date.now()}`;
-      const path = `users/${activeFarmId}/team/${memberId}`;
-      try {
-        await setDoc(doc(db, path), {
-          name,
-          email,
-          role: role.charAt(0).toUpperCase() + role.slice(1).toLowerCase(),
-          joinedAt: new Date().toISOString(),
-          status: memberUid ? 'Active' : 'Pending',
-          uid: memberUid || null
+    
+    prompt({
+      title: 'Add Team Member',
+      message: 'Enter Team Member Name:',
+      onConfirm: (name) => {
+        if (!name) return;
+        prompt({
+          title: 'Add Team Member',
+          message: 'Enter Team Member Email:',
+          onConfirm: (email) => {
+            if (!email) return;
+            prompt({
+              title: 'Add Team Member',
+              message: 'Enter Role (Manager/Worker):',
+              defaultValue: 'Worker',
+              onConfirm: (role) => {
+                if (!role) return;
+                prompt({
+                  title: 'Add Team Member',
+                  message: 'Enter User ID (Optional - for secure access):',
+                  onConfirm: (memberUid) => {
+                    const memberId = memberUid || `temp_${Date.now()}`;
+                    const path = `users/${activeFarmId}/team/${memberId}`;
+                    try {
+                      setDoc(doc(db, path), {
+                        name,
+                        email,
+                        role: role.charAt(0).toUpperCase() + role.slice(1).toLowerCase(),
+                        joinedAt: new Date().toISOString(),
+                        status: memberUid ? 'Active' : 'Pending',
+                        uid: memberUid || null
+                      });
+                    } catch (error) {
+                      handleFirestoreError(error, OperationType.CREATE, path);
+                    }
+                  }
+                });
+              }
+            });
+          }
         });
-      } catch (error) {
-        handleFirestoreError(error, OperationType.CREATE, path);
       }
-    }
+    });
   };
 
   const removeTeamMember = async (memberId: string) => {
     if (!user || !activeFarmId) return;
-    if (confirm("Are you sure you want to remove this team member?")) {
-      const path = `users/${activeFarmId}/team/${memberId}`;
-      try {
-        await deleteDoc(doc(db, path));
-      } catch (error) {
-        handleFirestoreError(error, OperationType.DELETE, path);
+    
+    confirm({
+      title: 'Remove Member',
+      message: 'Are you sure you want to remove this team member? They will lose access to the shared farm data?',
+      type: 'danger',
+      onConfirm: async () => {
+        const path = `users/${activeFarmId}/team/${memberId}`;
+        try {
+          await deleteDoc(doc(db, path));
+        } catch (error) {
+          handleFirestoreError(error, OperationType.DELETE, path);
+        }
       }
-    }
+    });
   };
 
   const updateMemberRole = async (memberId: string, currentRole: string) => {
-    if (!user) return;
-    const newRole = prompt("Enter New Role (Manager/Worker):", currentRole);
-    if (newRole && newRole !== currentRole) {
-      const path = `users/${user.uid}/team/${memberId}`;
-      try {
-        await updateDoc(doc(db, path), { 
-          role: newRole.charAt(0).toUpperCase() + newRole.slice(1).toLowerCase() 
-        });
-      } catch (error) {
-        handleFirestoreError(error, OperationType.UPDATE, path);
+    if (!user || !activeFarmId) return;
+    prompt({
+      title: 'Update Role',
+      message: 'Enter New Role (Manager/Worker):',
+      defaultValue: currentRole,
+      onConfirm: (newRole) => {
+        if (newRole && newRole !== currentRole) {
+          const path = `users/${activeFarmId}/team/${memberId}`;
+          try {
+            updateDoc(doc(db, path), { 
+              role: newRole.charAt(0).toUpperCase() + newRole.slice(1).toLowerCase() 
+            });
+          } catch (error) {
+            handleFirestoreError(error, OperationType.UPDATE, path);
+          }
+        }
       }
-    }
+    });
   };
 
   return (
-    <div className="space-y-6 pb-24 bg-[var(--m3-background)] min-h-screen">
-      {/* Header */}
-      <div className="bg-[var(--m3-primary-container)] rounded-b-[2.5rem] p-8 pt-12 shadow-md relative overflow-hidden">
-        <div className="relative z-10">
-          <h2 className="text-3xl font-medium text-[var(--m3-on-primary-container)] mb-1 m3-headline-medium">Settings</h2>
-          <p className="text-[var(--m3-on-primary-container)] opacity-70 text-xs font-medium uppercase tracking-widest">System Configuration</p>
-        </div>
-      </div>
-
-      <div className="px-6 space-y-6">
-        {/* Farm Identity Section */}
-        <section className="space-y-3">
-          <SectionHeader title="Farm Identity" />
-      
-          <div className="m3-card-filled p-4 bg-[var(--m3-surface-container-low)] divide-y divide-[var(--m3-outline-variant)]">
-            <div className="py-4">
-              <label className="text-[10px] font-medium text-[var(--m3-on-surface-variant)] uppercase tracking-wider mb-2 block">Farm Name</label>
-              <input 
-                value={settings.farmName}
-                onChange={e => updateSetting('farmName', e.target.value)}
-                className="w-full bg-[var(--m3-surface-container-high)] border-b border-[var(--m3-outline)] outline-none text-sm font-medium text-[var(--m3-on-surface)] p-3 rounded-t-lg focus:border-[var(--m3-primary)] transition-all"
-              />
-            </div>
-            <div className="py-4">
-              <label className="text-[10px] font-medium text-[var(--m3-on-surface-variant)] uppercase tracking-wider mb-2 block">Farm Land Size</label>
-              <div className="flex gap-2">
-                <input 
-                  type="number"
-                  value={profile?.farmSize || 0}
-                  onChange={e => updateSetting('farmSize', parseFloat(e.target.value) || 0)}
-                  className="flex-1 bg-[var(--m3-surface-container-high)] border-b border-[var(--m3-outline)] outline-none text-sm font-medium text-[var(--m3-on-surface)] p-3 rounded-t-lg focus:border-[var(--m3-primary)] transition-all"
-                />
-                <div className="bg-[var(--m3-surface-container-high)] px-4 flex items-center rounded-t-lg border-b border-[var(--m3-outline)] text-xs font-medium text-[var(--m3-on-surface-variant)]">
-                  {profile?.units === 'Imperial' ? 'Acres' : 'Hectares'}
-                </div>
-              </div>
-            </div>
-            <div className="w-full flex items-center justify-between py-4">
-              <div className="flex items-center gap-4 text-left">
-                <div className="p-3 bg-[var(--m3-surface-container-high)] rounded-xl text-[var(--m3-on-surface-variant)]">
-                  <MapPin className="w-5 h-5" />
-                </div>
-                <div>
-                  <p className="text-sm font-medium text-[var(--m3-on-surface)]">Primary Region</p>
-                  <div className="flex items-center gap-1.5 mt-0.5">
-                    <span className={`w-1.5 h-1.5 rounded-full ${isLocating ? 'bg-[var(--m3-primary)] animate-pulse' : 'bg-[var(--m3-outline)]'}`} />
-                    <p className="text-[10px] text-[var(--m3-on-surface-variant)] font-medium uppercase tracking-widest">{isLocating ? 'Syncing...' : 'Connected to GPS'}</p>
-                  </div>
-                </div>
-              </div>
-              <div className="flex items-center gap-3">
-                <div className="flex flex-col items-end">
-                  <span className="text-xs font-medium text-[var(--m3-primary)] truncate max-w-[120px]">{location}</span>
-                  <button 
-                    onClick={() => {
-                      const loc = prompt("Enter Location Manually", location);
-                      if (loc) {
-                        setLocation(loc);
-                        localStorage.setItem('agri_farm_location', loc);
-                      }
-                    }}
-                    className="text-[8px] font-medium text-[var(--m3-on-surface-variant)] uppercase tracking-widest mt-1"
-                  >
-                    Edit Manually
-                  </button>
-                </div>
-                <button 
-                  onClick={detectLocation}
-                  disabled={isLocating}
-                  className="p-2 bg-[var(--m3-surface-container-high)] rounded-xl text-[var(--m3-primary)] disabled:opacity-50"
-                >
-                  {isLocating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Navigation className="w-4 h-4" />}
-                </button>
-              </div>
-            </div>
-          </div>
-        </section>
-
-        {/* Farm Team Section */}
-        <section className="space-y-3">
-          <SectionHeader title="Farm Team & Roles" />
-        <div className="m3-card-filled p-4 bg-[var(--m3-surface-container-low)] space-y-4">
-          <div className="flex items-center justify-between px-2 mb-2">
-            <div className="flex items-center gap-3">
-              <div className="p-2 bg-[var(--m3-surface-container-high)] rounded-xl text-[var(--m3-on-surface-variant)]">
-                <Users className="w-5 h-5" />
-              </div>
-              <div>
-                <p className="text-sm font-medium text-[var(--m3-on-surface)]">Team Management</p>
-                <p className="text-[10px] text-[var(--m3-on-surface-variant)] font-medium">Manage access for workers & managers</p>
-              </div>
-            </div>
-            <button 
-              onClick={addTeamMember}
-              className="p-2 bg-[var(--m3-primary)] text-[var(--m3-on-primary)] rounded-xl shadow-md active:scale-95 transition-all"
-            >
-              <UserPlus className="w-5 h-5" />
-            </button>
-          </div>
-
+    <div className="space-y-8 pb-32 animate-in fade-in duration-700 bg-[var(--m3-background)] min-h-screen">
+      {/* Dynamic System Header */}
+      <section className="px-6 pt-16 pb-8 relative overflow-hidden">
+        <div className="absolute top-0 right-0 w-64 h-64 bg-[var(--m3-primary)]/5 rounded-full blur-[100px] -mr-32 -mt-32" />
+        <motion.div 
+          initial={{ opacity: 0, x: -20 }}
+          animate={{ opacity: 1, x: 0 }}
+          className="flex flex-col gap-8 relative z-10"
+        >
           <div className="space-y-3">
-            {loadingTeam ? (
-              <div className="flex items-center justify-center py-6">
-                <Loader2 className="w-6 h-6 animate-spin text-[var(--m3-primary)]/30" />
+            <div className="flex items-center gap-3">
+              <div className="w-2 h-2 rounded-full bg-[var(--m3-primary)] animate-pulse" />
+              <span className="text-[10px] font-mono text-[var(--m3-primary)] font-bold uppercase tracking-[0.4em]">Integrated Settings.</span>
+            </div>
+            <h2 className="text-5xl font-black text-white tracking-tighter font-sans uppercase leading-none">
+              System <span className="text-[var(--m3-primary)]">Control.</span>
+            </h2>
+            <div className="flex items-center gap-4">
+              <p className="text-[10px] font-mono text-white/30 uppercase tracking-[0.2em]">Agri-OS v2.5 Deployment</p>
+              <div className="h-px w-12 bg-white/10" />
+              <div className="flex items-center gap-1.5">
+                <Signal className="w-3 h-3 text-[var(--m3-primary)]" />
+                <span className="text-[10px] font-mono text-[var(--m3-primary)] uppercase tracking-widest">Active</span>
               </div>
-            ) : team.length > 0 ? (
-              team.map(member => (
-                <div key={member.id} className="flex items-center justify-between p-4 bg-[var(--m3-surface-container-high)] rounded-2xl border border-[var(--m3-outline-variant)] group">
-                  <div className="flex items-center gap-4">
-                    <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-xs ${
-                      member.role === 'Manager' ? 'bg-[var(--m3-tertiary-container)] text-[var(--m3-on-tertiary-container)]' : 'bg-[var(--m3-secondary-container)] text-[var(--m3-on-secondary-container)]'
-                    }`}>
-                      {member.name.charAt(0)}
-                    </div>
-                    <div>
-                      <p className="text-sm font-medium text-[var(--m3-on-surface)]">{member.name}</p>
-                      <div className="flex items-center gap-2">
-                        <span className={`text-[9px] font-bold uppercase tracking-wider ${
-                          member.role === 'Manager' ? 'text-[var(--m3-tertiary)]' : 'text-[var(--m3-secondary)]'
-                        }`}>{member.role}</span>
-                        <span className="text-[9px] text-[var(--m3-outline)]">•</span>
-                        <span className="text-[9px] text-[var(--m3-on-surface-variant)] font-medium">{member.email}</span>
-                      </div>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                    <button 
-                      onClick={() => updateMemberRole(member.id, member.role)}
-                      className="p-2 text-[var(--m3-on-surface-variant)] hover:text-[var(--m3-primary)] transition-colors"
-                    >
-                      <ShieldCheck className="w-4 h-4" />
-                    </button>
-                    <button 
-                      onClick={() => removeTeamMember(member.id)}
-                      className="p-2 text-[var(--m3-on-surface-variant)] hover:text-[var(--m3-error)] transition-colors"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                  </div>
-                </div>
-              ))
-            ) : (
-              <div className="text-center py-8 border-2 border-dashed border-[var(--m3-outline-variant)] rounded-2xl">
-                <Users className="w-8 h-8 text-[var(--m3-outline)] mx-auto mb-2" />
-                <p className="text-[10px] font-medium text-[var(--m3-on-surface-variant)] uppercase tracking-widest">No team members yet</p>
-                <button 
-                  onClick={addTeamMember}
-                  className="mt-3 text-[10px] font-medium text-[var(--m3-primary)] uppercase tracking-widest bg-[var(--m3-primary-container)] px-4 py-2 rounded-full border border-[var(--m3-outline-variant)]"
-                >
-                  Add First Member
-                </button>
-              </div>
-            )}
+            </div>
           </div>
-        </div>
+        </motion.div>
       </section>
 
-        {/* AI Section */}
-        <section className="space-y-3">
-          <SectionHeader title="AI & Intelligence Tuning" />
-          <div className="m3-card-filled p-4 bg-[var(--m3-surface-container-low)] divide-y divide-[var(--m3-outline-variant)]">
-            <div className="flex items-center justify-between py-4">
-              <div className="flex items-center gap-4">
-                <div className="p-3 bg-[var(--m3-surface-container-high)] rounded-xl text-[var(--m3-on-surface-variant)]">
-                  <Mic2 className="w-5 h-5" />
+      <div className="px-6 space-y-12">
+        {/* Farm Infrastructure */}
+        <motion.section 
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.1 }}
+          className="space-y-6"
+        >
+          <SectionHeader title="Farm Infrastructure" subtitle="Base Coordinates & Spatial identity" />
+          <div className="bg-[var(--m3-surface-container-low)] rounded-[2.5rem] p-8 border border-white/5 space-y-8 shadow-2xl relative group overflow-hidden">
+            <div className="absolute top-0 right-0 p-8 opacity-[0.02] group-hover:opacity-[0.05] transition-opacity">
+              <Landmark className="w-32 h-32 rotate-12" />
+            </div>
+            
+            <div className="space-y-6 relative z-10">
+              <div className="group/input">
+                <label className="text-[9px] font-mono text-white/30 uppercase tracking-[0.3em] mb-3 block pl-2 group-focus-within/input:text-[var(--m3-primary)] transition-colors">Registered Farm Codename</label>
+                <input 
+                  value={settings.farmName}
+                  onChange={e => updateSetting('farmName', e.target.value)}
+                  className="w-full bg-white/[0.03] border border-white/10 p-5 rounded-2xl outline-none font-mono text-sm text-white focus:border-[var(--m3-primary)]/50 transition-all placeholder:text-white/10"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="group/input">
+                  <label className="text-[9px] font-mono text-white/30 uppercase tracking-[0.3em] mb-3 block pl-2">Territory Size</label>
+                  <div className="relative">
+                    <input 
+                      type="number"
+                      value={profile?.farmSize || 0}
+                      onChange={e => updateSetting('farmSize', parseFloat(e.target.value) || 0)}
+                      className="w-full bg-white/[0.03] border border-white/10 p-5 rounded-2xl outline-none font-mono text-sm text-white focus:border-[var(--m3-primary)]/50 transition-all"
+                    />
+                    <div className="absolute right-4 top-1/2 -translate-y-1/2 text-[9px] font-black text-[var(--m3-primary)] uppercase tracking-widest bg-[var(--m3-primary)]/10 px-3 py-1.5 rounded-lg border border-[var(--m3-primary)]/20">
+                      {profile?.units === 'Imperial' ? 'ACRES' : 'HECTARES'}
+                    </div>
+                  </div>
                 </div>
-                <div>
-                  <p className="text-sm font-medium text-[var(--m3-on-surface)]">AgriVoice Profile</p>
-                  <p className="text-[10px] text-[var(--m3-on-surface-variant)] font-medium italic">Gemini Voice Personality</p>
+
+                <div className="flex flex-col justify-end">
+                   <button 
+                    onClick={detectLocation}
+                    disabled={isLocating}
+                    className="w-full bg-white/[0.03] border border-white/10 p-5 rounded-2xl flex items-center justify-center gap-3 active:scale-95 transition-all group/loc"
+                   >
+                     {isLocating ? <Loader2 className="w-4 h-4 animate-spin text-[var(--m3-primary)]" /> : <Navigation className="w-4 h-4 text-white/40 group-hover/loc:text-[var(--m3-primary)] transition-colors" />}
+                     <span className="text-[9px] font-black text-white/40 uppercase tracking-widest group-hover/loc:text-white transition-colors">Relocate</span>
+                   </button>
                 </div>
               </div>
-              <select 
-                value={settings.aiVoice}
-                onChange={(e) => updateSetting('aiVoice', e.target.value)}
-                className="bg-[var(--m3-surface-container-high)] border-none rounded-xl py-2 px-4 text-xs font-medium text-[var(--m3-primary)] outline-none"
-              >
-                {AI_VOICES.map(voice => (
-                  <option key={voice.name} value={voice.name}>{voice.label}</option>
-                ))}
-              </select>
-            </div>
 
-            <div className="flex items-center justify-between py-4">
-              <div className="flex items-center gap-4">
-                <div className="p-3 bg-[var(--m3-surface-container-high)] rounded-xl text-[var(--m3-on-surface-variant)]">
-                  <Cpu className="w-5 h-5" />
+              <div className="p-6 bg-white/[0.02] border border-white/5 rounded-3xl flex items-center justify-between">
+                <div className="flex items-center gap-4">
+                  <div className="p-3 bg-[var(--m3-primary)]/10 rounded-2xl text-[var(--m3-primary)] border border-[var(--m3-primary)]/20">
+                    <MapPin className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <p className="text-[9px] font-mono text-white/30 uppercase tracking-widest mb-1">Current Telemetry</p>
+                    <p className="text-xs font-black text-white uppercase tracking-wider">{location}</p>
+                  </div>
                 </div>
-                <div>
-                  <p className="text-sm font-medium text-[var(--m3-on-surface)]">Intelligence Strategy</p>
-                  <p className="text-[10px] text-[var(--m3-on-surface-variant)] font-medium italic">Inference Depth vs Speed</p>
-                </div>
+                <button 
+                  onClick={() => {
+                    prompt({
+                      title: 'Manual Coordination',
+                      message: 'Enter system location manually:',
+                      defaultValue: location,
+                      onConfirm: (loc) => loc && (setLocation(loc), updateProfileField('location', loc))
+                    });
+                  }}
+                  className="text-[9px] font-black text-[var(--m3-primary)] uppercase tracking-widest hover:underline"
+                >
+                  Override
+                </button>
               </div>
-              <select 
-                value={settings.precisionMode}
-                onChange={(e) => updateSetting('precisionMode', e.target.value)}
-                className="bg-[var(--m3-surface-container-high)] border-none rounded-xl py-2 px-4 text-xs font-medium text-[var(--m3-primary)] outline-none"
-              >
-                <option>Standard</option>
-                <option>Balanced</option>
-                <option>High Accuracy</option>
-              </select>
             </div>
-
-            <ToggleItem 
-              icon={<Camera />}
-              label="HD Diagnostic Scanning"
-              enabled={settings.scannerHD}
-              onToggle={(val) => updateSetting('scannerHD', val)}
-            />
           </div>
-        </section>
+        </motion.section>
 
-        {/* Government Section */}
-        <section className="space-y-3">
-          <SectionHeader title="Government & Schemes" />
-          <div className="m3-card-filled p-4 bg-[var(--m3-surface-container-low)] divide-y divide-[var(--m3-outline-variant)]">
-            <SettingItem 
-              icon={<CreditCard />}
-              label="Kisan Credit Card (KCC)"
-              value={settings.kccId || 'Link ID'}
-              onClick={() => {
-                const id = prompt("Enter KCC ID (16 digits)", settings.kccId);
-                if (id !== null) updateSetting('kccId', id);
-              }}
-            />
-            <SettingItem 
-              icon={<Landmark />}
-              label="PM-KISAN ID"
-              value={settings.pmKisanId || 'Link ID'}
-              onClick={() => {
-                const id = prompt("Enter PM-KISAN Registration ID", settings.pmKisanId);
-                if (id !== null) updateSetting('pmKisanId', id);
-              }}
-            />
-          </div>
-        </section>
-
-        {/* Language Section */}
-        <section className="space-y-3">
-          <SectionHeader title="Language & Dialect" />
-          <div className="grid grid-cols-2 gap-3">
-            {LANGUAGES.map(lang => {
+        {/* Global Operations */}
+        <motion.section 
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.2 }}
+          className="space-y-6"
+        >
+          <SectionHeader title="Global Operations" subtitle="Interface & Locale Configuration" />
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+            {LANGUAGES.slice(0, 6).map(lang => {
               const isActive = language === lang.name;
               return (
                 <button
                   key={lang.name}
                   onClick={() => handleLanguageChange(lang.name)}
-                  className={`flex flex-col items-start p-4 rounded-3xl border transition-all relative overflow-hidden group ${
+                  className={`relative p-6 rounded-[2rem] border transition-all duration-500 text-left overflow-hidden active:scale-95 ${
                     isActive 
-                      ? 'bg-[var(--m3-primary)] border-[var(--m3-primary)] text-[var(--m3-on-primary)] shadow-xl scale-[1.02]' 
-                      : 'bg-[var(--m3-surface-container-low)] border-[var(--m3-outline-variant)] text-[var(--m3-on-surface)] hover:border-[var(--m3-primary)]'
+                      ? 'bg-[var(--m3-primary)] border-[var(--m3-primary)] text-black shadow-2xl scale-[1.02]' 
+                      : 'bg-white/[0.03] border-white/10 text-white/40 hover:border-white/20'
                   }`}
                 >
-                  {isActive && (
-                    <div className="absolute top-0 right-0 p-3">
-                      <div className="w-1.5 h-1.5 bg-[var(--m3-on-primary)] rounded-full animate-pulse" />
-                    </div>
-                  )}
-                  <span className={`text-[10px] font-medium uppercase tracking-widest mb-1 ${isActive ? 'text-[var(--m3-on-primary)]/70' : 'text-[var(--m3-on-surface-variant)]'}`}>
+                  <div className={`text-[9px] font-mono mb-2 uppercase tracking-[0.2em] ${isActive ? 'text-black/60' : 'text-white/20'}`}>
                     {lang.name}
-                  </span>
-                  <span className="text-sm font-medium tracking-tight">
+                  </div>
+                  <div className="text-base font-black tracking-tighter uppercase font-sans">
                     {lang.label.split(' ')[1] || lang.label}
-                  </span>
+                  </div>
                   {isActive && (
-                    <div className="mt-3 flex items-center gap-1.5">
-                      <div className="w-4 h-px bg-[var(--m3-on-primary)]/50" />
-                      <span className="text-[8px] font-medium uppercase tracking-tighter text-[var(--m3-on-primary)]/80">Active Profile</span>
+                    <div className="absolute top-4 right-4 animate-pulse">
+                      <div className="w-1.5 h-1.5 bg-black rounded-full" />
                     </div>
                   )}
                 </button>
               );
             })}
           </div>
-        </section>
+        </motion.section>
 
-        {/* Preferences Section */}
-        <section className="space-y-3">
-          <SectionHeader title="System Preferences" />
-          <div className="m3-card-filled p-4 bg-[var(--m3-surface-container-low)] divide-y divide-[var(--m3-outline-variant)]">
-            <div className="flex items-center justify-between py-4">
-              <div className="flex items-center gap-4">
-                <div className="p-3 bg-[var(--m3-surface-container-high)] rounded-xl text-[var(--m3-on-surface-variant)]">
-                  <Globe className="w-5 h-5" />
-                </div>
-                <div>
-                  <p className="text-sm font-medium text-[var(--m3-on-surface)]">Measurement Units</p>
-                  <p className="text-[10px] text-[var(--m3-on-surface-variant)] font-medium italic">Metric (C°, Ha) vs Imperial (F°, Ac)</p>
-                </div>
-              </div>
-              <select 
-                value={settings.units}
-                onChange={(e) => updateSetting('units', e.target.value)}
-                className="bg-[var(--m3-surface-container-high)] border-none rounded-xl py-2 px-4 text-xs font-medium text-[var(--m3-primary)] outline-none"
-              >
-                <option>Metric</option>
-                <option>Imperial</option>
-              </select>
-            </div>
-
+        {/* Intelligence & Protocols */}
+        <motion.section 
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.3 }}
+          className="space-y-6"
+        >
+          <SectionHeader title="Intelligence Protocols" subtitle="AI Inference & Awareness Tuning" />
+          <div className="bg-[var(--m3-surface-container-low)] rounded-[2.5rem] border border-white/5 divide-y divide-white/5 overflow-hidden">
+            <ToggleItem 
+              icon={<Mic2 />}
+              label="AgriVoice Personality"
+              enabled={true} 
+              onToggle={() => {}}
+              rightElement={
+                <select 
+                  value={settings.aiVoice}
+                  onChange={(e) => updateSetting('aiVoice', e.target.value)}
+                  className="bg-transparent border-none text-[10px] font-mono text-[var(--m3-primary)] font-bold uppercase tracking-widest outline-none cursor-pointer text-right appearance-none"
+                >
+                  {AI_VOICES.map(voice => <option key={voice.name} value={voice.name} className="bg-stone-900">{voice.name}</option>)}
+                </select>
+              }
+            />
+            <ToggleItem 
+              icon={<Cpu />}
+              label="Inference Precision"
+              enabled={true}
+              onToggle={() => {}}
+              rightElement={
+                <select 
+                  value={settings.precisionMode}
+                  onChange={(e) => updateSetting('precisionMode', e.target.value)}
+                  className="bg-transparent border-none text-[10px] font-mono text-[var(--m3-primary)] font-bold uppercase tracking-widest outline-none cursor-pointer text-right appearance-none"
+                >
+                  <option className="bg-stone-900">Standard</option>
+                  <option className="bg-stone-900">High</option>
+                </select>
+              }
+            />
+            <ToggleItem 
+              icon={<Camera />}
+              label="HD Diagnostic Scanning"
+              enabled={settings.scannerHD}
+              onToggle={(val) => updateSetting('scannerHD', val)}
+            />
             <ToggleItem 
               icon={<Bell />}
-              label="Push Notifications"
+              label="Push Link Protocols"
               enabled={settings.notifications}
               onToggle={(val) => updateSetting('notifications', val)}
             />
-            <ToggleItem 
-              icon={<Bell />}
-              label="Weather Alerts"
+             <ToggleItem 
+              icon={<Zap />}
+              label="Weather Guard Monitoring"
               enabled={settings.weatherAlerts}
               onToggle={(val) => updateSetting('weatherAlerts', val)}
             />
-            <ToggleItem 
-              icon={<Moon />}
-              label="Auto Night Mode"
-              enabled={settings.autoNightMode}
-              onToggle={(val) => updateSetting('autoNightMode', val)}
+          </div>
+        </motion.section>
+
+        {/* Personnel & Logistics */}
+        <motion.section 
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.4 }}
+          className="space-y-6"
+        >
+          <div className="flex items-center justify-between">
+            <SectionHeader title="Personnel & Logistics" subtitle="Shared Network access" />
+            <button 
+              onClick={addTeamMember}
+              className="p-3 bg-[var(--m3-primary)] text-black rounded-2xl shadow-xl active:scale-90 transition-all border border-black/10"
+            >
+              <UserPlus className="w-5 h-5" />
+            </button>
+          </div>
+
+          <div className="space-y-4">
+            {team.length > 0 ? team.map(member => (
+              <div key={member.id} className="bg-white/[0.03] p-6 rounded-[2rem] border border-white/5 flex items-center justify-between group">
+                <div className="flex items-center gap-5">
+                  <div className="w-12 h-12 rounded-2xl bg-white/[0.05] border border-white/10 flex items-center justify-center text-xs font-mono font-black text-[var(--m3-primary)]">
+                    {member.name.substring(0, 2).toUpperCase()}
+                  </div>
+                  <div>
+                    <h4 className="text-sm font-black text-white uppercase tracking-widest leading-none mb-1">{member.name}</h4>
+                    <div className="flex items-center gap-3">
+                      <span className="text-[9px] font-mono text-[var(--m3-primary)] font-bold uppercase tracking-widest">{member.role}</span>
+                      <div className="w-1 h-1 rounded-full bg-white/10" />
+                      <span className="text-[9px] font-mono text-white/30 uppercase tracking-widest">{member.email}</span>
+                    </div>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-all">
+                  <button onClick={() => updateMemberRole(member.id, member.role)} className="p-3 bg-white/5 rounded-xl hover:text-[var(--m3-primary)] transition-colors"><ShieldCheck className="w-4 h-4" /></button>
+                  <button onClick={() => removeTeamMember(member.id)} className="p-3 bg-white/5 rounded-xl hover:text-rose-500 transition-colors"><Trash2 className="w-4 h-4" /></button>
+                </div>
+              </div>
+            )) : (
+              <div className="py-12 border border-dashed border-white/10 rounded-[2.5rem] flex flex-col items-center gap-4 text-center">
+                <Users className="w-12 h-12 text-white/5" />
+                <p className="text-[9px] font-mono text-white/20 uppercase tracking-[0.4em]">Zero Personnel Detected</p>
+              </div>
+            )}
+          </div>
+        </motion.section>
+
+        {/* System & Compliance */}
+        <motion.section 
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.5 }}
+          className="space-y-6"
+        >
+          <SectionHeader title="System & Compliance" subtitle="Federal records & Authentication" />
+          <div className="bg-[var(--m3-surface-container-low)] rounded-[2.5rem] border border-white/5 divide-y divide-white/5 overflow-hidden">
+            <SettingItem 
+              icon={<CreditCard />}
+              label="Kisan Credit Card (KCC)"
+              value={settings.kccId || 'LINK SYSTEM'}
+              onClick={() => prompt({ title: 'KCC Sync', message: 'Enter unit KCC identity code:', defaultValue: settings.kccId, onConfirm: (id) => id !== null && updateSetting('kccId', id) })}
+            />
+            <SettingItem 
+              icon={<Landmark />}
+              label="PM-KISAN Registry"
+              value={settings.pmKisanId || 'LINK SYSTEM'}
+              onClick={() => prompt({ title: 'PM-KISAN Sync', message: 'Enter PM-KISAN registration code:', defaultValue: settings.pmKisanId, onConfirm: (id) => id !== null && updateSetting('pmKisanId', id) })}
+            />
+            <SettingItem 
+              icon={<ShieldCheck />}
+              label="Privacy Policy"
+              sub="Data usage & OAuth security"
+              onClick={() => { window.location.hash = '#privacy'; }}
+            />
+            <SettingItem 
+              icon={<FileText />}
+              label="Terms of Service"
+              sub="Legal terms & agronomic disclaimer"
+              onClick={() => { window.location.hash = '#terms'; }}
+            />
+            <SettingItem 
+              icon={<Download />}
+              label="Export System Archive"
+              sub="Generate PDF/JSON telemetry"
+              onClick={exportPDF}
+            />
+            <SettingItem 
+              icon={<LogOut />}
+              label="Terminate Session"
+              sub="De-authenticate existing link"
+              onClick={logout}
+              className="text-rose-500"
+            />
+             <SettingItem 
+              icon={<Trash2 />}
+              label="Wipe Local Matrix"
+              sub="Purge all cached data protocols"
+              onClick={clearData}
+              className="text-rose-600"
             />
           </div>
-        </section>
+        </motion.section>
 
-        {/* Account Section */}
-        <section className="space-y-3">
-          <SectionHeader title="Account & Data" />
-          <div className="m3-card-filled p-4 bg-[var(--m3-surface-container-low)] divide-y divide-[var(--m3-outline-variant)]">
-            <button 
-              onClick={exportPDF}
-              className="w-full flex items-center justify-between py-4 active:bg-[var(--m3-surface-container-high)] transition-colors group text-left"
-            >
-              <div className="flex items-center gap-4">
-                <div className="p-3 bg-[var(--m3-surface-container-high)] rounded-xl text-[var(--m3-on-surface-variant)]">
-                  <FileText className="w-5 h-5" />
-                </div>
-                <div>
-                  <p className="text-sm font-medium text-[var(--m3-on-surface)]">Export Farm Report (PDF)</p>
-                  <p className="text-[10px] text-[var(--m3-on-surface-variant)] font-medium">Download professional PDF report</p>
-                </div>
-              </div>
-              <Download className="w-5 h-5 text-[var(--m3-outline)]" />
-            </button>
-
-            <button 
-              onClick={logout}
-              className="w-full flex items-center gap-4 py-4 text-[var(--m3-on-surface)] active:bg-[var(--m3-surface-container-high)] transition-colors text-left"
-            >
-              <div className="p-3 bg-[var(--m3-surface-container-high)] rounded-xl text-[var(--m3-on-surface-variant)]">
-                <LogOut className="w-5 h-5" />
-              </div>
-              <div>
-                <p className="text-sm font-medium">Sign Out</p>
-                <p className="text-[10px] opacity-60 font-medium">Log out of your Bharat Kisan account</p>
-              </div>
-            </button>
-
-            <button 
-              onClick={() => {
-                if (confirm("This will permanently delete your local cache. Your cloud data will remain safe. Continue?")) {
-                  localStorage.clear();
-                  window.location.reload();
-                }
-              }}
-              className="w-full flex items-center gap-4 py-4 text-[var(--m3-error)] active:bg-[var(--m3-error-container)]/10 transition-colors text-left"
-            >
-              <div className="p-3 bg-[var(--m3-error-container)]/20 rounded-xl text-[var(--m3-error)]">
-                <Trash2 className="w-5 h-5" />
-              </div>
-              <div>
-                <p className="text-sm font-medium">Clear Local Cache</p>
-                <p className="text-[10px] opacity-60 font-medium">Reset local application state</p>
-              </div>
-            </button>
-          </div>
-        </section>
-
-        {/* Developer Options */}
-        {devMode && (
-          <section className="space-y-3 animate-in slide-in-from-bottom-4 duration-500">
-            <SectionHeader title="Developer Options" />
-            <div className="m3-card-filled p-4 bg-[var(--m3-surface-container-low)] divide-y divide-[var(--m3-outline-variant)]">
-              <button 
-                onClick={becomeAdmin}
-                className="w-full flex items-center gap-4 py-4 text-[var(--m3-primary)] active:bg-[var(--m3-primary-container)]/20 transition-colors text-left"
-              >
-                <div className="p-3 bg-[var(--m3-primary-container)]/30 rounded-xl text-[var(--m3-primary)]">
-                  <ShieldAlert className="w-5 h-5" />
-                </div>
-                <div>
-                  <p className="text-sm font-medium">Become Administrator</p>
-                  <p className="text-[10px] opacity-60 font-medium">Elevate your role to Admin (Testing only)</p>
-                </div>
-              </button>
-              
-              <div className="py-4">
-                <p className="text-[10px] font-medium text-[var(--m3-on-surface-variant)] uppercase tracking-widest mb-2">Debug Info</p>
-                <div className="bg-white/5 border border-stone-800 rounded-xl p-3 font-mono text-[10px] text-[var(--m3-on-surface-variant)] space-y-1">
-                  <p>User ID: {user?.uid}</p>
-                  <p>Farm ID: {activeFarmId}</p>
-                  <p>Role: {profile?.role || 'user'}</p>
-                  <p>Platform: {import.meta.env.MODE}</p>
-                </div>
-              </div>
+        {/* Build Telemetry */}
+        <section className="py-20 flex flex-col items-center gap-8">
+          <div className="h-px w-24 bg-white/10" />
+          <div className="flex flex-col items-center gap-3">
+            <div className="flex items-center gap-2 px-6 py-2 bg-white/[0.03] border border-white/10 rounded-full">
+              <Database className="w-3 h-3 text-[var(--m3-primary)]" />
+              <span className="text-[9px] font-mono text-white/40 uppercase tracking-[0.3em]">
+                Static RAM: {(JSON.stringify(localStorage).length / 1024).toFixed(1)} KB Committed
+              </span>
             </div>
-          </section>
-        )}
-      </div>
+            <p 
+              onClick={handleVersionTap}
+              className="text-[9px] font-mono text-white/20 uppercase tracking-[0.5em] cursor-pointer hover:text-[var(--m3-primary)] transition-colors"
+            >
+              Bharat-Agri-v2.5.2-Platinum
+            </p>
+          </div>
 
-      <div className="text-center py-8">
-        <div className="inline-flex items-center gap-2 bg-[var(--m3-secondary-container)] px-4 py-2 rounded-full border border-[var(--m3-outline-variant)]">
-          <Database className="w-3 h-3 text-[var(--m3-on-secondary-container)]" />
-          <span className="text-[10px] font-medium uppercase text-[var(--m3-on-secondary-container)] tracking-widest">
-            Cache: {(JSON.stringify(localStorage).length / 1024).toFixed(1)} KB Used
-          </span>
-        </div>
-        <p 
-          onClick={handleVersionTap}
-          className="text-[9px] text-[var(--m3-on-surface-variant)] mt-3 font-medium uppercase tracking-widest opacity-60 cursor-pointer select-none"
-        >
-          Build Version: 2.5.2-Platinum
-        </p>
+          {devMode && (
+            <motion.div 
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              className="w-full bg-emerald-500/10 border border-emerald-500/20 p-8 rounded-[2.5rem] space-y-6"
+            >
+              <div className="flex items-center gap-3">
+                <ShieldAlert className="w-5 h-5 text-emerald-500" />
+                <h4 className="text-[10px] font-black text-emerald-500 uppercase tracking-[0.4em]">Administrative Access Enabled</h4>
+              </div>
+              <div className="grid grid-cols-1 gap-3">
+                <button onClick={becomeAdmin} className="w-full py-4 bg-emerald-500 text-black font-black text-[10px] uppercase tracking-[0.3em] rounded-2xl active:scale-95 transition-all">Elevate To Admin</button>
+                <div className="bg-black/40 p-5 rounded-2xl font-mono text-[9px] text-white/40 space-y-1 border border-white/5">
+                  <p>UID: {user?.uid}</p>
+                  <p>FID: {activeFarmId}</p>
+                  <p>ROLE: {profile?.role || 'FARMER'}</p>
+                </div>
+              </div>
+            </motion.div>
+          )}
+        </section>
       </div>
     </div>
   );
 };
 
-const SectionHeader: React.FC<{ title: string }> = ({ title }) => (
-  <h3 className="text-[10px] font-medium text-[var(--m3-on-surface-variant)] uppercase tracking-[0.15em] ml-1 mb-1">{title}</h3>
+const SectionHeader: React.FC<{ title: string, subtitle?: string }> = ({ title, subtitle }) => (
+  <div className="flex flex-col gap-1 mb-2 ml-2">
+    <div className="flex items-center gap-3">
+      <div className="w-1 h-3 bg-[var(--m3-primary)] rounded-full" />
+      <h3 className="text-[11px] font-black text-white uppercase tracking-[0.3em] leading-none">
+        {title}
+      </h3>
+    </div>
+    {subtitle && <p className="text-[9px] font-mono text-white/20 uppercase tracking-widest pl-4">{subtitle}</p>}
+  </div>
 );
 
-const SettingItem: React.FC<{ icon: React.ReactNode, label: string, value?: string, sub?: string, onClick?: () => void }> = ({ icon, label, value, sub, onClick }) => (
+const SettingItem: React.FC<{ icon: React.ReactNode, label: string, value?: string, sub?: string, onClick?: () => void, className?: string }> = ({ icon, label, value, sub, onClick, className }) => (
   <button 
     onClick={onClick}
-    className="w-full flex items-center justify-between p-4 active:bg-[var(--m3-surface-container-high)] transition-colors group rounded-xl"
+    className="w-full flex items-center justify-between p-8 active:bg-white/[0.03] transition-all group relative"
   >
-    <div className="flex items-center gap-4 text-left">
-      <div className="p-3 bg-[var(--m3-surface-container-high)] rounded-xl text-[var(--m3-on-surface-variant)]">
-        {React.cloneElement(icon as React.ReactElement<any>, { className: 'w-5 h-5' })}
+    <div className="flex items-center gap-5 text-left relative z-10">
+      <div className={`p-4 bg-white/[0.03] rounded-2xl border border-white/5 text-white/40 group-hover:text-[var(--m3-primary)] group-hover:border-[var(--m3-primary)]/20 transition-all ${className}`}>
+        {React.cloneElement(icon as React.ReactElement<any>, { className: 'w-6 h-6' })}
       </div>
       <div>
-        <p className="text-sm font-medium text-[var(--m3-on-surface)]">{label}</p>
-        {sub && <p className="text-[10px] text-[var(--m3-on-surface-variant)] font-medium uppercase tracking-wider">{sub}</p>}
+        <p className={`text-sm font-black uppercase tracking-widest transition-colors ${className || 'text-white'}`}>{label}</p>
+        {sub && <p className="text-[9px] font-mono text-white/20 uppercase tracking-widest mt-1">{sub}</p>}
       </div>
     </div>
-    <div className="flex items-center gap-2">
-      {value && <span className="text-xs font-medium text-[var(--m3-primary)] truncate max-w-[120px]">{value}</span>}
-      <ChevronRight className="w-4 h-4 text-[var(--m3-on-surface-variant)]" />
+    <div className="flex items-center gap-4 relative z-10">
+      {value && <span className="text-[10px] font-bold text-[var(--m3-primary)] uppercase tracking-widest">{value}</span>}
+      <ChevronRight className="w-5 h-5 text-white/10 group-hover:text-[var(--m3-primary)] transition-colors" />
     </div>
   </button>
 );
 
-const ToggleItem: React.FC<{ icon: React.ReactNode, label: string, enabled: boolean, onToggle: (val: boolean) => void }> = ({ icon, label, enabled, onToggle }) => (
-  <div className="flex items-center justify-between py-4">
-    <div className="flex items-center gap-4">
-      <div className="p-3 bg-[var(--m3-surface-container-high)] rounded-xl text-[var(--m3-on-surface-variant)]">
-        {React.cloneElement(icon as React.ReactElement<any>, { className: 'w-5 h-5' })}
+const ToggleItem: React.FC<{ icon: React.ReactNode, label: string, enabled: boolean, onToggle: (val: boolean) => void, rightElement?: React.ReactNode }> = ({ icon, label, enabled, onToggle, rightElement }) => (
+  <div className="flex items-center justify-between p-8 group">
+    <div className="flex items-center gap-5">
+      <div className={`p-4 bg-white/[0.03] rounded-2xl border border-white/5 text-white/40 group-hover:text-[var(--m3-primary)] group-hover:border-[var(--m3-primary)]/20 transition-all`}>
+        {React.cloneElement(icon as React.ReactElement<any>, { className: 'w-6 h-6' })}
       </div>
-      <p className="text-sm font-medium text-[var(--m3-on-surface)]">{label}</p>
+      <p className="text-sm font-black text-white uppercase tracking-widest">{label}</p>
     </div>
-    <button 
-      onClick={() => onToggle(!enabled)}
-      className={`relative w-12 h-7 rounded-full transition-all duration-300 ${enabled ? 'bg-[var(--m3-primary)]' : 'bg-[var(--m3-surface-container-high)] border border-[var(--m3-outline)]'}`}
-    >
-      <div className={`absolute top-1 w-5 h-5 rounded-full transition-all duration-300 ${enabled ? 'left-6 bg-[var(--m3-on-primary)] shadow-sm' : 'left-1 bg-[var(--m3-on-surface-variant)]'}`} />
-    </button>
+    <div className="flex items-center gap-6">
+      {rightElement}
+      <button 
+        onClick={() => onToggle(!enabled)}
+        className="relative w-14 h-8 rounded-full transition-all duration-500 overflow-hidden border border-white/10 shadow-inner group/toggle"
+      >
+        <div className={`absolute inset-0 transition-opacity duration-500 ${enabled ? 'bg-[var(--m3-primary)] opacity-100' : 'bg-white/5 opacity-0'}`} />
+        <div className={`absolute top-1.5 w-5 h-5 rounded-full transition-all duration-500 shadow-2xl ${enabled ? 'right-1.5 bg-black' : 'left-1.5 bg-white/20'}`} />
+      </button>
+    </div>
   </div>
 );
+
 
 export default Settings;

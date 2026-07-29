@@ -73,7 +73,7 @@ const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ language }) => {
       audioRefs.current.stream = stream;
 
       const sessionPromise = ai.live.connect({
-        model: 'gemini-2.5-flash-native-audio-preview-12-2025',
+        model: 'gemini-3.1-flash-live-preview',
         callbacks: {
           onopen: () => {
             setIsActive(true);
@@ -124,39 +124,39 @@ const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ language }) => {
   };
 
   return (
-    <div className="flex flex-col h-full items-center justify-center gap-12 py-10 animate-in fade-in zoom-in-95">
+    <div className="flex flex-col h-full items-center justify-center gap-12 py-10 animate-in fade-in zoom-in-95 text-white">
       <div className="text-center space-y-4">
-        <h2 className="text-2xl font-bold text-stone-900">AgriVoice Live ({language})</h2>
-        <p className="text-sm text-stone-500 font-medium px-8 leading-relaxed">
-            {isActive ? 'Speak naturally about your farm concerns' : 'Hands-free assistance for field work'}
+        <h2 className="text-2xl font-black text-white uppercase tracking-tight font-display">AgriVoice Live ({language})</h2>
+        <p className="text-xs text-stone-400 font-bold uppercase tracking-wider px-8 leading-relaxed">
+            {isActive ? 'Speak naturally about your farm concerns' : 'Hands-free voice assistance for field operations'}
         </p>
       </div>
 
       <div className="relative">
         {isActive && (
-          <div className="absolute inset-0 rounded-full bg-orange-400/30 animate-ping"></div>
+          <div className="absolute inset-0 rounded-full bg-amber-500/30 animate-ping"></div>
         )}
         <button
           onClick={isActive ? stopSession : startSession}
           className={`
             relative z-10 w-44 h-44 rounded-full flex items-center justify-center transition-all duration-500 shadow-2xl
             ${isActive 
-              ? 'bg-[#825500] rotate-180 scale-110' 
-              : 'bg-white border-8 border-orange-100 hover:scale-105'}
+              ? 'bg-amber-500 text-black rotate-180 scale-110 shadow-amber-500/50' 
+              : 'bg-stone-900 border-8 border-amber-500/20 hover:scale-105 text-amber-500'}
           `}
         >
           {isActive ? (
             <div className="flex items-center gap-1">
-                {[1,2,3,4].map(i => <div key={i} className={`w-1 bg-white rounded-full animate-[bounce_1s_infinite]`} style={{animationDelay: `${i*0.1}s`, height: `${10+i*5}px`}}></div>)}
+                {[1,2,3,4].map(i => <div key={i} className={`w-1.5 bg-black rounded-full animate-[bounce_1s_infinite]`} style={{animationDelay: `${i*0.1}s`, height: `${12+i*6}px`}}></div>)}
             </div>
-          ) : <Mic className="w-16 h-16 text-[#825500]" />}
+          ) : <Mic className="w-16 h-16 text-amber-500" />}
         </button>
       </div>
 
       <div className="w-full max-w-sm px-4 space-y-4">
         {isActive && (
-          <div className="bg-[#ffddb3]/40 p-6 rounded-[2rem] border border-[#ffddb3] min-h-[120px] flex flex-col justify-center animate-in slide-in-from-bottom-4">
-             <p className="text-[#825500] text-sm font-bold text-center italic leading-relaxed">
+          <div className="bg-stone-900 p-6 rounded-[2rem] border border-amber-500/20 min-h-[120px] flex flex-col justify-center animate-in slide-in-from-bottom-4 shadow-xl">
+             <p className="text-amber-400 text-sm font-bold text-center italic leading-relaxed">
                 {aiTranscription || transcription || "Listening for your query..."}
              </p>
           </div>
@@ -165,14 +165,14 @@ const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ language }) => {
         {!isActive && (
           <div className="grid grid-cols-2 gap-3">
              {["Blight advice", "Market prices", "Irrigation stats"].map((q, i) => (
-               <button key={i} onClick={startSession} className="bg-white p-3 rounded-2xl border border-stone-100 text-[11px] font-bold text-stone-500 shadow-sm flex items-center gap-2">
-                 <Sunrise className="w-3 h-3 text-orange-400" /> {q}
+               <button key={i} onClick={startSession} className="bg-stone-900 p-3.5 rounded-2xl border border-stone-800 text-[11px] font-bold text-stone-300 shadow-sm flex items-center gap-2 hover:bg-stone-800 active:scale-95 transition-all">
+                 <Sunrise className="w-3.5 h-3.5 text-amber-500" /> {q}
                </button>
              ))}
           </div>
         )}
         
-        {error && <p className="text-rose-600 text-[10px] font-bold text-center bg-rose-50 py-2 rounded-full">{error}</p>}
+        {error && <p className="text-rose-400 text-[10px] font-bold text-center bg-rose-950/60 border border-rose-500/30 py-2 rounded-full">{error}</p>}
       </div>
     </div>
   );

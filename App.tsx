@@ -19,8 +19,6 @@ import SprayingAdvisor from './components/SprayingAdvisor';
 import Settings from './components/Settings';
 import Profile from './components/Profile';
 import HarvestScheduler from './components/HarvestScheduler';
-import LivestockAssistant from './components/LivestockAssistant';
-import SustainabilityHub from './components/SustainabilityHub';
 import HelpFeedback from './components/HelpFeedback';
 import TaskManager from './components/TaskManager';
 import Onboarding from './components/Onboarding';
@@ -32,17 +30,18 @@ import FinanceLedger from './components/FinanceLedger';
 import SubsidyTracker from './components/SubsidyTracker';
 import SeasonalPlanner from './components/SeasonalPlanner';
 import InputAdvisor from './components/InputAdvisor';
-import CarbonCreditTracker from './components/CarbonCreditTracker';
-import EquipmentRental from './components/EquipmentRental';
 import CropHealthMonitor from './components/CropHealthMonitor';
 import SplashScreen from './components/SplashScreen';
 import AdminPanel from './components/AdminPanel';
 
-import AgriAcademy from './components/AgriAcademy';
-import EquipmentMarket from './components/EquipmentMarket';
 import SmartAlerts from './components/SmartAlerts';
 import FeatureTour from './components/FeatureTour';
 import CropRotationAdvisor from './components/CropRotationAdvisor';
+import ProduceLedger from './components/ProduceLedger';
+import CommunityDAO from './components/CommunityDAO';
+import P2PMarketplace from './components/P2PMarketplace';
+import ProjectDocs from './components/ProjectDocs';
+import { PublicLandingPage, PublicPrivacyPolicy, PublicTermsOfService } from './components/PublicPages';
 
 import { useFirebase } from './src/components/FirebaseProvider';
 import { auth, db } from './src/firebase';
@@ -51,7 +50,7 @@ import { doc, setDoc } from 'firebase/firestore';
 import { Loader2 } from 'lucide-react';
 
 const App: React.FC = () => {
-  const { user, profile, loading, memberships, activeFarmId, setActiveFarmId } = useFirebase();
+  const { user, profile, loading, memberships, activeFarmId, setActiveFarmId, updateProfileLocal } = useFirebase();
   const [currentView, setCurrentView] = React.useState<AppView>(AppView.DASHBOARD);
   const [viewHistory, setViewHistory] = React.useState<AppView[]>([]);
   const [language, setLanguage] = React.useState<string>(() => {
@@ -61,6 +60,37 @@ const App: React.FC = () => {
     return localStorage.getItem('agri_tour_completed') !== 'true';
   });
   const [showSplash, setShowSplash] = React.useState(true);
+  const [showLogin, setShowLogin] = React.useState(false);
+  const [currentHash, setCurrentHash] = React.useState<string>(() => {
+    if (typeof window !== 'undefined') {
+      const h = window.location.hash || (window.location.pathname === '/privacy' ? '#privacy' : window.location.pathname === '/terms' ? '#terms' : '');
+      return h;
+    }
+    return '';
+  });
+
+  React.useEffect(() => {
+    const handleHashOrPopState = () => {
+      const h = window.location.hash || (window.location.pathname === '/privacy' ? '#privacy' : window.location.pathname === '/terms' ? '#terms' : '');
+      setCurrentHash(h);
+      if (h === '#login') {
+        setShowLogin(true);
+      }
+    };
+    window.addEventListener('hashchange', handleHashOrPopState);
+    window.addEventListener('popstate', handleHashOrPopState);
+    return () => {
+      window.removeEventListener('hashchange', handleHashOrPopState);
+      window.removeEventListener('popstate', handleHashOrPopState);
+    };
+  }, []);
+
+  const setHash = (hash: string) => {
+    if (typeof window !== 'undefined') {
+      window.location.hash = hash;
+    }
+    setCurrentHash(hash);
+  };
 
   React.useEffect(() => {
     const timer = setTimeout(() => {
@@ -100,7 +130,7 @@ const App: React.FC = () => {
       name,
       farmName: farm,
       phone,
-      email: user.email,
+      email: user.email || `${phone || 'farmer'}@bharatkisan.com`,
       language: lang,
       state,
       district,
@@ -114,24 +144,30 @@ const App: React.FC = () => {
       onboardingComplete: true
     };
 
+    // 1. Immediately sync to localStorage for instantaneous offline/mobile resilience
+    localStorage.setItem('agri_farmer_name', name);
+    localStorage.setItem('agri_farm_name', farm);
+    localStorage.setItem('agri_farmer_phone', phone);
+    localStorage.setItem('agri_language', lang);
+    localStorage.setItem('agri_state', state);
+    localStorage.setItem('agri_district', district);
+    localStorage.setItem('agri_mandal', mandal);
+    localStorage.setItem('agri_revenue_village', revenue);
+    localStorage.setItem('agri_session_active', 'true');
+    localStorage.setItem('agri_onboarding_completed', 'true');
+
+    // 2. Immediately update React state so the UI transitions cleanly to Dashboard without blocking
+    updateProfileLocal(profileData);
+    setLanguage(lang);
+    setShowTour(true);
+
+    // 3. Save to Firestore in background without blocking UI
     try {
-      await setDoc(doc(db, 'users', user.uid), profileData);
-      
-      // Sync to localStorage
-      localStorage.setItem('agri_farmer_name', name);
-      localStorage.setItem('agri_farm_name', farm);
-      localStorage.setItem('agri_farmer_phone', phone);
-      localStorage.setItem('agri_language', lang);
-      localStorage.setItem('agri_state', state);
-      localStorage.setItem('agri_district', district);
-      localStorage.setItem('agri_mandal', mandal);
-      localStorage.setItem('agri_revenue_village', revenue);
-      localStorage.setItem('agri_session_active', 'true');
-      
-      setLanguage(lang);
-      setShowTour(true);
+      setDoc(doc(db, 'users', user.uid), profileData).catch((err) => {
+        console.warn("Background Firestore profile save warning:", err);
+      });
     } catch (error) {
-      console.error("Error saving profile:", error);
+      console.error("Error initiating profile save:", error);
     }
   };
 
@@ -164,7 +200,7 @@ const App: React.FC = () => {
   const renderView = () => {
     switch (currentView) {
       case AppView.DASHBOARD:
-        return <Dashboard setView={navigateTo} />;
+        return <Dashboard setView={navigateTo} language={language} />;
       case AppView.TOOLS_HUB:
         return <ToolsHub setView={navigateTo} />;
       case AppView.DISEASE_SCANNER:
@@ -199,10 +235,6 @@ const App: React.FC = () => {
         return <Profile onLogout={handleLogout} onNavigate={navigateTo} />;
       case AppView.HARVEST_SCHEDULER:
         return <HarvestScheduler language={language} />;
-      case AppView.LIVESTOCK_ASSISTANT:
-        return <LivestockAssistant language={language} />;
-      case AppView.SUSTAINABILITY_HUB:
-        return <SustainabilityHub language={language} />;
       case AppView.HELP_FEEDBACK:
         return <HelpFeedback />;
       case AppView.TASK_MANAGER:
@@ -219,22 +251,22 @@ const App: React.FC = () => {
         return <SeasonalPlanner language={language} />;
       case AppView.INPUT_ADVISOR:
         return <InputAdvisor language={language} />;
-      case AppView.EQUIPMENT_MARKET:
-        return <EquipmentMarket />;
-      case AppView.AGRI_ACADEMY:
-        return <AgriAcademy />;
       case AppView.SMART_ALERTS:
         return <SmartAlerts />;
       case AppView.CROP_ROTATION_ADVISOR:
         return <CropRotationAdvisor language={language} />;
-      case AppView.CARBON_CREDIT_TRACKER:
-        return <CarbonCreditTracker />;
-      case AppView.EQUIPMENT_RENTAL:
-        return <EquipmentRental />;
       case AppView.CROP_HEALTH_MONITOR:
         return <CropHealthMonitor />;
       case AppView.ADMIN_PANEL:
         return <AdminPanel />;
+      case AppView.PRODUCE_LEDGER:
+        return <ProduceLedger onBack={handleBack} />;
+      case AppView.COMMUNITY_DAO:
+        return <CommunityDAO onBack={handleBack} />;
+      case AppView.P2P_MARKETPLACE:
+        return <P2PMarketplace onBack={handleBack} />;
+      case AppView.PROJECT_DOCS:
+        return <ProjectDocs />;
       default:
         return <Dashboard setView={navigateTo} />;
     }
@@ -244,6 +276,26 @@ const App: React.FC = () => {
     localStorage.setItem('agri_tour_completed', 'true');
     setShowTour(false);
   };
+
+  if (currentHash === '#privacy') {
+    return (
+      <PublicPrivacyPolicy 
+        onGoToLogin={() => { setShowLogin(true); setHash('#login'); }} 
+        onGoToHome={() => setHash('')} 
+        onGoToTerms={() => setHash('#terms')} 
+      />
+    );
+  }
+
+  if (currentHash === '#terms') {
+    return (
+      <PublicTermsOfService 
+        onGoToLogin={() => { setShowLogin(true); setHash('#login'); }} 
+        onGoToHome={() => setHash('')} 
+        onGoToPrivacy={() => setHash('#privacy')} 
+      />
+    );
+  }
 
   if (showSplash) {
     return <SplashScreen />;
@@ -258,7 +310,23 @@ const App: React.FC = () => {
   }
 
   if (!user) {
-    return <Login onLogin={() => {}} onSwitchToRegister={() => {}} />;
+    if (showLogin || currentHash === '#login') {
+      return (
+        <Login 
+          onLogin={() => setShowLogin(false)} 
+          onSwitchToRegister={() => {}} 
+          onBackToHome={() => { setShowLogin(false); setHash(''); }}
+        />
+      );
+    }
+    return (
+      <PublicLandingPage 
+        onGoToLogin={() => { setShowLogin(true); setHash('#login'); }} 
+        onGoToPrivacy={() => setHash('#privacy')} 
+        onGoToTerms={() => setHash('#terms')} 
+        onGoToHome={() => setHash('')}
+      />
+    );
   }
 
   if (!profile && memberships.length === 0) {

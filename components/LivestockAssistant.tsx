@@ -1,6 +1,10 @@
 
 import React from 'react';
 import { diagnoseLivestock } from '../services/geminiService';
+import { db } from '../src/firebase';
+import { collection, addDoc, deleteDoc, doc, onSnapshot, query, orderBy, serverTimestamp } from 'firebase/firestore';
+import { handleFirestoreError, OperationType } from '../src/utils/firestoreErrorHandler';
+import { useFirebase } from '../src/components/FirebaseProvider';
 import { 
   Beef, 
   Camera, 
@@ -15,8 +19,11 @@ import {
   RotateCcw,
   Zap,
   RefreshCw,
-  Search
+  Search,
+  Trash2,
+  AlertCircle
 } from 'lucide-react';
+import { motion, AnimatePresence } from 'motion/react';
 
 const ANIMAL_TYPES = ['Cattle', 'Poultry', 'Swine', 'Sheep', 'Goats', 'Other'];
 
@@ -24,14 +31,60 @@ interface LivestockAssistantProps {
   language: string;
 }
 
-// Fixed error: Used direct props destructuring instead of React.FC wrapper
+interface DiagnosisRecord {
+  id: string;
+  animalType: string;
+  conditionName: string;
+  isHealthy: boolean;
+  urgency: string;
+  symptomsSeen: string[];
+  careSteps: string[];
+  nutritionalAdvice: string;
+  image?: string;
+  timestamp: any;
+}
+
 const LivestockAssistant = ({ language }: LivestockAssistantProps) => {
+  const { activeFarmId } = useFirebase();
   const [image, setImage] = React.useState<string | null>(null);
   const [animalType, setAnimalType] = React.useState('Cattle');
   const [loading, setLoading] = React.useState(false);
   const [result, setResult] = React.useState<any>(null);
+  const [history, setHistory] = React.useState<DiagnosisRecord[]>([]);
   const [showCamera, setShowCamera] = React.useState(false);
   const [facingMode, setFacingMode] = React.useState<'user' | 'environment'>('environment');
+  const [confirmDialog, setConfirmDialog] = React.useState<{
+    isOpen: boolean;
+    title: string;
+    message: string;
+    onConfirm: () => void;
+    type: 'danger' | 'info';
+  }>({ isOpen: false, title: '', message: '', onConfirm: () => {}, type: 'info' });
+
+  const [alertDialog, setAlertDialog] = React.useState<{
+    isOpen: boolean;
+    title: string;
+    message: string;
+  }>({ isOpen: false, title: '', message: '' });
+
+  React.useEffect(() => {
+    if (!activeFarmId) return;
+
+    const path = `users/${activeFarmId}/livestockHistory`;
+    const q = query(collection(db, path), orderBy('timestamp', 'desc'));
+
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const records: DiagnosisRecord[] = [];
+      snapshot.forEach((doc) => {
+        records.push({ id: doc.id, ...doc.data() } as DiagnosisRecord);
+      });
+      setHistory(records);
+    }, (error) => {
+      handleFirestoreError(error, OperationType.LIST, path);
+    });
+
+    return () => unsubscribe();
+  }, [activeFarmId]);
   
   const videoRef = React.useRef<HTMLVideoElement>(null);
   const canvasRef = React.useRef<HTMLCanvasElement>(null);
@@ -58,7 +111,11 @@ const LivestockAssistant = ({ language }: LivestockAssistantProps) => {
       setResult(null);
     } catch (err) {
       console.error("Camera access denied", err);
-      alert("Microphone/Camera access required for health scanning.");
+      setAlertDialog({
+        isOpen: true,
+        title: 'Sensor Access',
+        message: 'Microphone/Camera access is required for livestock health scanning. Please enable these permissions in your system settings.'
+      });
     }
   };
 
@@ -103,16 +160,44 @@ const LivestockAssistant = ({ language }: LivestockAssistantProps) => {
   };
 
   const handleAnalyze = async (base64: string) => {
+    if (!activeFarmId) return;
     setLoading(true);
     setResult(null);
     try {
       const data = await diagnoseLivestock(base64, animalType, language);
       setResult(data);
+      
+      const path = `users/${activeFarmId}/livestockHistory`;
+      await addDoc(collection(db, path), {
+        ...data,
+        animalType,
+        image: `data:image/jpeg;base64,${base64}`,
+        timestamp: serverTimestamp()
+      });
     } catch (err) {
       console.error(err);
     } finally {
       setLoading(false);
     }
+  };
+
+  const deleteRecord = async (id: string) => {
+    if (!activeFarmId) return;
+    
+    setConfirmDialog({
+      isOpen: true,
+      title: 'Delete Record',
+      message: 'Are you sure you want to remove this health diagnosis from history?',
+      type: 'danger',
+      onConfirm: async () => {
+        const path = `users/${activeFarmId}/livestockHistory/${id}`;
+        try {
+          await deleteDoc(doc(db, path));
+        } catch (error) {
+          handleFirestoreError(error, OperationType.DELETE, path);
+        }
+      }
+    });
   };
 
   return (
@@ -279,6 +364,132 @@ const LivestockAssistant = ({ language }: LivestockAssistantProps) => {
           </div>
         </div>
       )}
+
+      {history.length > 0 && (
+        <div className="bg-white rounded-[2.5rem] p-6 md:p-8 shadow-sm border border-stone-200">
+          <h3 className="text-xl font-black mb-6 flex items-center gap-3 text-stone-900">
+            <History className="text-stone-400 w-5 h-5" />
+            Diagnosis History
+          </h3>
+          <div className="space-y-4">
+            {history.map((record) => (
+              <div key={record.id} className="bg-stone-50 rounded-3xl p-4 border border-stone-100 flex gap-4 items-center group">
+                {record.image && (
+                  <img 
+                    src={record.image} 
+                    alt="Scan" 
+                    className="w-16 h-16 rounded-2xl object-cover border border-stone-200"
+                    referrerPolicy="no-referrer"
+                  />
+                )}
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 mb-1">
+                    <span className={`text-[10px] font-black uppercase px-2 py-0.5 rounded ${record.isHealthy ? 'bg-emerald-100 text-emerald-700' : 'bg-orange-100 text-orange-700'}`}>
+                      {record.isHealthy ? 'Healthy' : 'Issue Detected'}
+                    </span>
+                    <span className="text-[10px] font-bold text-stone-400">
+                      {record.timestamp?.toDate ? record.timestamp.toDate().toLocaleDateString() : 'Recent'}
+                    </span>
+                  </div>
+                  <h4 className="font-bold text-stone-800 truncate">{record.conditionName}</h4>
+                  <p className="text-xs text-stone-500">{record.animalType}</p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <button 
+                    onClick={() => setResult(record)}
+                    className="p-2 bg-white rounded-xl border border-stone-200 text-stone-400 hover:text-orange-600 transition-all"
+                  >
+                    <Search className="w-4 h-4" />
+                  </button>
+                  <button 
+                    onClick={() => deleteRecord(record.id)}
+                    className="p-2 bg-white rounded-xl border border-stone-200 text-stone-400 hover:text-red-500 transition-all opacity-0 group-hover:opacity-100"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Custom Confirmation Dialog */}
+      <AnimatePresence>
+        {confirmDialog.isOpen && (
+          <motion.div 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-stone-950/60 backdrop-blur-sm"
+          >
+            <motion.div 
+              initial={{ scale: 0.9, opacity: 0, y: 20 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
+              exit={{ scale: 0.9, opacity: 0, y: 20 }}
+              className="bg-white rounded-[2.5rem] p-8 max-w-sm w-full shadow-2xl border border-stone-200"
+            >
+              <div className="text-center">
+                <div className={`w-16 h-16 ${confirmDialog.type === 'danger' ? 'bg-rose-500/10 text-rose-500' : 'bg-amber-500/10 text-amber-500'} rounded-2xl flex items-center justify-center mb-6 mx-auto`}>
+                  {confirmDialog.type === 'danger' ? <Trash2 className="w-8 h-8" /> : <Info className="w-8 h-8" />}
+                </div>
+                <h3 className="text-xl font-black text-stone-900 uppercase tracking-tighter mb-2">{confirmDialog.title}</h3>
+                <p className="text-sm font-medium text-stone-500 leading-relaxed mb-8">{confirmDialog.message}</p>
+                <div className="flex gap-3">
+                  <button 
+                    onClick={() => setConfirmDialog({ ...confirmDialog, isOpen: false })}
+                    className="flex-1 py-4 bg-stone-100 text-stone-500 rounded-2xl font-black text-[10px] uppercase tracking-widest hover:bg-stone-200 transition-all"
+                  >
+                    Cancel
+                  </button>
+                  <button 
+                    onClick={() => {
+                      confirmDialog.onConfirm();
+                      setConfirmDialog({ ...confirmDialog, isOpen: false });
+                    }}
+                    className={`flex-1 py-4 ${confirmDialog.type === 'danger' ? 'bg-rose-500' : 'bg-stone-900'} text-white rounded-2xl font-black text-[10px] uppercase tracking-widest shadow-lg hover:opacity-90 transition-all`}
+                  >
+                    Confirm
+                  </button>
+                </div>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Custom Alert Dialog */}
+      <AnimatePresence>
+        {alertDialog.isOpen && (
+          <motion.div 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-stone-950/60 backdrop-blur-sm"
+          >
+            <motion.div 
+              initial={{ scale: 0.9, opacity: 0, y: 20 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
+              exit={{ scale: 0.9, opacity: 0, y: 20 }}
+              className="bg-white rounded-[2.5rem] p-8 max-w-sm w-full shadow-2xl border border-stone-200"
+            >
+              <div className="text-center">
+                <div className="w-16 h-16 bg-amber-500/10 text-amber-500 rounded-2xl flex items-center justify-center mb-6 mx-auto">
+                  <AlertCircle className="w-8 h-8" />
+                </div>
+                <h3 className="text-xl font-black text-stone-900 uppercase tracking-tighter mb-2">{alertDialog.title}</h3>
+                <p className="text-sm font-medium text-stone-500 leading-relaxed mb-8">{alertDialog.message}</p>
+                <button 
+                  onClick={() => setAlertDialog({ ...alertDialog, isOpen: false })}
+                  className="w-full py-4 bg-stone-900 text-white rounded-2xl font-black text-[10px] uppercase tracking-widest shadow-lg hover:opacity-90 transition-all"
+                >
+                  Understood
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 };

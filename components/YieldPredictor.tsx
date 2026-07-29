@@ -1,30 +1,83 @@
 
 import React from 'react';
 import { estimateYield } from '../services/geminiService';
-import { Calculator, Coins, TrendingUp, Loader2, Map as MapIcon, Sprout } from 'lucide-react';
+import { Calculator, Coins, TrendingUp, Loader2, Map as MapIcon, Sprout, History, Trash2, Search } from 'lucide-react';
 import Markdown from 'react-markdown';
+import { db } from '../src/firebase';
+import { collection, addDoc, deleteDoc, doc, onSnapshot, query, orderBy, serverTimestamp } from 'firebase/firestore';
+import { handleFirestoreError, OperationType } from '../src/utils/firestoreErrorHandler';
+import { useFirebase } from '../src/components/FirebaseProvider';
 
 interface YieldPredictorProps {
   language: string;
 }
 
-// Fixed error: Used direct props destructuring for more reliable prop type inference
+interface PredictionRecord {
+  id: string;
+  crop: string;
+  area: number;
+  unit: string;
+  irrigation: string;
+  variety: string;
+  prediction: string;
+  timestamp: any;
+}
+
 const YieldPredictor = ({ language }: YieldPredictorProps) => {
+  const { activeFarmId } = useFirebase();
   const [data, setData] = React.useState({ crop: '', area: '', unit: 'Hectares', irrigation: 'Rainfed', variety: '' });
   const [prediction, setPrediction] = React.useState('');
   const [loading, setLoading] = React.useState(false);
+  const [history, setHistory] = React.useState<PredictionRecord[]>([]);
+
+  React.useEffect(() => {
+    if (!activeFarmId) return;
+
+    const path = `users/${activeFarmId}/yieldPredictions`;
+    const q = query(collection(db, path), orderBy('timestamp', 'desc'));
+
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const records: PredictionRecord[] = [];
+      snapshot.forEach((doc) => {
+        records.push({ id: doc.id, ...doc.data() } as PredictionRecord);
+      });
+      setHistory(records);
+    }, (error) => {
+      handleFirestoreError(error, OperationType.LIST, path);
+    });
+
+    return () => unsubscribe();
+  }, [activeFarmId]);
 
   const handlePredict = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!data.crop || !data.area) return;
+    if (!data.crop || !data.area || !activeFarmId) return;
     setLoading(true);
     try {
       const res = await estimateYield(data, language);
       setPrediction(res);
+
+      const path = `users/${activeFarmId}/yieldPredictions`;
+      await addDoc(collection(db, path), {
+        ...data,
+        area: Number(data.area),
+        prediction: res,
+        timestamp: serverTimestamp()
+      });
     } catch (err) {
       console.error(err);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const deleteRecord = async (id: string) => {
+    if (!activeFarmId) return;
+    const path = `users/${activeFarmId}/yieldPredictions/${id}`;
+    try {
+      await deleteDoc(doc(db, path));
+    } catch (error) {
+      handleFirestoreError(error, OperationType.DELETE, path);
     }
   };
 
@@ -113,6 +166,46 @@ const YieldPredictor = ({ language }: YieldPredictorProps) => {
               </div>
             </div>
             <Markdown>{prediction}</Markdown>
+          </div>
+        )}
+
+        {history.length > 0 && (
+          <div className="mt-12 space-y-6">
+            <h3 className="text-xl font-bold flex items-center gap-2 text-stone-800">
+              <History className="text-stone-400" />
+              Previous Reports
+            </h3>
+            <div className="grid gap-4">
+              {history.map((record) => (
+                <div key={record.id} className="bg-stone-50 rounded-2xl p-4 border border-stone-100 flex items-center justify-between group">
+                  <div className="flex items-center gap-4">
+                    <div className="p-2 bg-white rounded-xl shadow-sm text-blue-600">
+                      <TrendingUp className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <h4 className="font-bold text-stone-800">{record.crop} ({record.area} {record.unit})</h4>
+                      <p className="text-xs text-stone-400">
+                        {record.timestamp?.toDate ? record.timestamp.toDate().toLocaleDateString() : 'Recent'} • {record.variety}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button 
+                      onClick={() => setPrediction(record.prediction)}
+                      className="p-2 bg-white rounded-xl border border-stone-200 text-stone-400 hover:text-blue-600 transition-all"
+                    >
+                      <Search className="w-4 h-4" />
+                    </button>
+                    <button 
+                      onClick={() => deleteRecord(record.id)}
+                      className="p-2 bg-white rounded-xl border border-stone-200 text-stone-400 hover:text-red-500 transition-all opacity-0 group-hover:opacity-100"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
           </div>
         )}
       </div>

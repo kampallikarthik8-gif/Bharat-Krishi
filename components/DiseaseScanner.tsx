@@ -34,18 +34,30 @@ import {
   BadgeCheck,
   AlertCircle,
   Eye,
-  Scan
+  Scan,
+  History as HistoryIcon,
+  Trash2
 } from 'lucide-react';
 
 import { Camera, CameraResultType, CameraSource } from '@capacitor/camera';
 import { Share } from '@capacitor/share';
 import { useFirebase } from '../src/components/FirebaseProvider';
 import { db } from '../src/firebase';
-import { collection, addDoc } from 'firebase/firestore';
+import { collection, addDoc, query, onSnapshot, orderBy, deleteDoc, doc } from 'firebase/firestore';
 import { handleFirestoreError, OperationType } from '../src/utils/firestoreErrorHandler';
 
 import { triggerHaptic, triggerSelectionHaptic } from '../src/utils/haptics';
 import { ImpactStyle } from '@capacitor/haptics';
+import { motion, AnimatePresence } from 'motion/react';
+import { useDialogs } from '../src/components/DialogProvider';
+
+interface SavedScan {
+  id: string;
+  timestamp: string;
+  type: 'disease' | 'pest';
+  image: string;
+  data: DiseaseDiagnosis | PestIdentification;
+}
 
 const ThreatRadar: React.FC<{ level: PestIdentification['threatLevel'] }> = ({ level }) => {
   const levels = {
@@ -93,6 +105,7 @@ interface DiseaseScannerProps {
 
 const DiseaseScanner: React.FC<DiseaseScannerProps> = ({ language }) => {
   const { activeFarmId } = useFirebase();
+  const { confirm } = useDialogs();
   const [image, setImage] = React.useState<string | null>(null);
   const [loading, setLoading] = React.useState(false);
   const [scanMode, setScanMode] = React.useState<'disease' | 'pest'>('disease');
@@ -100,8 +113,44 @@ const DiseaseScanner: React.FC<DiseaseScannerProps> = ({ language }) => {
   const [pestResult, setPestResult] = React.useState<PestIdentification | null>(null);
   const [referenceImg, setReferenceImg] = React.useState<string | null>(null);
   const [addedTasks, setAddedTasks] = React.useState<Set<string>>(new Set());
-  
-  const startCamera = async () => {
+  const [history, setHistory] = React.useState<SavedScan[]>([]);
+  const [saveStatus, setSaveStatus] = React.useState<'idle' | 'saved'>('idle');
+
+  // Live camera and file states
+  const [isLiveCamera, setIsLiveCamera] = React.useState(false);
+  const [facingMode, setFacingMode] = React.useState<'environment' | 'user'>('environment');
+  const videoRef = React.useRef<HTMLVideoElement>(null);
+  const streamRef = React.useRef<MediaStream | null>(null);
+  const fileInputRef = React.useRef<HTMLInputElement>(null);
+
+  React.useEffect(() => {
+    if (!activeFarmId) return;
+
+    const path = `users/${activeFarmId}/scanHistory`;
+    const q = query(collection(db, path), orderBy('timestamp', 'desc'));
+
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const scans = snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      })) as SavedScan[];
+      setHistory(scans);
+    }, (error) => {
+      handleFirestoreError(error, OperationType.LIST, path);
+    });
+
+    return () => unsubscribe();
+  }, [activeFarmId]);
+
+  const stopLiveCamera = () => {
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach(track => track.stop());
+      streamRef.current = null;
+    }
+    setIsLiveCamera(false);
+  };
+
+  const startCameraFallback = async () => {
     triggerSelectionHaptic();
     try {
       const photo = await Camera.getPhoto({
@@ -121,12 +170,121 @@ const DiseaseScanner: React.FC<DiseaseScannerProps> = ({ language }) => {
     }
   };
 
+  const startLiveCamera = async () => {
+    triggerSelectionHaptic();
+    setIsLiveCamera(true);
+    setImage(null);
+    
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach(track => track.stop());
+    }
+
+    try {
+      const constraints = {
+        video: {
+          facingMode: facingMode,
+          width: { ideal: 1280 },
+          height: { ideal: 720 }
+        },
+        audio: false
+      };
+      const stream = await navigator.mediaDevices.getUserMedia(constraints);
+      streamRef.current = stream;
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+      }
+    } catch (err) {
+      console.warn("Direct getUserMedia failed, falling back to system camera picker:", err);
+      setIsLiveCamera(false);
+      startCameraFallback();
+    }
+  };
+
+  const toggleCameraFacing = () => {
+    triggerSelectionHaptic();
+    setFacingMode(prev => prev === 'environment' ? 'user' : 'environment');
+  };
+
+  React.useEffect(() => {
+    if (isLiveCamera) {
+      startLiveCamera();
+    }
+  }, [facingMode]);
+
+  React.useEffect(() => {
+    return () => {
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach(track => track.stop());
+      }
+    };
+  }, []);
+
+  const capturePhoto = () => {
+    triggerSelectionHaptic();
+    if (!videoRef.current) return;
+    
+    const video = videoRef.current;
+    const canvas = document.createElement('canvas');
+    canvas.width = video.videoWidth || 640;
+    canvas.height = video.videoHeight || 480;
+    
+    const ctx = canvas.getContext('2d');
+    if (ctx) {
+      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+      const dataUrl = canvas.toDataURL('image/jpeg', 0.9);
+      setImage(dataUrl);
+      stopLiveCamera();
+      
+      const base64Str = dataUrl.split(',')[1];
+      handleScan(base64Str);
+    }
+  };
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        const base64 = reader.result as string;
+        setImage(base64);
+        const base64Clean = base64.split(',')[1];
+        handleScan(base64Clean);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const pickFromGallery = async () => {
+    triggerSelectionHaptic();
+    try {
+      const photo = await Camera.getPhoto({
+        quality: 90,
+        allowEditing: false,
+        resultType: CameraResultType.Base64,
+        source: CameraSource.Photos
+      });
+
+      if (photo.base64String) {
+        setImage(`data:image/jpeg;base64,${photo.base64String}`);
+        handleScan(photo.base64String);
+      }
+    } catch (err) {
+      console.log("Gallery selection fallback to input", err);
+      fileInputRef.current?.click();
+    }
+  };
+  
+  const startCamera = async () => {
+    startLiveCamera();
+  };
+
   const handleScan = async (base64: string) => {
     setLoading(true);
     setDiagnosis(null);
     setPestResult(null);
     setReferenceImg(null);
     setAddedTasks(new Set());
+    setSaveStatus('idle');
     try {
       if (scanMode === 'disease') {
         const result = await diagnosePlant(base64, language);
@@ -146,6 +304,43 @@ const DiseaseScanner: React.FC<DiseaseScannerProps> = ({ language }) => {
     } finally {
       setLoading(false);
     }
+  };
+
+  const saveToHistory = async () => {
+    if (!activeFarmId || !image || (!diagnosis && !pestResult)) return;
+    
+    const path = `users/${activeFarmId}/scanHistory`;
+    try {
+      await addDoc(collection(db, path), {
+        timestamp: new Date().toISOString(),
+        type: scanMode,
+        image,
+        data: scanMode === 'disease' ? diagnosis : pestResult
+      });
+      setSaveStatus('saved');
+      setTimeout(() => setSaveStatus('idle'), 3000);
+    } catch (error) {
+      handleFirestoreError(error, OperationType.CREATE, path);
+    }
+  };
+
+  const deleteFromHistory = async (id: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!activeFarmId) return;
+    
+    confirm({
+      title: 'Delete Scan',
+      message: 'Are you sure you want to remove this scan from history? This action cannot be undone.',
+      type: 'danger',
+      onConfirm: async () => {
+        const path = `users/${activeFarmId}/scanHistory/${id}`;
+        try {
+          await deleteDoc(doc(db, path));
+        } catch (error) {
+          handleFirestoreError(error, OperationType.DELETE, path);
+        }
+      }
+    });
   };
 
   const addToTasks = async (title: string, desc: string, priority: 'High' | 'Medium' | 'Low' = 'High') => {
@@ -304,47 +499,141 @@ const DiseaseScanner: React.FC<DiseaseScannerProps> = ({ language }) => {
 
       {(!diagnosis && !pestResult) ? (
         <div className="flex flex-col gap-8">
-          <div 
-            onClick={() => startCamera()}
-            className="aspect-[4/5] bg-white/5 rounded-[4rem] border-2 border-dashed border-white/10 flex flex-col items-center justify-center relative overflow-hidden active:bg-white/10 transition-all shadow-2xl group cursor-pointer backdrop-blur-sm"
-          >
-            {image ? (
-              <img src={image} className="w-full h-full object-cover" alt="Preview" />
-            ) : (
-              <div className="text-white/20 flex flex-col items-center gap-8 group-hover:text-white/40 transition-colors">
-                <div className="relative">
-                  <div className="absolute inset-0 bg-amber-500/20 blur-3xl rounded-full animate-pulse"></div>
-                  <div className="bg-white/5 p-10 rounded-[2.5rem] shadow-2xl relative z-10 border border-white/10 backdrop-blur-xl">
-                    {scanMode === 'disease' ? <CameraIcon className="w-16 h-16 text-amber-500" /> : <Search className="w-16 h-16 text-amber-500" />}
-                  </div>
-                </div>
-                <div className="text-center px-8">
-                  <span className="font-black text-[11px] uppercase tracking-[0.3em] text-white block mb-3 font-display">
-                    {scanMode === 'disease' ? 'Neural Leaf Analysis' : 'Specimen Identification'}
-                  </span>
-                  <p className="text-[10px] text-white/40 font-bold uppercase tracking-[0.1em] leading-relaxed max-w-[240px]">
-                    Position subject within frame for high-fidelity morphology capture
-                  </p>
+          <style>{`
+            @keyframes scan-glow {
+              0% { top: 0%; }
+              50% { top: 100%; }
+              100% { top: 0%; }
+            }
+            .animate-scanner-line {
+              animation: scan-glow 4s ease-in-out infinite;
+            }
+          `}</style>
+
+          {isLiveCamera ? (
+            <div className="flex flex-col gap-8">
+              <div 
+                className="aspect-[4/5] bg-stone-950 rounded-[4rem] border-2 border-amber-500/20 flex flex-col items-center justify-center relative overflow-hidden shadow-2xl backdrop-blur-sm"
+              >
+                <video 
+                  ref={videoRef}
+                  autoPlay
+                  playsInline
+                  muted
+                  className="w-full h-full object-cover"
+                />
+                
+                {/* Viewfinder Corners */}
+                <div className="absolute top-10 left-10 w-12 h-12 border-t-4 border-l-4 border-amber-500/50 rounded-tl-2xl"></div>
+                <div className="absolute top-10 right-10 w-12 h-12 border-t-4 border-r-4 border-amber-500/50 rounded-tr-2xl"></div>
+                <div className="absolute bottom-10 left-10 w-12 h-12 border-b-4 border-l-4 border-amber-500/50 rounded-bl-2xl"></div>
+                <div className="absolute bottom-10 right-10 w-12 h-12 border-b-4 border-r-4 border-amber-500/50 rounded-br-2xl"></div>
+
+                {/* Futuristic laser scanning line */}
+                <div className="absolute inset-x-0 h-1.5 bg-amber-500/50 shadow-[0_0_15px_rgba(245,158,11,0.8)] animate-scanner-line pointer-events-none"></div>
+
+                {/* Camera Type Overlay Label */}
+                <div className="absolute top-6 left-1/2 -translate-x-1/2 bg-black/80 px-4 py-2 rounded-full border border-white/10 text-[8px] font-black uppercase tracking-[0.2em] text-amber-500">
+                  Live feed: {facingMode === 'environment' ? 'Rear Sensor' : 'User Facing'}
                 </div>
               </div>
-            )}
-            
-            {/* Viewfinder Corners */}
-            <div className="absolute top-10 left-10 w-12 h-12 border-t-4 border-l-4 border-white/20 rounded-tl-2xl"></div>
-            <div className="absolute top-10 right-10 w-12 h-12 border-t-4 border-r-4 border-white/20 rounded-tr-2xl"></div>
-            <div className="absolute bottom-10 left-10 w-12 h-12 border-b-4 border-l-4 border-white/20 rounded-bl-2xl"></div>
-            <div className="absolute bottom-10 right-10 w-12 h-12 border-b-4 border-r-4 border-white/20 rounded-br-2xl"></div>
-          </div>
-          
-          <div className="flex flex-col px-4">
-            <button 
-              onClick={() => startCamera()}
-              className="bg-amber-500 text-black font-black py-6 rounded-[2rem] flex items-center justify-center gap-4 shadow-[0_20px_50px_-12px_rgba(245,158,11,0.5)] active:scale-[0.98] transition-all uppercase text-[11px] tracking-[0.3em] font-display"
-            >
-              <Zap className="w-5 h-5" />
-              {image ? 'RE-INITIALIZE LENS' : 'INITIALIZE BIO-LENS'}
-            </button>
-          </div>
+              
+              {/* Live Camera Controls */}
+              <div className="flex items-center justify-around px-8 mt-2">
+                {/* Cancel Button */}
+                <button 
+                  type="button"
+                  onClick={stopLiveCamera}
+                  className="w-16 h-16 rounded-full bg-white/5 border border-white/10 text-white flex items-center justify-center hover:bg-white/10 active:scale-90 transition-all shadow-xl"
+                  title="Close Camera"
+                >
+                  <X className="w-6 h-6" />
+                </button>
+
+                {/* Shutter Button */}
+                <button 
+                  type="button"
+                  onClick={capturePhoto}
+                  className="relative flex items-center justify-center group active:scale-95 transition-all"
+                  title="Capture Frame"
+                >
+                  <div className="w-24 h-24 rounded-full border-4 border-white flex items-center justify-center">
+                    <div className="w-18 h-18 rounded-full bg-amber-500 group-hover:bg-amber-400 group-active:scale-90 transition-all shadow-lg shadow-amber-500/30"></div>
+                  </div>
+                </button>
+
+                {/* Toggle Facing Button */}
+                <button 
+                  type="button"
+                  onClick={toggleCameraFacing}
+                  className="w-16 h-16 rounded-full bg-white/5 border border-white/10 text-white flex items-center justify-center hover:bg-white/10 active:scale-90 transition-all shadow-xl"
+                  title="Switch Lens"
+                >
+                  <RefreshCw className="w-6 h-6" />
+                </button>
+              </div>
+            </div>
+          ) : (
+            <>
+              <div 
+                onClick={() => startLiveCamera()}
+                className="aspect-[4/5] bg-white/5 rounded-[4rem] border-2 border-dashed border-white/10 flex flex-col items-center justify-center relative overflow-hidden active:bg-white/10 transition-all shadow-2xl group cursor-pointer backdrop-blur-sm"
+              >
+                {image ? (
+                  <img src={image} className="w-full h-full object-cover" alt="Preview" />
+                ) : (
+                  <div className="text-white/20 flex flex-col items-center gap-8 group-hover:text-white/40 transition-colors">
+                    <div className="relative">
+                      <div className="absolute inset-0 bg-amber-500/20 blur-3xl rounded-full animate-pulse"></div>
+                      <div className="bg-white/5 p-10 rounded-[2.5rem] shadow-2xl relative z-10 border border-white/10 backdrop-blur-xl">
+                        {scanMode === 'disease' ? <CameraIcon className="w-16 h-16 text-amber-500" /> : <Search className="w-16 h-16 text-amber-500" />}
+                      </div>
+                    </div>
+                    <div className="text-center px-8">
+                      <span className="font-black text-[11px] uppercase tracking-[0.3em] text-white block mb-3 font-display">
+                        {scanMode === 'disease' ? 'Neural Leaf Analysis' : 'Specimen Identification'}
+                      </span>
+                      <p className="text-[10px] text-white/40 font-bold uppercase tracking-[0.1em] leading-relaxed max-w-[240px]">
+                        Position subject within frame for high-fidelity morphology capture
+                      </p>
+                    </div>
+                  </div>
+                )}
+                
+                {/* Viewfinder Corners */}
+                <div className="absolute top-10 left-10 w-12 h-12 border-t-4 border-l-4 border-white/20 rounded-tl-2xl"></div>
+                <div className="absolute top-10 right-10 w-12 h-12 border-t-4 border-r-4 border-white/20 rounded-tr-2xl"></div>
+                <div className="absolute bottom-10 left-10 w-12 h-12 border-b-4 border-l-4 border-white/20 rounded-bl-2xl"></div>
+                <div className="absolute bottom-10 right-10 w-12 h-12 border-b-4 border-r-4 border-white/20 rounded-br-2xl"></div>
+              </div>
+              
+              <input 
+                type="file" 
+                ref={fileInputRef} 
+                accept="image/*" 
+                onChange={handleFileChange} 
+                className="hidden" 
+              />
+              <div className="grid grid-cols-2 gap-3 px-4">
+                <button 
+                  type="button"
+                  onClick={() => startLiveCamera()}
+                  className="bg-amber-500 text-black font-black py-5 rounded-[2rem] flex items-center justify-center gap-3 shadow-[0_20px_50px_-12px_rgba(245,158,11,0.4)] active:scale-[0.98] transition-all uppercase text-[10px] tracking-[0.2em] font-display"
+                >
+                  <CameraIcon className="w-5 h-5" />
+                  Live Camera
+                </button>
+                <button 
+                  type="button"
+                  onClick={pickFromGallery}
+                  className="bg-stone-900 border border-amber-500/20 text-white font-black py-5 rounded-[2rem] flex items-center justify-center gap-3 shadow-lg active:scale-[0.98] transition-all uppercase text-[10px] tracking-[0.2em] font-display hover:bg-stone-800"
+                >
+                  <FileText className="w-5 h-5 text-amber-500" />
+                  Gallery
+                </button>
+              </div>
+            </>
+          )}
         </div>
       ) : (
         <div className="space-y-10 animate-in slide-in-from-bottom-12 duration-1000 ease-out">
@@ -355,12 +644,22 @@ const DiseaseScanner: React.FC<DiseaseScannerProps> = ({ language }) => {
             >
               <ChevronLeft className="w-5 h-5" /> New Analysis
             </button>
-            <button 
-              onClick={handleShare} 
-              className="bg-white/5 text-white p-3 px-6 rounded-full flex items-center gap-3 font-black text-[10px] uppercase tracking-[0.2em] active:scale-95 transition-all border border-white/10 backdrop-blur-md"
-            >
-              <Share2 className="w-4 h-4" /> Export Report
-            </button>
+            <div className="flex items-center gap-3">
+              <button 
+                onClick={saveToHistory}
+                disabled={saveStatus === 'saved'}
+                className={`p-3 px-6 rounded-full flex items-center gap-3 font-black text-[10px] uppercase tracking-[0.2em] active:scale-95 transition-all border backdrop-blur-md ${saveStatus === 'saved' ? 'bg-amber-500 border-amber-500 text-black' : 'bg-white/5 text-white border-white/10'}`}
+              >
+                {saveStatus === 'saved' ? <CheckCircle2 className="w-4 h-4" /> : <Database className="w-4 h-4" />}
+                {saveStatus === 'saved' ? 'Saved' : 'Save History'}
+              </button>
+              <button 
+                onClick={handleShare} 
+                className="bg-white/5 text-white p-3 px-6 rounded-full flex items-center gap-3 font-black text-[10px] uppercase tracking-[0.2em] active:scale-95 transition-all border border-white/10 backdrop-blur-md"
+              >
+                <Share2 className="w-4 h-4" /> Export Report
+              </button>
+            </div>
           </div>
 
           {scanMode === 'disease' && diagnosis && (
@@ -609,6 +908,69 @@ const DiseaseScanner: React.FC<DiseaseScannerProps> = ({ language }) => {
               </div>
             </div>
           )}
+        </div>
+      )}
+
+      {/* History Section */}
+      {!diagnosis && !pestResult && history.length > 0 && (
+        <div className="px-4 space-y-6">
+          <div className="flex items-center justify-between px-2">
+            <div className="flex items-center gap-3">
+              <HistoryIcon className="w-5 h-5 text-stone-500" />
+              <h3 className="text-[10px] font-black text-stone-500 uppercase tracking-[0.2em]">Scan Archives</h3>
+            </div>
+            <span className="text-[10px] font-bold text-stone-600 uppercase">{history.length} Records</span>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {history.map(item => (
+              <div 
+                key={item.id}
+                onClick={() => {
+                  setImage(item.image);
+                  setScanMode(item.type);
+                  if (item.type === 'disease') {
+                    setDiagnosis(item.data as DiseaseDiagnosis);
+                    setPestResult(null);
+                  } else {
+                    setPestResult(item.data as PestIdentification);
+                    setDiagnosis(null);
+                  }
+                  window.scrollTo({ top: 0, behavior: 'smooth' });
+                }}
+                className="bg-white/5 border border-white/10 rounded-[2.5rem] overflow-hidden group hover:border-amber-500/50 transition-all cursor-pointer flex"
+              >
+                <div className="w-32 h-32 shrink-0 relative">
+                  <img src={item.image} className="w-full h-full object-cover" alt="Scan" />
+                  <div className="absolute inset-0 bg-black/20 group-hover:bg-transparent transition-colors"></div>
+                </div>
+                <div className="p-6 flex-1 flex flex-col justify-between">
+                  <div>
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="text-[8px] font-black text-amber-500 uppercase tracking-widest">{item.type}</span>
+                      <button 
+                        onClick={(e) => deleteFromHistory(item.id, e)}
+                        className="p-1.5 text-white/20 hover:text-rose-500 transition-colors"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+                    <h4 className="text-lg font-bold text-white tracking-tight truncate">
+                      {item.type === 'disease' ? (item.data as DiseaseDiagnosis).plantName : (item.data as PestIdentification).pestName}
+                    </h4>
+                    <p className="text-[10px] text-white/40 font-medium uppercase tracking-tighter">
+                      {new Date(item.timestamp).toLocaleDateString()}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <div className={`w-1.5 h-1.5 rounded-full ${item.type === 'disease' ? ((item.data as DiseaseDiagnosis).isHealthy ? 'bg-emerald-500' : 'bg-rose-500') : 'bg-amber-500'}`}></div>
+                    <span className="text-[9px] font-bold text-white/60 uppercase truncate">
+                      {item.type === 'disease' ? (item.data as DiseaseDiagnosis).condition : (item.data as PestIdentification).threatLevel + ' Threat'}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
         </div>
       )}
 

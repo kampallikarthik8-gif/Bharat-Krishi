@@ -125,6 +125,179 @@
         "createdAt": { "type": "string", "description": "Creation timestamp" }
       },
       "required": ["type", "title", "desc", "time", "active", "priority"]
+    },
+    "ProduceBatch": {
+      "title": "Produce Batch",
+      "description": "Represents a batch of produce for traceability.",
+      "type": "object",
+      "properties": {
+        "crop": { "type": "string", "description": "Crop name" },
+        "harvestDate": { "type": "string", "description": "Harvest date" },
+        "quantity": { "type": "number", "description": "Quantity" },
+        "unit": { "type": "string", "description": "Unit" },
+        "quality": { "type": "string", "description": "Quality grade" },
+        "farmerId": { "type": "string", "description": "ID of the farmer" },
+        "farmerName": { "type": "string", "description": "Name of the farmer" },
+        "traceHash": { "type": "string", "description": "Unique traceability hash" },
+        "status": { "type": "string", "description": "Batch status" },
+        "createdAt": { "type": "string", "description": "Creation timestamp" }
+      },
+      "required": ["crop", "harvestDate", "quantity", "unit", "farmerId"]
+    },
+    "DAOProposal": {
+      "title": "DAO Proposal",
+      "description": "Represents a community governance proposal.",
+      "type": "object",
+      "properties": {
+        "title": { "type": "string", "description": "Proposal title" },
+        "description": { "type": "string", "description": "Proposal description" },
+        "creatorId": { "type": "string", "description": "ID of the creator" },
+        "creatorName": { "type": "string", "description": "Name of the creator" },
+        "votesYes": { "type": "number", "description": "Number of Yes votes" },
+        "votesNo": { "type": "number", "description": "Number of No votes" },
+        "status": { "type": "string", "description": "Proposal status (Active/Passed/Rejected)" },
+        "endsAt": { "type": "string", "description": "End date of voting" },
+        "createdAt": { "type": "string", "description": "Creation timestamp" }
+      },
+      "required": ["title", "description", "creatorId", "status"]
+    },
+    "MarketItem": {
+      "title": "Market Item",
+      "description": "Represents an item in the P2P marketplace.",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string", "description": "Item name" },
+        "description": { "type": "string", "description": "Item description" },
+        "price": { "type": "number", "description": "Item price" },
+        "currency": { "type": "string", "description": "Currency" },
+        "quantity": { "type": "number", "description": "Available quantity" },
+        "unit": { "type": "string", "description": "Unit" },
+        "sellerId": { "type": "string", "description": "ID of the seller" },
+        "sellerName": { "type": "string", "description": "Name of the seller" },
+        "category": { "type": "string", "description": "Item category" },
+        "status": { "type": "string", "description": "Item status (Available/Sold)" },
+        "createdAt": { "type": "string", "description": "Creation timestamp" }
+      },
+      "required": ["name", "price", "sellerId", "status"]
+    },
+    "JournalEntry": {
+      "title": "Journal Entry",
+      "description": "Represents a daily log or observation on the farm.",
+      "type": "object",
+      "properties": {
+        "title": { "type": "string", "description": "Entry title" },
+        "content": { "type": "string", "description": "Entry content" },
+        "category": { "type": "string", "description": "Entry category" },
+        "date": { "type": "string", "description": "Entry date" },
+        "tags": { "type": "array", "description": "Associated tags" },
+        "createdAt": { "type": "string", "description": "Creation timestamp" }
+      },
+      "required": ["title", "content", "date"]
+    },
+    "SoilReport": {
+      "title": "Soil Report",
+      "description": "Represents a digital soil analysis report.",
+      "type": "object",
+      "properties": {
+        "texture": { "type": "string", "description": "Soil texture" },
+        "estimatedPh": { "type": "string", "description": "Estimated pH level" },
+        "n": { "type": "string", "description": "Nitrogen level" },
+        "p": { "type": "string", "description": "Phosphorus level" },
+        "k": { "type": "string", "description": "Potassium level" },
+        "organicMatter": { "type": "string", "description": "Organic matter level" },
+        "recommendations": { "type": "array", "description": "Expert recommendations" },
+        "date": { "type": "string", "description": "Analysis date" },
+        "image": { "type": "string", "description": "Base64 image of the soil" }
+      },
+      "required": ["texture", "estimatedPh", "date"]
+    },
+    "ScanRecord": {
+      "title": "Scan Record",
+      "description": "Represents a plant disease or pest scan record.",
+      "type": "object",
+      "properties": {
+        "type": { "type": "string", "description": "Scan type (disease/pest)" },
+        "timestamp": { "type": "string", "description": "Scan timestamp" },
+        "image": { "type": "string", "description": "Base64 image of the subject" },
+        "data": { "type": "object", "description": "Diagnosis or identification data" }
+      },
+      "required": ["type", "timestamp", "image", "data"]
+    },
+    "CropStrategy": {
+      "title": "Crop Strategy",
+      "description": "Represents a personalized crop management strategy.",
+      "type": "object",
+      "properties": {
+        "crop": { "type": "string", "description": "Crop name" },
+        "location": { "type": "string", "description": "Farm location" },
+        "soil": { "type": "string", "description": "Soil type" },
+        "advice": { "type": "string", "description": "Strategic advice text" },
+        "fertilizerPlan": { "type": "object", "description": "Detailed fertilizer plan" },
+        "timestamp": { "type": "string", "description": "Generation timestamp" }
+      },
+      "required": ["crop", "advice", "timestamp"]
+    },
+    "IrrigationZone": {
+      "title": "Irrigation Zone",
+      "description": "Represents a managed irrigation sector.",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string", "description": "Zone name" },
+        "cropType": { "type": "string", "description": "Crop type in the zone" },
+        "soilType": { "type": "string", "description": "Soil type in the zone" },
+        "lastWatered": { "type": "string", "description": "Last watered timestamp" },
+        "recommendation": { "type": "string", "description": "AI irrigation recommendation" },
+        "updatedAt": { "type": "string", "description": "Last update timestamp" }
+      },
+      "required": ["name", "cropType", "soilType"]
+    },
+    "LivestockDiagnosis": {
+      "title": "Livestock Diagnosis",
+      "description": "Represents a health scan record for livestock.",
+      "type": "object",
+      "properties": {
+        "animalType": { "type": "string", "description": "Type of animal" },
+        "conditionName": { "type": "string", "description": "Diagnosed condition" },
+        "isHealthy": { "type": "boolean", "description": "Health status" },
+        "urgency": { "type": "string", "description": "Urgency level" },
+        "symptomsSeen": { "type": "array", "description": "List of symptoms" },
+        "careSteps": { "type": "array", "description": "Recommended care steps" },
+        "nutritionalAdvice": { "type": "string", "description": "Nutritional advice" },
+        "image": { "type": "string", "description": "Base64 image of the animal" },
+        "timestamp": { "type": "string", "description": "Scan timestamp" }
+      },
+      "required": ["animalType", "conditionName", "timestamp"]
+    },
+    "YieldPrediction": {
+      "title": "Yield Prediction",
+      "description": "Represents a generated yield and ROI forecast.",
+      "type": "object",
+      "properties": {
+        "crop": { "type": "string", "description": "Crop name" },
+        "area": { "type": "number", "description": "Farm area" },
+        "unit": { "type": "string", "description": "Area unit" },
+        "irrigation": { "type": "string", "description": "Irrigation method" },
+        "variety": { "type": "string", "description": "Crop variety" },
+        "prediction": { "type": "string", "description": "Markdown prediction report" },
+        "timestamp": { "type": "string", "description": "Generation timestamp" }
+      },
+      "required": ["crop", "area", "prediction", "timestamp"]
+    },
+    "CropHealthReport": {
+      "title": "Crop Health Report",
+      "description": "Represents a satellite-based crop health analysis.",
+      "type": "object",
+      "properties": {
+        "fieldName": { "type": "string", "description": "Name of the field" },
+        "ndvi": { "type": "number", "description": "NDVI index value" },
+        "moisture": { "type": "string", "description": "Moisture level" },
+        "chlorophyll": { "type": "string", "description": "Chlorophyll level" },
+        "temp": { "type": "string", "description": "Surface temperature" },
+        "biomass": { "type": "string", "description": "Biomass estimate" },
+        "recommendation": { "type": "string", "description": "AI recommendation" },
+        "timestamp": { "type": "string", "description": "Report timestamp" }
+      },
+      "required": ["fieldName", "ndvi", "timestamp"]
     }
   },
   "firestore": {
@@ -155,6 +328,50 @@
     "/users/{userId}/alerts/{alertId}": {
       "schema": "Alert",
       "description": "User's smart alerts"
+    },
+    "/users/{userId}/journal/{entryId}": {
+      "schema": "JournalEntry",
+      "description": "User's farm journal entries"
+    },
+    "/users/{userId}/soilReports/{reportId}": {
+      "schema": "SoilReport",
+      "description": "User's soil analysis reports"
+    },
+    "/users/{userId}/scanHistory/{scanId}": {
+      "schema": "ScanRecord",
+      "description": "User's plant/pest scan history"
+    },
+    "/users/{userId}/cropStrategies/{strategyId}": {
+      "schema": "CropStrategy",
+      "description": "User's saved crop strategies"
+    },
+    "/users/{userId}/irrigationZones/{zoneId}": {
+      "schema": "IrrigationZone",
+      "description": "User's irrigation management zones"
+    },
+    "/users/{userId}/livestockHistory/{diagnosisId}": {
+      "schema": "LivestockDiagnosis",
+      "description": "User's livestock health scan history"
+    },
+    "/users/{userId}/yieldPredictions/{predictionId}": {
+      "schema": "YieldPrediction",
+      "description": "User's yield and ROI forecasts"
+    },
+    "/users/{userId}/cropHealthReports/{reportId}": {
+      "schema": "CropHealthReport",
+      "description": "User's crop health monitoring reports"
+    },
+    "/produce_ledger/{batchId}": {
+      "schema": "ProduceBatch",
+      "description": "Global produce traceability ledger"
+    },
+    "/dao_proposals/{proposalId}": {
+      "schema": "DAOProposal",
+      "description": "Community governance proposals"
+    },
+    "/marketplace/{itemId}": {
+      "schema": "MarketItem",
+      "description": "P2P marketplace items"
     }
   }
 }

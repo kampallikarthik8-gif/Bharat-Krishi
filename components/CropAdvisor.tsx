@@ -36,11 +36,14 @@ import {
   GripVertical,
   Sun,
   Wind,
-  MessageCircle
+  MessageCircle,
+  Info
 } from 'lucide-react';
 import Markdown from 'react-markdown';
+import { motion, AnimatePresence } from 'motion/react';
 
 import { useFirebase } from '../src/components/FirebaseProvider';
+import { useDialogs } from '../src/components/DialogProvider';
 import { db } from '../src/firebase';
 import { collection, query, onSnapshot, addDoc, deleteDoc, doc, orderBy } from 'firebase/firestore';
 import { handleFirestoreError, OperationType } from '../src/utils/firestoreErrorHandler';
@@ -83,6 +86,7 @@ interface CropAdvisorProps {
 
 const CropAdvisor: React.FC<CropAdvisorProps> = ({ language: initialLanguage }) => {
   const { profile, activeFarmId } = useFirebase();
+  const { confirm } = useDialogs();
   const [formData, setFormData] = React.useState({
     crop: '',
     location: profile?.location || '',
@@ -106,7 +110,7 @@ const CropAdvisor: React.FC<CropAdvisorProps> = ({ language: initialLanguage }) 
   const [loading, setLoading] = React.useState(false);
   const [detecting, setDetecting] = React.useState(false);
   const [saveStatus, setSaveStatus] = React.useState<'idle' | 'saved'>('idle');
-
+  
   const [savedStrategies, setSavedStrategies] = React.useState<SavedStrategy[]>([]);
   const reportRef = React.useRef<HTMLDivElement>(null);
 
@@ -200,14 +204,20 @@ const CropAdvisor: React.FC<CropAdvisorProps> = ({ language: initialLanguage }) 
   const deleteArchived = async (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
     if (!activeFarmId) return;
-    if (!confirm("Remove this archived strategy?")) return;
     
-    const path = `users/${activeFarmId}/cropStrategies/${id}`;
-    try {
-      await deleteDoc(doc(db, path));
-    } catch (error) {
-      handleFirestoreError(error, OperationType.DELETE, path);
-    }
+    confirm({
+      title: 'Delete Strategy',
+      message: 'Are you sure you want to remove this archived strategy? This action cannot be undone.',
+      type: 'danger',
+      onConfirm: async () => {
+        const path = `users/${activeFarmId}/cropStrategies/${id}`;
+        try {
+          await deleteDoc(doc(db, path));
+        } catch (error) {
+          handleFirestoreError(error, OperationType.DELETE, path);
+        }
+      }
+    });
   };
 
   const loadArchived = (strategy: SavedStrategy) => {

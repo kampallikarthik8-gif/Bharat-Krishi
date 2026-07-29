@@ -10,7 +10,11 @@ import {
   Code,
   Settings as SettingsIcon,
   LogOut,
-  Shield
+  Shield,
+  Database,
+  Users,
+  ShoppingBag,
+  FileText
 } from 'lucide-react';
 import { useFirebase } from '../src/components/FirebaseProvider';
 import { triggerHaptic, triggerSelectionHaptic } from '../src/utils/haptics';
@@ -204,6 +208,13 @@ const Layout: React.FC<LayoutProps> = ({
               <DrawerItem icon={Shield} label="Admin Panel" onClick={() => { handleNavClick(AppView.ADMIN_PANEL); setDrawerOpen(false); }} active={currentView === AppView.ADMIN_PANEL} />
             )}
             
+            <div className="my-4 h-px bg-amber-500/10 mx-4" />
+            <p className="px-4 py-2 text-[10px] font-black text-amber-500/40 uppercase tracking-[0.3em]">Dapp Ecosystem</p>
+            <DrawerItem icon={Database} label="Produce Ledger" onClick={() => { handleNavClick(AppView.PRODUCE_LEDGER); setDrawerOpen(false); }} active={currentView === AppView.PRODUCE_LEDGER} />
+            <DrawerItem icon={Users} label="Farmer DAO" onClick={() => { handleNavClick(AppView.COMMUNITY_DAO); setDrawerOpen(false); }} active={currentView === AppView.COMMUNITY_DAO} />
+            <DrawerItem icon={ShoppingBag} label="P2P Market" onClick={() => { handleNavClick(AppView.P2P_MARKETPLACE); setDrawerOpen(false); }} active={currentView === AppView.P2P_MARKETPLACE} />
+            <DrawerItem icon={FileText} label="Project Specs (30 Pages)" onClick={() => { handleNavClick(AppView.PROJECT_DOCS); setDrawerOpen(false); }} active={currentView === AppView.PROJECT_DOCS} />
+
             <div className="my-4 h-px bg-amber-500/10 mx-4" />
             
             <button 

@@ -24,8 +24,10 @@ import {
   FlaskConical,
   Filter,
   CheckCircle2,
-  Languages as LangIcon
+  Languages as LangIcon,
+  AlertCircle
 } from 'lucide-react';
+import { motion, AnimatePresence } from 'motion/react';
 
 const CROPS = [
   'General', 'Corn', 'Soybeans', 'Wheat', 'Rice', 'Cotton', 'Potato', 'Tomato', 'Citrus', 'Apple', 'Grapes'
@@ -111,6 +113,11 @@ const VisualGallery: React.FC<VisualGalleryProps> = ({ language: initialLanguage
   const [showCamera, setShowCamera] = React.useState(false);
   const [facingMode, setFacingMode] = React.useState<'user' | 'environment'>('environment');
   const [capturedImage, setCapturedImage] = React.useState<string | null>(null);
+  const [alertDialog, setAlertDialog] = React.useState<{
+    isOpen: boolean;
+    title: string;
+    message: string;
+  }>({ isOpen: false, title: '', message: '' });
 
   const videoRef = React.useRef<HTMLVideoElement>(null);
   const canvasRef = React.useRef<HTMLCanvasElement>(null);
@@ -193,7 +200,11 @@ const VisualGallery: React.FC<VisualGalleryProps> = ({ language: initialLanguage
       setShowCamera(true);
       setError(null);
     } catch (err) {
-      alert("Camera access denied.");
+      setAlertDialog({
+        isOpen: true,
+        title: 'Camera Access',
+        message: 'Lens access required. Please enable camera permissions in your browser or device settings to use the pest scanner.'
+      });
     }
   };
 
@@ -579,6 +590,39 @@ const VisualGallery: React.FC<VisualGalleryProps> = ({ language: initialLanguage
           </div>
         </div>
       )}
+
+      {/* Custom Alert Dialog */}
+      <AnimatePresence>
+        {alertDialog.isOpen && (
+          <motion.div 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-stone-950/60 backdrop-blur-sm"
+          >
+            <motion.div 
+              initial={{ scale: 0.9, opacity: 0, y: 20 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
+              exit={{ scale: 0.9, opacity: 0, y: 20 }}
+              className="bg-white rounded-[2.5rem] p-8 max-w-sm w-full shadow-2xl border border-stone-200"
+            >
+              <div className="text-center">
+                <div className="w-16 h-16 bg-amber-500/10 text-amber-500 rounded-2xl flex items-center justify-center mb-6 mx-auto">
+                  <AlertCircle className="w-8 h-8" />
+                </div>
+                <h3 className="text-xl font-black text-stone-900 uppercase tracking-tighter mb-2">{alertDialog.title}</h3>
+                <p className="text-sm font-medium text-stone-500 leading-relaxed mb-8">{alertDialog.message}</p>
+                <button 
+                  onClick={() => setAlertDialog({ ...alertDialog, isOpen: false })}
+                  className="w-full py-4 bg-stone-900 text-white rounded-2xl font-black text-[10px] uppercase tracking-widest shadow-lg hover:opacity-90 transition-all"
+                >
+                  Understood
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 };

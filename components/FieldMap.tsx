@@ -14,6 +14,7 @@ import {
   ChevronRight,
   ChevronDown,
   ArrowUp,
+  ArrowDown,
   ClipboardList,
   RefreshCw,
   Trash2,
@@ -51,7 +52,7 @@ import ReactMarkdown from 'react-markdown';
 import { motion, AnimatePresence } from 'motion/react';
 import L from 'leaflet';
 import { db, auth } from '../src/firebase';
-import { collection, query, onSnapshot, addDoc, updateDoc, deleteDoc, doc, orderBy, setDoc } from 'firebase/firestore';
+import { collection, query, onSnapshot, addDoc, updateDoc, deleteDoc, doc, orderBy, setDoc, serverTimestamp } from 'firebase/firestore';
 import { handleFirestoreError, OperationType } from '../src/utils/firestoreErrorHandler';
 
 import { useFirebase } from '../src/components/FirebaseProvider';
@@ -122,6 +123,61 @@ const POI_STATUS_THEMES: Record<string, { ring: string, animate: string, label: 
   'Operational': { ring: 'border-white', animate: '', label: 'Operational', badge: 'bg-amber-500' },
   'Maintenance': { ring: 'border-amber-400', animate: 'animate-pulse', label: 'Needs Maint.', badge: 'bg-amber-500' },
   'Critical': { ring: 'border-rose-500', animate: 'animate-ping', label: 'Critical Issue', badge: 'bg-rose-500' }
+};
+
+const INDIAN_STATE_COORDINATES: Record<string, { lat: number; lon: number }> = {
+  'andhra pradesh': { lat: 15.9129, lon: 79.7400 },
+  'telangana': { lat: 18.1124, lon: 79.0193 },
+  'maharashtra': { lat: 19.7515, lon: 75.7139 },
+  'karnataka': { lat: 15.3173, lon: 75.7139 },
+  'tamil nadu': { lat: 11.1271, lon: 78.6569 },
+  'kerala': { lat: 10.8505, lon: 76.2711 },
+  'gujarat': { lat: 22.2587, lon: 71.1924 },
+  'rajasthan': { lat: 27.0238, lon: 74.2179 },
+  'madhya pradesh': { lat: 22.9734, lon: 78.6569 },
+  'uttar pradesh': { lat: 26.8467, lon: 80.9462 },
+  'bihar': { lat: 25.0961, lon: 85.3131 },
+  'west bengal': { lat: 22.9868, lon: 87.8550 },
+  'punjab': { lat: 31.1471, lon: 75.3412 },
+  'haryana': { lat: 29.0588, lon: 76.0856 },
+  'himachal pradesh': { lat: 31.1048, lon: 77.1734 },
+  'jammu and kashmir': { lat: 33.7782, lon: 76.5762 },
+  'odisha': { lat: 20.9517, lon: 85.0985 },
+  'assam': { lat: 26.2006, lon: 92.9376 },
+  'chhattisgarh': { lat: 21.2787, lon: 81.8661 },
+  'jharkhand': { lat: 23.6913, lon: 85.2722 },
+  'uttarakhand': { lat: 30.0668, lon: 79.0193 },
+  'delhi': { lat: 28.6139, lon: 77.2090 },
+};
+
+const getPincodeFallbackCoords = (pincodeStr: string) => {
+  if (!pincodeStr || pincodeStr.length < 1) return null;
+  const zone = pincodeStr[0];
+  switch (zone) {
+    case '1': return { lat: 30.12, lon: 76.53 };
+    case '2': return { lat: 26.85, lon: 80.94 };
+    case '3': return { lat: 25.10, lon: 73.50 };
+    case '4': return { lat: 19.75, lon: 75.71 };
+    case '5': return { lat: 15.00, lon: 78.00 };
+    case '6': return { lat: 10.50, lon: 77.50 };
+    case '7': return { lat: 23.50, lon: 87.50 };
+    case '8': return { lat: 24.50, lon: 85.00 };
+    default: return null;
+  }
+};
+
+const getProfileFallbackCoords = (): { lat: number; lon: number } | null => {
+  const state = (localStorage.getItem("agri_state") || "").trim().toLowerCase();
+  if (!state) return null;
+  if (INDIAN_STATE_COORDINATES[state]) {
+    return INDIAN_STATE_COORDINATES[state];
+  }
+  for (const key of Object.keys(INDIAN_STATE_COORDINATES)) {
+    if (state.includes(key) || key.includes(state)) {
+      return INDIAN_STATE_COORDINATES[key];
+    }
+  }
+  return null;
 };
 
 interface SnapResult {
@@ -205,6 +261,7 @@ const FieldMap = ({ language, onBack }: { language: string, onBack: () => void }
   const [mapReady, setMapReady] = React.useState(false);
 
   const registryRef = React.useRef<HTMLElement>(null);
+  const hasCenteredOnFields = React.useRef(false);
 
   const [formData, setFormData] = React.useState({
     name: '',
@@ -222,6 +279,20 @@ const FieldMap = ({ language, onBack }: { language: string, onBack: () => void }
 
   const [savedFields, setSavedFields] = React.useState<Field[]>([]);
   const [loading, setLoading] = React.useState(true);
+
+  const [confirmDialog, setConfirmDialog] = React.useState<{
+    isOpen: boolean;
+    title: string;
+    message: string;
+    onConfirm: () => void;
+    type: 'danger' | 'info';
+  }>({ isOpen: false, title: '', message: '', onConfirm: () => {}, type: 'info' });
+
+  const [alertDialog, setAlertDialog] = React.useState<{
+    isOpen: boolean;
+    title: string;
+    message: string;
+  }>({ isOpen: false, title: '', message: '' });
 
   React.useEffect(() => {
     if (!activeFarmId) return;
@@ -317,31 +388,109 @@ const FieldMap = ({ language, onBack }: { language: string, onBack: () => void }
           mapRef.current.setView([parseFloat(lat), parseFloat(lon)], 16);
         }
       } else {
-        setPincodeError('Location not found');
+        // Fallback to zone approximation even if search results are empty
+        const fallback = getPincodeFallbackCoords(pincode);
+        if (fallback && mapRef.current) {
+          mapRef.current.setView([fallback.lat, fallback.lon], 13);
+          setPincodeError('Exact pincode not found; showing region');
+        } else {
+          setPincodeError('Location not found');
+        }
       }
     } catch (err) {
       console.error(err);
-      setPincodeError('Search failed');
+      const fallback = getPincodeFallbackCoords(pincode);
+      if (fallback && mapRef.current) {
+        mapRef.current.setView([fallback.lat, fallback.lon], 13);
+        setPincodeError('Offline/Network block: showing region');
+      } else {
+        setPincodeError('Search failed (Offline)');
+      }
     } finally {
       setIsSearchingPincode(false);
     }
   };
 
+  const getResilientPosition = (
+    onSuccess: (lat: number, lon: number) => void,
+    onFailure: (err?: any) => void
+  ) => {
+    navigator.geolocation.getCurrentPosition(
+      (pos) => onSuccess(pos.coords.latitude, pos.coords.longitude),
+      (err) => {
+        console.warn("High accuracy GPS lookup failed, attempting low accuracy fallback", err);
+        navigator.geolocation.getCurrentPosition(
+          (pos) => onSuccess(pos.coords.latitude, pos.coords.longitude),
+          (err2) => {
+            console.warn("Low accuracy GPS lookup failed, falling back", err2);
+            onFailure(err2);
+          },
+          { enableHighAccuracy: false, timeout: 6000, maximumAge: 600000 }
+        );
+      },
+      { enableHighAccuracy: true, timeout: 4000, maximumAge: 60000 }
+    );
+  };
+
   const recenterMap = () => {
     setIsSearchingPincode(true);
-    navigator.geolocation.getCurrentPosition(
-      (pos) => {
+    getResilientPosition(
+      (lat, lon) => {
         if (mapRef.current) {
-          mapRef.current.setView([pos.coords.latitude, pos.coords.longitude], 17);
+          mapRef.current.setView([lat, lon], 17);
         }
         setIsSearchingPincode(false);
       },
-      (err) => {
-        console.error("Geolocation failed", err);
+      () => {
         setIsSearchingPincode(false);
-        alert("Unable to fetch current location. Please check your GPS settings.");
-      },
-      { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+        const state = localStorage.getItem("agri_state") || "";
+        const district = localStorage.getItem("agri_district") || "";
+        const mandal = localStorage.getItem("agri_mandal") || "";
+        const village = localStorage.getItem("agri_revenue_village") || "";
+        
+        const locFallback = getProfileFallbackCoords();
+        const queryParts = [village, mandal, district, state, "India"].filter(Boolean);
+        if (queryParts.length > 1) {
+          const searchStr = queryParts.join(", ");
+          fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(searchStr)}&limit=1`)
+            .then(res => res.json())
+            .then(data => {
+              if (data && data.length > 0 && mapRef.current) {
+                const { lat, lon } = data[0];
+                mapRef.current.setView([parseFloat(lat), parseFloat(lon)], 15);
+              } else if (locFallback && mapRef.current) {
+                mapRef.current.setView([locFallback.lat, locFallback.lon], 12);
+              } else {
+                setAlertDialog({
+                  isOpen: true,
+                  title: 'GPS Offline',
+                  message: 'Unable to fix location. Please enter a pincode or verify your GPS settings.'
+                });
+              }
+            })
+            .catch(() => {
+              if (locFallback && mapRef.current) {
+                mapRef.current.setView([locFallback.lat, locFallback.lon], 12);
+              } else {
+                setAlertDialog({
+                  isOpen: true,
+                  title: 'GPS Offline',
+                  message: 'Unable to fix location. Please enter a pincode or verify your GPS settings.'
+                });
+              }
+            });
+        } else {
+          if (locFallback && mapRef.current) {
+            mapRef.current.setView([locFallback.lat, locFallback.lon], 12);
+          } else {
+            setAlertDialog({
+              isOpen: true,
+              title: 'GPS Offline',
+              message: 'Unable to fix location. Please search using a pincode or configure your profile location.'
+            });
+          }
+        }
+      }
     );
   };
 
@@ -613,7 +762,11 @@ const FieldMap = ({ language, onBack }: { language: string, onBack: () => void }
 
   const fetchDetailedPlan = async (field: Field) => {
     if (!field.cropType) {
-      alert("Please specify a focus crop for this parcel first.");
+      setAlertDialog({
+        isOpen: true,
+        title: 'Missing Data',
+        message: 'Please specify a focus crop for this parcel first.'
+      });
       return;
     }
     setAdviceLoading(true);
@@ -621,6 +774,19 @@ const FieldMap = ({ language, onBack }: { language: string, onBack: () => void }
       const location = localStorage.getItem('agri_farm_location') || 'Local Farm';
       const advice = await getFertilizerAdvice(field.cropType, location, 'Alluvial', language);
       setDetailedAdvice(advice);
+      
+      // Save advice to Firestore for persistence
+      if (activeFarmId) {
+        const path = `users/${activeFarmId}/fields/${field.id}`;
+        try {
+          await updateDoc(doc(db, path), {
+            lastAdvice: advice,
+            updatedAt: serverTimestamp()
+          });
+        } catch (error) {
+          handleFirestoreError(error, OperationType.UPDATE, path);
+        }
+      }
     } catch (err) {
       console.error("Fertilizer strategy retrieval failed:", err);
     } finally {
@@ -629,12 +795,91 @@ const FieldMap = ({ language, onBack }: { language: string, onBack: () => void }
   };
 
   React.useEffect(() => {
-    navigator.geolocation.getCurrentPosition(
-      (pos) => initMap(pos.coords.latitude, pos.coords.longitude),
-      () => initMap(20.5937, 78.9629),
-      { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+    if (loading) return;
+
+    getResilientPosition(
+      (lat, lon) => initMap(lat, lon),
+      () => {
+        const state = localStorage.getItem("agri_state") || "";
+        const district = localStorage.getItem("agri_district") || "";
+        const mandal = localStorage.getItem("agri_mandal") || "";
+        const village = localStorage.getItem("agri_revenue_village") || "";
+        
+        const locFallback = getProfileFallbackCoords();
+        const queryParts = [village, mandal, district, state, "India"].filter(Boolean);
+        if (queryParts.length > 1) {
+          const searchStr = queryParts.join(", ");
+          fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(searchStr)}&limit=1`)
+            .then(res => res.json())
+            .then(data => {
+              if (data && data.length > 0) {
+                const { lat, lon } = data[0];
+                initMap(parseFloat(lat), parseFloat(lon));
+              } else if (locFallback) {
+                initMap(locFallback.lat, locFallback.lon);
+              } else {
+                initMap(20.5937, 78.9629);
+              }
+            })
+            .catch(() => {
+              if (locFallback) {
+                initMap(locFallback.lat, locFallback.lon);
+              } else {
+                initMap(20.5937, 78.9629);
+              }
+            });
+        } else {
+          if (locFallback) {
+            initMap(locFallback.lat, locFallback.lon);
+          } else {
+            initMap(20.5937, 78.9629);
+          }
+        }
+      }
     );
-  }, []);
+
+    return () => {
+      if (mapRef.current) {
+        mapRef.current.remove();
+        mapRef.current = null;
+      }
+    };
+  }, [loading]);
+
+  React.useEffect(() => {
+    if (!mapReady || !mapRef.current || !mapContainerRef.current) return;
+    
+    const resizeObserver = new ResizeObserver(() => {
+      if (mapRef.current) {
+        mapRef.current.invalidateSize();
+      }
+    });
+    
+    resizeObserver.observe(mapContainerRef.current);
+    
+    return () => {
+      resizeObserver.disconnect();
+    };
+  }, [mapReady]);
+
+  React.useEffect(() => {
+    if (mapReady && mapRef.current && savedFields.length > 0 && !hasCenteredOnFields.current) {
+      hasCenteredOnFields.current = true;
+      try {
+        const bounds = L.latLngBounds([]);
+        savedFields.forEach(f => {
+          if (f.points && f.points.length > 0) {
+            f.points.forEach(p => bounds.extend(p));
+          }
+        });
+        if (bounds.isValid()) {
+          mapRef.current.fitBounds(bounds, { padding: [50, 50], maxZoom: 18 });
+        }
+      } catch (err) {
+        console.error("Error biological fitting bounds to saved fields:", err);
+      }
+    }
+  }, [mapReady, savedFields]);
 
   React.useEffect(() => {
     if (!mapReady || !drawingLayersRef.current || !snapLayersRef.current) return;
@@ -871,9 +1116,14 @@ const FieldMap = ({ language, onBack }: { language: string, onBack: () => void }
                  <button onClick={() => setEditingPOI(null)} className="flex-1 py-4 bg-white/5 text-stone-500 rounded-2xl font-black text-[10px] uppercase tracking-widest hover:bg-white/10 transition-all">Cancel</button>
                  {editingPOI.fieldId && (
                    <button 
-                     onClick={async () => {
+                     onClick={() => {
                        if (!auth.currentUser || !editingPOI.fieldId) return;
-                       if (confirm("Delete this asset?")) {
+                        setConfirmDialog({
+                          isOpen: true,
+                          title: 'Delete Asset',
+                          message: 'Are you sure you want to remove this asset from the field map?',
+                          type: 'danger',
+                          onConfirm: async () => {
                          const path = `users/${activeFarmId}/fields/${editingPOI.fieldId}`;
                          const field = savedFields.find(f => f.id === editingPOI.fieldId);
                          if (field) {
@@ -886,7 +1136,8 @@ const FieldMap = ({ language, onBack }: { language: string, onBack: () => void }
                            }
                          }
                        }
-                     }}
+                      });
+                    }}
                      className="p-4 bg-rose-500/10 text-rose-500 rounded-2xl hover:bg-rose-500 hover:text-white transition-all border border-rose-500/20"
                    >
                      <Trash2 className="w-5 h-5" />
@@ -1242,15 +1493,21 @@ const FieldMap = ({ language, onBack }: { language: string, onBack: () => void }
                                       </button>
                                       <div className="flex gap-2">
                                         <button className="flex-1 py-3 bg-white border border-stone-200 rounded-xl text-[9px] font-black uppercase text-stone-400 hover:text-rose-500 hover:border-rose-200 transition-all" onClick={async () => { 
-                                          if(confirm("Delete parcel?")) {
-                                            if (!auth.currentUser) return;
-                                            const path = `users/${activeFarmId}/fields/${field.id}`;
-                                            try {
-                                              await deleteDoc(doc(db, path));
-                                            } catch (error) {
-                                              handleFirestoreError(error, OperationType.DELETE, path);
+                                          setConfirmDialog({
+                                            isOpen: true,
+                                            title: 'Delete Parcel',
+                                            message: `Are you sure you want to delete ${field.name}? This action cannot be undone.`,
+                                            type: 'danger',
+                                            onConfirm: async () => {
+                                              if (!auth.currentUser) return;
+                                              const path = `users/${activeFarmId}/fields/${field.id}`;
+                                              try {
+                                                await deleteDoc(doc(db, path));
+                                              } catch (error) {
+                                                handleFirestoreError(error, OperationType.DELETE, path);
+                                              }
                                             }
-                                          } 
+                                         });
                                         }}>Delete</button>
                                         <button className="flex-1 py-3 bg-white border border-stone-200 rounded-xl text-[9px] font-black uppercase text-stone-400 hover:text-amber-500 hover:border-amber-200 transition-all">Edit</button>
                                       </div>
@@ -1400,7 +1657,11 @@ const FieldMap = ({ language, onBack }: { language: string, onBack: () => void }
                     <button onClick={() => setShowZoneModal(false)} className="px-6 py-4 bg-stone-100 text-stone-500 font-black rounded-2xl text-[10px] uppercase tracking-widest">Back</button>
                     <button onClick={async () => {
                       if (!activeField) {
-                        alert("Please select a field first to attach this zone.");
+                        setAlertDialog({
+                          isOpen: true,
+                          title: 'Field Required',
+                          message: 'Please select a field first to attach this zone.'
+                        });
                         return;
                       }
                       if (!auth.currentUser) return;
@@ -1544,6 +1805,104 @@ const FieldMap = ({ language, onBack }: { language: string, onBack: () => void }
            </main>
         </div>
       )}
+
+      {/* Custom Alert Dialog */}
+      <AnimatePresence>
+        {alertDialog.isOpen && (
+          <div className="absolute inset-0 z-[10000] bg-black/60 backdrop-blur-md flex items-center justify-center p-6 animate-in fade-in">
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.9, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.9, y: 20 }}
+              className="bg-white w-full max-w-sm rounded-[2.5rem] p-8 shadow-2xl border border-stone-100"
+            >
+              <div className="flex flex-col items-center text-center">
+                <div className="w-16 h-16 bg-amber-500/10 rounded-2xl flex items-center justify-center text-amber-500 mb-6">
+                  <Info className="w-8 h-8" />
+                </div>
+                <h3 className="text-xl font-black text-stone-900 uppercase tracking-tighter mb-2">{alertDialog.title}</h3>
+                <p className="text-sm font-medium text-stone-500 leading-relaxed mb-8">{alertDialog.message}</p>
+                <button 
+                  onClick={() => setAlertDialog({ ...alertDialog, isOpen: false })}
+                  className="w-full py-4 bg-stone-900 text-white rounded-2xl font-black text-[10px] uppercase tracking-widest shadow-lg hover:bg-amber-500 hover:text-stone-950 transition-all"
+                >
+                  Understood
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Custom Confirm Dialog */}
+      <AnimatePresence>
+        {confirmDialog.isOpen && (
+          <div className="absolute inset-0 z-[10000] bg-black/60 backdrop-blur-md flex items-center justify-center p-6 animate-in fade-in">
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.9, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.9, y: 20 }}
+              className="bg-white w-full max-w-sm rounded-[2.5rem] p-8 shadow-2xl border border-stone-100"
+            >
+              <div className="flex flex-col items-center text-center">
+                <div className={`w-16 h-16 ${confirmDialog.type === 'danger' ? 'bg-rose-500/10 text-rose-500' : 'bg-amber-500/10 text-amber-500'} rounded-2xl flex items-center justify-center mb-6`}>
+                  {confirmDialog.type === 'danger' ? <Trash2 className="w-8 h-8" /> : <Info className="w-8 h-8" />}
+                </div>
+                <h3 className="text-xl font-black text-stone-900 uppercase tracking-tighter mb-2">{confirmDialog.title}</h3>
+                <p className="text-sm font-medium text-stone-500 leading-relaxed mb-8">{confirmDialog.message}</p>
+                <div className="flex gap-3 w-full">
+                  <button 
+                    onClick={() => setConfirmDialog({ ...confirmDialog, isOpen: false })}
+                    className="flex-1 py-4 bg-stone-100 text-stone-500 rounded-2xl font-black text-[10px] uppercase tracking-widest hover:bg-stone-200 transition-all"
+                  >
+                    Cancel
+                  </button>
+                  <button 
+                    onClick={() => {
+                      confirmDialog.onConfirm();
+                      setConfirmDialog({ ...confirmDialog, isOpen: false });
+                    }}
+                    className={`flex-1 py-4 ${confirmDialog.type === 'danger' ? 'bg-rose-500' : 'bg-stone-900'} text-white rounded-2xl font-black text-[10px] uppercase tracking-widest shadow-lg hover:opacity-90 transition-all`}
+                  >
+                    Confirm
+                  </button>
+                </div>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Floating View Scroll Assists */}
+      <div className="fixed bottom-28 right-6 z-[3000] flex flex-col gap-3">
+        <motion.button
+          whileHover={{ scale: 1.1 }}
+          whileTap={{ scale: 0.9 }}
+          onClick={() => {
+            if (mapContainerRef.current) {
+              mapContainerRef.current.scrollIntoView({ behavior: 'smooth' });
+            }
+          }}
+          className="w-12 h-12 bg-stone-950/90 hover:bg-stone-900 text-amber-500 rounded-full flex items-center justify-center border border-white/10 shadow-2xl active:scale-95 transition-all"
+          title="Scroll up to Map"
+        >
+          <ArrowUp className="w-5 h-5" />
+        </motion.button>
+        
+        <motion.button
+          whileHover={{ scale: 1.1 }}
+          whileTap={{ scale: 0.9 }}
+          onClick={() => {
+            if (registryRef.current) {
+              registryRef.current.scrollIntoView({ behavior: 'smooth' });
+            }
+          }}
+          className="w-12 h-12 bg-stone-950/90 hover:bg-stone-900 text-amber-500 rounded-full flex items-center justify-center border border-white/10 shadow-2xl active:scale-95 transition-all"
+          title="Scroll down to Registry"
+        >
+          <ArrowDown className="w-5 h-5" />
+        </motion.button>
+      </div>
     </div>
   );
 };

@@ -46,7 +46,6 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete, onBackToLogin }) =>
   const [step, setStep] = React.useState(0);
   const [name, setName] = React.useState('');
   const [phone, setPhone] = React.useState('');
-  const [farmName, setFarmName] = React.useState('');
   const [state, setState] = React.useState('');
   const [district, setDistrict] = React.useState('');
   const [mandal, setMandal] = React.useState('');
@@ -55,8 +54,8 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete, onBackToLogin }) =>
   const [selectedLang, setSelectedLang] = React.useState(localStorage.getItem('agri_language') || 'English');
 
   const handleNext = () => {
-    if (step < 5) setStep(step + 1);
-    else onComplete(name, farmName, phone, selectedLang, state, district, mandal, revenue, farmSize);
+    if (step < 4) setStep(step + 1);
+    else onComplete(name, `${name || 'Kisan'}'s Farm`, phone, selectedLang, state, district, mandal, revenue, farmSize);
   };
 
   const handleBack = () => {
@@ -66,7 +65,7 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete, onBackToLogin }) =>
   return (
     <div className="min-h-screen bg-black flex flex-col items-center justify-center p-6 relative overflow-hidden">
       <motion.div 
-        initial={{ opacity: 0, scale: 0.9 }}
+         initial={{ opacity: 0, scale: 0.9 }}
         animate={{ opacity: 1, scale: 1 }}
         className="w-full max-w-sm space-y-8 relative z-10"
       >
@@ -85,7 +84,7 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete, onBackToLogin }) =>
               referrerPolicy="no-referrer"
             />
             <div className="flex gap-1.5">
-              {[0, 1, 2, 3, 4, 5].map((s) => (
+              {[0, 1, 2, 3, 4].map((s) => (
                 <div 
                   key={s} 
                   className={`h-1.5 rounded-full transition-all duration-300 ${s === step ? 'w-6 bg-amber-500' : 'w-1.5 bg-stone-800'}`} 
@@ -149,16 +148,6 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete, onBackToLogin }) =>
               {step === 3 && (
                 <div className="space-y-6">
                   <div className="space-y-1">
-                    <h2 className="text-2xl font-black text-white uppercase tracking-tight">Farm</h2>
-                    <p className="text-[10px] font-bold text-stone-500 uppercase tracking-widest">What is your farm's name?</p>
-                  </div>
-                  <InputField icon={<Sprout className="w-6 h-6" />} placeholder="Farm Name" value={farmName} onChange={setFarmName} />
-                </div>
-              )}
-
-              {step === 4 && (
-                <div className="space-y-6">
-                  <div className="space-y-1">
                     <h2 className="text-2xl font-black text-white uppercase tracking-tight">Land Size</h2>
                     <p className="text-[10px] font-bold text-stone-500 uppercase tracking-widest">How much land do you farm? (Acres)</p>
                   </div>
@@ -166,7 +155,7 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete, onBackToLogin }) =>
                 </div>
               )}
 
-              {step === 5 && (
+              {step === 4 && (
                 <div className="space-y-6">
                   <div className="space-y-1">
                     <h2 className="text-2xl font-black text-white uppercase tracking-tight">Location</h2>
@@ -197,14 +186,13 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete, onBackToLogin }) =>
                 disabled={
                   step === 1 ? !name.trim() : 
                   step === 2 ? !phone.trim() : 
-                  step === 3 ? !farmName.trim() : 
-                  step === 4 ? !farmSize.trim() :
-                  step === 5 ? (!state || !district.trim() || !mandal.trim() || !revenue.trim()) : 
+                  step === 3 ? !farmSize.trim() :
+                  step === 4 ? (!state || !district.trim() || !mandal.trim() || !revenue.trim()) : 
                   false
                 }
                 className="w-full bg-amber-600 text-black font-black py-4 rounded-full flex items-center justify-center gap-2 shadow-xl shadow-amber-900/20 disabled:opacity-40 transition-all uppercase text-[10px] tracking-widest"
               >
-                {step === 5 ? 'Start Farming' : 'Continue'}
+                {step === 4 ? 'Start Farming' : 'Continue'}
                 <ArrowRight className="w-5 h-5" />
               </motion.button>
             </motion.div>

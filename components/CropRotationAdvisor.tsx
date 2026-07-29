@@ -19,9 +19,12 @@ import {
   Info,
   Zap,
   Save,
-  RotateCcw
+  RotateCcw,
+  AlertCircle
 } from 'lucide-react';
 import Markdown from 'react-markdown';
+import { motion, AnimatePresence } from 'motion/react';
+import { useDialogs } from '../src/components/DialogProvider';
 
 const WEATHER_API_KEY = import.meta.env.VITE_WEATHER_API_KEY;
 
@@ -44,6 +47,7 @@ interface CropRotationAdvisorProps {
 }
 
 const CropRotationAdvisor: React.FC<CropRotationAdvisorProps> = ({ language }) => {
+  const { confirm } = useDialogs();
   const [formData, setFormData] = React.useState({
     currentCrops: [] as string[],
     location: localStorage.getItem('agri_farm_location') || '',
@@ -139,10 +143,17 @@ const CropRotationAdvisor: React.FC<CropRotationAdvisorProps> = ({ language }) =
 
   const deleteArchived = (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
-    if (!confirm("Remove this archived rotation plan?")) return;
-    const updated = savedRotations.filter(s => s.id !== id);
-    setSavedRotations(updated);
-    localStorage.setItem('agri_saved_rotations', JSON.stringify(updated));
+    
+    confirm({
+      title: 'Delete Rotation Plan',
+      message: 'Are you sure you want to remove this archived rotation plan?',
+      type: 'danger',
+      onConfirm: () => {
+        const updated = savedRotations.filter(s => s.id !== id);
+        setSavedRotations(updated);
+        localStorage.setItem('agri_saved_rotations', JSON.stringify(updated));
+      }
+    });
   };
 
   const loadArchived = (rotation: SavedRotation) => {
@@ -363,10 +374,15 @@ const CropRotationAdvisor: React.FC<CropRotationAdvisorProps> = ({ language }) =
               </div>
               <button 
                 onClick={() => {
-                  if (confirm("Clear all archived plans?")) {
-                    localStorage.removeItem('agri_saved_rotations');
-                    setSavedRotations([]);
-                  }
+                  confirm({
+                    title: 'Clear Archive',
+                    message: 'Clear all archived plans?',
+                    type: 'danger',
+                    onConfirm: () => {
+                      localStorage.removeItem('agri_saved_rotations');
+                      setSavedRotations([]);
+                    }
+                  });
                 }}
                 className="text-[10px] font-black text-orange-400 uppercase tracking-widest hover:text-orange-300 transition-colors"
               >

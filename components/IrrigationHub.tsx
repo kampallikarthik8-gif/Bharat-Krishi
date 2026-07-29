@@ -19,6 +19,10 @@ import {
   Activity
 } from 'lucide-react';
 import { getAIClient } from '../services/geminiService';
+import { db, auth } from '../src/firebase';
+import { collection, addDoc, deleteDoc, doc, onSnapshot, query, orderBy, updateDoc, serverTimestamp } from 'firebase/firestore';
+import { handleFirestoreError, OperationType } from '../src/utils/firestoreErrorHandler';
+import { useFirebase } from '../src/components/FirebaseProvider';
 
 interface IrrigationZone {
   id: string;
@@ -26,45 +30,43 @@ interface IrrigationZone {
   cropType: string;
   soilType: string;
   lastWatered?: string;
+  recommendation?: string;
 }
 
 const WEATHER_API_KEY = import.meta.env.VITE_WEATHER_API_KEY;
 
-// Fixed error: Added IrrigationHubProps and used language from props
 interface IrrigationHubProps {
   language: string;
 }
 
 const IrrigationHub: React.FC<IrrigationHubProps> = ({ language }) => {
+  const { activeFarmId } = useFirebase();
   const [loading, setLoading] = React.useState(true);
   const [weather, setWeather] = React.useState<any>(null);
-  const [zones, setZones] = React.useState<IrrigationZone[]>(() => {
-    const saved = localStorage.getItem('agri_irrigation_zones');
-    if (saved) return JSON.parse(saved);
-    
-    const mainCrops = JSON.parse(localStorage.getItem('agri_main_crops') || '[]');
-    const soilType = localStorage.getItem('agri_soil_type') || 'Loamy';
-    
-    if (mainCrops.length > 0) {
-      return mainCrops.map((crop: string, i: number) => ({
-        id: (i + 1).toString(),
-        name: `${crop} Field`,
-        cropType: crop,
-        soilType: soilType
-      }));
-    }
-    
-    return [
-      { id: '1', name: 'Primary Field', cropType: 'Paddy', soilType: 'Loamy' }
-    ];
-  });
-  const [recommendations, setRecommendations] = React.useState<Record<string, string>>({});
+  const [zones, setZones] = React.useState<IrrigationZone[]>([]);
   const [activeZone, setActiveZone] = React.useState<IrrigationZone | null>(null);
   const [analyzing, setAnalyzing] = React.useState<string | null>(null);
 
   React.useEffect(() => {
-    localStorage.setItem('agri_irrigation_zones', JSON.stringify(zones));
-  }, [zones]);
+    if (!activeFarmId) return;
+
+    const path = `users/${activeFarmId}/irrigationZones`;
+    const q = query(collection(db, path), orderBy('updatedAt', 'desc'));
+
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const zoneData: IrrigationZone[] = [];
+      snapshot.forEach((doc) => {
+        zoneData.push({ id: doc.id, ...doc.data() } as IrrigationZone);
+      });
+      setZones(zoneData);
+      setLoading(false);
+    }, (error) => {
+      handleFirestoreError(error, OperationType.LIST, path);
+      setLoading(false);
+    });
+
+    return () => unsubscribe();
+  }, [activeFarmId]);
 
   React.useEffect(() => {
     navigator.geolocation.getCurrentPosition(async (pos) => {
@@ -72,28 +74,32 @@ const IrrigationHub: React.FC<IrrigationHubProps> = ({ language }) => {
         const res = await fetch(`https://api.openweathermap.org/data/2.5/weather?lat=${pos.coords.latitude}&lon=${pos.coords.longitude}&appid=${WEATHER_API_KEY}&units=metric`);
         const data = await res.json();
         setWeather(data);
-      } finally {
-        setLoading(false);
+      } catch (err) {
+        console.error("Weather fetch failed", err);
       }
     });
   }, []);
 
   const getAiRecommendation = async (zone: IrrigationZone) => {
-    if (!weather) return;
+    if (!weather || !activeFarmId) return;
     setAnalyzing(zone.id);
     try {
       const ai = getAIClient();
-      // Added language requirement to prompt
       const prompt = `Provide a precise irrigation recommendation for a zone named "${zone.name}" with "${zone.cropType}" crops and "${zone.soilType}" soil. 
       Local Weather: ${weather.main.temp}°C, Humidity ${weather.main.humidity}%, Condition: ${weather.weather[0].description}. 
       Return a single brief, expert instruction (max 20 words) in ${language}.`;
       
       const response = await ai.models.generateContent({
-        model: 'gemini-3-flash-preview',
+        model: 'gemini-3.6-flash',
         contents: prompt
       });
       
-      setRecommendations(prev => ({ ...prev, [zone.id]: response.text || "Watering needed." }));
+      const recommendation = response.text || "Watering needed.";
+      const path = `users/${activeFarmId}/irrigationZones/${zone.id}`;
+      await updateDoc(doc(db, path), { 
+        recommendation,
+        updatedAt: serverTimestamp()
+      });
     } catch (err) {
       console.error(err);
     } finally {
@@ -101,27 +107,49 @@ const IrrigationHub: React.FC<IrrigationHubProps> = ({ language }) => {
     }
   };
 
-  const addZone = () => {
+  const addZone = async () => {
+    if (!activeFarmId) return;
     const soilType = localStorage.getItem('agri_soil_type') || 'Loamy';
-    const newZone: IrrigationZone = {
-      id: Date.now().toString(),
+    const path = `users/${activeFarmId}/irrigationZones`;
+    const newZoneData = {
       name: 'New Zone',
       cropType: 'Corn',
-      soilType: soilType
+      soilType: soilType,
+      updatedAt: serverTimestamp()
     };
-    setZones([...zones, newZone]);
-    setActiveZone(newZone);
+    
+    try {
+      const docRef = await addDoc(collection(db, path), newZoneData);
+      setActiveZone({ id: docRef.id, ...newZoneData } as IrrigationZone);
+    } catch (error) {
+      handleFirestoreError(error, OperationType.CREATE, path);
+    }
   };
 
-  const removeZone = (id: string) => {
-    if (zones.length <= 1) return;
-    setZones(zones.filter(z => z.id !== id));
-    if (activeZone?.id === id) setActiveZone(null);
+  const removeZone = async (id: string) => {
+    if (!activeFarmId) return;
+    const path = `users/${activeFarmId}/irrigationZones/${id}`;
+    try {
+      await deleteDoc(doc(db, path));
+      if (activeZone?.id === id) setActiveZone(null);
+    } catch (error) {
+      handleFirestoreError(error, OperationType.DELETE, path);
+    }
   };
 
-  const updateZone = (updated: IrrigationZone) => {
-    setZones(zones.map(z => z.id === updated.id ? updated : z));
-    setActiveZone(updated);
+  const updateZoneDetails = async (updated: IrrigationZone) => {
+    if (!activeFarmId) return;
+    const path = `users/${activeFarmId}/irrigationZones/${updated.id}`;
+    try {
+      const { id, ...data } = updated;
+      await updateDoc(doc(db, path), {
+        ...data,
+        updatedAt: serverTimestamp()
+      });
+      setActiveZone(updated);
+    } catch (error) {
+      handleFirestoreError(error, OperationType.UPDATE, path);
+    }
   };
 
   return (
@@ -200,13 +228,13 @@ const IrrigationHub: React.FC<IrrigationHubProps> = ({ language }) => {
                    </div>
                 </div>
 
-                {recommendations[zone.id] && (
+                {zone.recommendation && (
                   <div className="mt-4 bg-amber-500/5 backdrop-blur-md p-4 rounded-2xl border border-amber-500/10 animate-in slide-in-from-top-2">
                      <p className="text-[9px] font-black text-amber-500 uppercase tracking-widest mb-1 flex items-center gap-2">
                         <CheckCircle2 className="w-3 h-3" /> Gemini Instruction
                      </p>
                      <p className="text-xs font-bold text-amber-100/80 leading-relaxed italic">
-                        "{recommendations[zone.id]}"
+                        "{zone.recommendation}"
                      </p>
                   </div>
                 )}
@@ -233,7 +261,7 @@ const IrrigationHub: React.FC<IrrigationHubProps> = ({ language }) => {
                    <label className="text-[10px] font-black text-stone-500 uppercase tracking-widest ml-2">Zone Name</label>
                    <input 
                     value={activeZone.name}
-                    onChange={e => updateZone({...activeZone, name: e.target.value})}
+                    onChange={e => updateZoneDetails({...activeZone, name: e.target.value})}
                     className="w-full bg-black border border-white/10 p-4 rounded-2xl outline-none focus:ring-2 focus:ring-amber-500 font-bold text-sm text-white"
                    />
                 </div>
@@ -244,7 +272,7 @@ const IrrigationHub: React.FC<IrrigationHubProps> = ({ language }) => {
                      <div className="relative">
                        <input 
                         value={activeZone.cropType}
-                        onChange={e => updateZone({...activeZone, cropType: e.target.value})}
+                        onChange={e => updateZoneDetails({...activeZone, cropType: e.target.value})}
                         className="w-full bg-black border border-white/10 p-4 rounded-2xl outline-none focus:ring-2 focus:ring-amber-500 font-bold text-xs text-white"
                        />
                        <Sprout className="absolute right-4 top-1/2 -translate-y-1/2 text-stone-600 w-4 h-4" />
@@ -255,7 +283,7 @@ const IrrigationHub: React.FC<IrrigationHubProps> = ({ language }) => {
                      <div className="relative">
                        <select 
                         value={activeZone.soilType}
-                        onChange={e => updateZone({...activeZone, soilType: e.target.value})}
+                        onChange={e => updateZoneDetails({...activeZone, soilType: e.target.value})}
                         className="w-full bg-black border border-white/10 p-4 rounded-2xl outline-none appearance-none font-bold text-xs text-white"
                        >
                           <option>Loamy</option>

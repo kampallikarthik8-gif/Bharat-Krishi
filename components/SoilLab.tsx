@@ -24,8 +24,17 @@ import {
   ArrowRight,
   TrendingDown,
   TrendingUp,
-  Minus
+  Minus,
+  Info,
+  AlertCircle
 } from 'lucide-react';
+import { motion, AnimatePresence } from 'motion/react';
+
+import { useFirebase } from '../src/components/FirebaseProvider';
+import { useDialogs } from '../src/components/DialogProvider';
+import { db } from '../src/firebase';
+import { collection, query, onSnapshot, addDoc, deleteDoc, doc, orderBy } from 'firebase/firestore';
+import { handleFirestoreError, OperationType } from '../src/utils/firestoreErrorHandler';
 
 interface SavedSoilReport extends SoilReport {
   id: string;
@@ -87,13 +96,12 @@ interface SoilLabProps {
 }
 
 const SoilLab: React.FC<SoilLabProps> = ({ language }) => {
+  const { activeFarmId } = useFirebase();
+  const { confirm, alert } = useDialogs();
   const [image, setImage] = React.useState<string | null>(null);
   const [loading, setLoading] = React.useState(false);
   const [report, setReport] = React.useState<SoilReport | null>(null);
-  const [history, setHistory] = React.useState<SavedSoilReport[]>(() => {
-    const saved = localStorage.getItem('agriassist_soil_history');
-    return saved ? JSON.parse(saved) : [];
-  });
+  const [history, setHistory] = React.useState<SavedSoilReport[]>([]);
   const [saveStatus, setSaveStatus] = React.useState<'idle' | 'saved'>('idle');
   const [showCamera, setProjectedShowCamera] = React.useState(false);
   const [facingMode, setFacingMode] = React.useState<'user' | 'environment'>('environment');
@@ -101,6 +109,25 @@ const SoilLab: React.FC<SoilLabProps> = ({ language }) => {
   const videoRef = React.useRef<HTMLVideoElement>(null);
   const canvasRef = React.useRef<HTMLCanvasElement>(null);
   const streamRef = React.useRef<MediaStream | null>(null);
+
+  React.useEffect(() => {
+    if (!activeFarmId) return;
+
+    const path = `users/${activeFarmId}/soilReports`;
+    const q = query(collection(db, path), orderBy('date', 'desc'));
+
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const reports = snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      })) as SavedSoilReport[];
+      setHistory(reports);
+    }, (error) => {
+      handleFirestoreError(error, OperationType.LIST, path);
+    });
+
+    return () => unsubscribe();
+  }, [activeFarmId]);
 
   // Use a callback ref to handle video element mounting
   const setVideoRef = React.useCallback((node: HTMLVideoElement | null) => {
@@ -119,7 +146,12 @@ const SoilLab: React.FC<SoilLabProps> = ({ language }) => {
       const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode }, audio: false });
       streamRef.current = stream;
       setProjectedShowCamera(true);
-    } catch (err) { alert("Camera access required."); }
+    } catch (err) { 
+      alert({
+        title: 'Camera Access',
+        message: 'Camera access is required to analyze soil samples. Please enable it in your browser settings.'
+      });
+    }
   };
 
   const stopCamera = () => {
@@ -164,21 +196,40 @@ const SoilLab: React.FC<SoilLabProps> = ({ language }) => {
     }
   };
 
-  const saveReport = () => {
-    if (!report) return;
-    const newReport = { ...report, id: Date.now().toString(), date: new Date().toISOString(), image: image || undefined };
-    const updated = [newReport, ...history];
-    setHistory(updated);
-    localStorage.setItem('agriassist_soil_history', JSON.stringify(updated));
-    setSaveStatus('saved');
-    setTimeout(() => setSaveStatus('idle'), 3000);
+  const saveReport = async () => {
+    if (!report || !activeFarmId) return;
+    
+    const path = `users/${activeFarmId}/soilReports`;
+    try {
+      await addDoc(collection(db, path), {
+        ...report,
+        date: new Date().toISOString(),
+        image: image || undefined
+      });
+      setSaveStatus('saved');
+      setTimeout(() => setSaveStatus('idle'), 3000);
+    } catch (error) {
+      handleFirestoreError(error, OperationType.CREATE, path);
+    }
   };
 
-  const deleteHistory = (id: string, e: React.MouseEvent) => {
+  const deleteHistory = async (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
-    const updated = history.filter(h => h.id !== id);
-    setHistory(updated);
-    localStorage.setItem('agriassist_soil_history', JSON.stringify(updated));
+    if (!activeFarmId) return;
+    
+    confirm({
+      title: 'Delete Report',
+      message: 'Are you sure you want to remove this soil report from history?',
+      type: 'danger',
+      onConfirm: async () => {
+        const path = `users/${activeFarmId}/soilReports/${id}`;
+        try {
+          await deleteDoc(doc(db, path));
+        } catch (error) {
+          handleFirestoreError(error, OperationType.DELETE, path);
+        }
+      }
+    });
   };
 
   return (

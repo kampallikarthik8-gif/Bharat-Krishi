@@ -34,16 +34,20 @@ import {
   Beef,
   ShieldCheck,
   Bell,
-  Search
+  Search,
+  Info
 } from 'lucide-react';
 import { JournalEntry, Task, Field, InventoryItem, Transaction, UserProfile } from '../types';
 import { useFirebase } from '../src/components/FirebaseProvider';
 import { db } from '../src/firebase';
 import { collection, onSnapshot, query, limit, orderBy, getDocs } from 'firebase/firestore';
 import { handleFirestoreError, OperationType } from '../src/utils/firestoreErrorHandler';
+import { motion, AnimatePresence } from 'motion/react';
+import { useDialogs } from '../src/components/DialogProvider';
 
 const AdminPanel: React.FC = () => {
   const { activeFarmId, profile } = useFirebase();
+  const { alert } = useDialogs();
   const [stats, setStats] = React.useState({
     totalLogs: 0,
     totalTasks: 0,
@@ -167,7 +171,10 @@ const AdminPanel: React.FC = () => {
     };
     localStorage.setItem('agri_broadcasts', JSON.stringify([newBroadcast, ...broadcasts]));
     setBroadcastMessage('');
-    alert("Emergency broadcast queued for all active terminals.");
+    alert({
+      title: 'Broadcast Sent',
+      message: 'Emergency broadcast queued for all active terminals. Local data synchronization complete.'
+    });
   };
 
   const renderMetrics = () => (
