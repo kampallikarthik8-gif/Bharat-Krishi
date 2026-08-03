@@ -15,10 +15,6 @@ export default defineConfig(({ mode }) => {
         react(),
         tailwindcss(),
       ],
-      define: {
-        'process.env.API_KEY': JSON.stringify(apiKey),
-        'process.env.GEMINI_API_KEY': JSON.stringify(apiKey)
-      },
       optimizeDeps: {
         include: ['firebase/app', 'firebase/auth', 'firebase/firestore']
       },

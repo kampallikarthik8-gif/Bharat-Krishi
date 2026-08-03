@@ -21,8 +21,8 @@ const Login: React.FC<LoginProps> = ({ onLogin, onSwitchToRegister, onBackToHome
   const [errorMsg, setErrorMsg] = React.useState<string | null>(null);
 
   const [showGoogleAssist, setShowGoogleAssist] = React.useState(false);
-  const [simulatedEmail, setSimulatedEmail] = React.useState('kampallikarthik8@gmail.com');
-  const [simulatedName, setSimulatedName] = React.useState('Karthik Kampalli');
+  const [simulatedEmail, setSimulatedEmail] = React.useState('farmer@agriassist.in');
+  const [simulatedName, setSimulatedName] = React.useState('Kisan Producer');
 
   const handleGoogleSignIn = async () => {
     // Check if we are running in an iframe (default AI Studio preview environment)
@@ -449,7 +449,7 @@ const Login: React.FC<LoginProps> = ({ onLogin, onSwitchToRegister, onBackToHome
             <a href="#terms" className="hover:text-amber-500 transition-colors">Terms of Service</a>
           </div>
           <p className="text-[10px] font-mono text-stone-600 uppercase tracking-widest">
-            © {new Date().getFullYear()} Bharat Kisan | kampallikarthik8@gmail.com
+            © {new Date().getFullYear()} Bharat Kisan | Precision Farming Platform
           </p>
         </div>
       </motion.div>

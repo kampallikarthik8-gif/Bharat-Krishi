@@ -75,11 +75,8 @@ service cloud.firestore {
 
     function isAdmin() {
       return isAuthenticated() &&
-        (
-          (request.auth.token.email == "kampallikarthik8@gmail.com") ||
-          (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
-           get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin')
-        );
+        exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
     }
 
     function getMemberRole(farmerId) {
@@ -123,7 +120,7 @@ service cloud.firestore {
              (!('name' in data) || (data.name is string && data.name.size() < 100)) &&
              (!('farmName' in data) || (data.farmName is string && data.farmName.size() < 100)) &&
              (!('email' in data) || (data.email == null || data.email == "" || isValidEmail(data.email))) &&
-             (!('farmSize' in data) || (data.farmSize == null || data.farmSize is number)) &&
+             (!('farmSize' in data) || (data.farmSize == null || data.farmSize is number || data.farmSize is string)) &&
              (!('onboardingComplete' in data) || (data.onboardingComplete is bool)) &&
              (!('role' in data) || (data.role in ['admin', 'farmer'])) &&
              (!('mainCrops' in data) || (data.mainCrops is list)) &&
@@ -132,83 +129,84 @@ service cloud.firestore {
     }
 
     function isValidField(data) {
-      return hasOnlyAllowedFields(['name', 'cropType', 'season', 'points', 'area', 'perimeter', 'color', 'status', 'notes', 'markers', 'zones', 'createdAt']) &&
-             data.name is string && data.name.size() > 0 && data.name.size() < 100 &&
-             data.points is list && data.points.size() >= 3 &&
-             data.area is number && data.area >= 0;
+      return hasOnlyAllowedFields(['name', 'cropType', 'season', 'points', 'area', 'perimeter', 'color', 'status', 'notes', 'markers', 'zones', 'createdAt', 'updatedAt', 'khasraNo', 'lastAdvice']) &&
+             (!('name' in data) || (data.name is string && data.name.size() < 100));
     }
 
     function isValidTask(data) {
-      return hasOnlyAllowedFields(['title', 'description', 'priority', 'status', 'category', 'createdAt']) &&
-             data.title is string && data.title.size() > 0 && data.title.size() < 200 &&
-             data.priority in ['Low', 'Medium', 'High'] &&
-             data.status in ['Pending', 'Completed'];
+      return hasOnlyAllowedFields(['title', 'description', 'priority', 'status', 'category', 'createdAt', 'updatedAt', 'dueDate', 'fieldId', 'assignee']) &&
+             (!('title' in data) || (data.title is string && data.title.size() < 200)) &&
+             (!('priority' in data) || (data.priority in ['Low', 'Medium', 'High'])) &&
+             (!('status' in data) || (data.status in ['Pending', 'Completed']));
     }
 
     function isValidInventoryItem(data) {
-      return hasOnlyAllowedFields(['name', 'category', 'quantity', 'unit', 'minThreshold', 'expiryDate']) &&
-             data.name is string && data.name.size() > 0 && data.name.size() < 100 &&
-             data.category in ['Seeds', 'Fertilizer', 'Pesticide', 'Tools', 'Fuel', 'Other'] &&
-             data.quantity is number && data.quantity >= 0;
+      return hasOnlyAllowedFields(['name', 'category', 'quantity', 'unit', 'minThreshold', 'expiryDate', 'createdAt', 'updatedAt', 'notes']) &&
+             (!('name' in data) || (data.name is string && data.name.size() < 100)) &&
+             (!('category' in data) || (data.category in ['Seeds', 'Fertilizer', 'Pesticide', 'Tools', 'Fuel', 'Other']));
     }
 
     function isValidTransaction(data) {
-      return hasOnlyAllowedFields(['type', 'category', 'amount', 'date', 'note']) &&
-             data.type in ['Income', 'Expense'] &&
-             data.amount is number && data.amount >= 0;
+      return hasOnlyAllowedFields(['type', 'category', 'amount', 'date', 'note', 'createdAt', 'updatedAt']) &&
+             (!('type' in data) || (data.type in ['Income', 'Expense']));
     }
 
     function isValidJournalEntry(data) {
-      return hasOnlyAllowedFields(['date', 'category', 'notes', 'crop']) &&
-             data.category in ['Planting', 'Irrigation', 'Fertilizer', 'Pest Control', 'Harvest'] &&
-             data.notes is string && data.notes.size() > 0;
+      return hasOnlyAllowedFields(['date', 'category', 'notes', 'crop', 'createdAt', 'updatedAt']) &&
+             (!('category' in data) || (data.category in ['Planting', 'Irrigation', 'Fertilizer', 'Pest Control', 'Harvest']));
     }
 
     function isValidAlert(data) {
-      return hasOnlyAllowedFields(['type', 'title', 'desc', 'time', 'active', 'priority', 'createdAt']) &&
-             data.type in ['Spray', 'Weather', 'Market'] &&
-             data.title is string && data.title.size() > 0 && data.title.size() < 200 &&
-             data.desc is string && data.desc.size() > 0 && data.desc.size() < 1000 &&
-             data.priority in ['Low', 'Medium', 'High'] &&
-             data.active is bool;
+      return hasOnlyAllowedFields(['type', 'title', 'desc', 'time', 'active', 'priority', 'createdAt', 'updatedAt']) &&
+             (!('type' in data) || (data.type in ['Spray', 'Weather', 'Market'])) &&
+             (!('active' in data) || (data.active is bool));
     }
 
     function isValidSoilReport(data) {
-      return hasOnlyAllowedFields(['texture', 'estimatedPh', 'n', 'p', 'k', 'organicMatter', 'recommendations', 'date', 'image']) &&
-             data.texture is string && data.estimatedPh is string && data.date is string;
+      return hasOnlyAllowedFields(['texture', 'estimatedPh', 'n', 'p', 'k', 'organicMatter', 'drainage', 'recommendations', 'date', 'image', 'createdAt', 'updatedAt']) &&
+             (!('texture' in data) || (data.texture is string)) &&
+             (!('estimatedPh' in data) || (data.estimatedPh is string));
     }
 
     function isValidScanRecord(data) {
-      return hasOnlyAllowedFields(['type', 'timestamp', 'image', 'data']) &&
-             data.type in ['disease', 'pest'] &&
-             data.timestamp is string &&
-             data.image is string &&
-             data.data is map;
+      return hasOnlyAllowedFields(['type', 'timestamp', 'image', 'data', 'createdAt', 'updatedAt']) &&
+             (!('type' in data) || (data.type in ['disease', 'pest']));
     }
 
     function isValidCropStrategy(data) {
-      return hasOnlyAllowedFields(['crop', 'location', 'soil', 'advice', 'fertilizerPlan', 'timestamp']) &&
-             data.crop is string && data.advice is string && data.timestamp is string;
+      return hasOnlyAllowedFields(['crop', 'location', 'soil', 'advice', 'fertilizerPlan', 'timestamp', 'createdAt', 'updatedAt']) &&
+             (!('crop' in data) || (data.crop is string)) &&
+             (!('advice' in data) || (data.advice is string));
     }
 
     function isValidIrrigationZone(data) {
-      return hasOnlyAllowedFields(['name', 'cropType', 'soilType', 'lastWatered', 'recommendation', 'updatedAt']) &&
-             data.name is string && data.cropType is string && data.soilType is string;
+      return hasOnlyAllowedFields(['name', 'cropType', 'soilType', 'lastWatered', 'recommendation', 'updatedAt', 'createdAt']) &&
+             (!('name' in data) || (data.name is string));
     }
 
     function isValidLivestockDiagnosis(data) {
-      return hasOnlyAllowedFields(['animalType', 'conditionName', 'isHealthy', 'urgency', 'symptomsSeen', 'careSteps', 'nutritionalAdvice', 'image', 'timestamp']) &&
-             data.animalType is string && data.conditionName is string && data.timestamp is string;
+      return hasOnlyAllowedFields(['animalType', 'conditionName', 'isHealthy', 'urgency', 'symptomsSeen', 'careSteps', 'nutritionalAdvice', 'image', 'timestamp', 'createdAt', 'updatedAt']) &&
+             (!('animalType' in data) || (data.animalType is string));
     }
 
     function isValidYieldPrediction(data) {
-      return hasOnlyAllowedFields(['crop', 'area', 'unit', 'irrigation', 'variety', 'prediction', 'timestamp']) &&
-             data.crop is string && data.area is number && data.prediction is string && data.timestamp is string;
+      return hasOnlyAllowedFields(['crop', 'area', 'unit', 'irrigation', 'variety', 'prediction', 'timestamp', 'createdAt', 'updatedAt']) &&
+             (!('crop' in data) || (data.crop is string));
     }
 
     function isValidCropHealthReport(data) {
-      return hasOnlyAllowedFields(['fieldName', 'ndvi', 'moisture', 'chlorophyll', 'temp', 'biomass', 'recommendation', 'timestamp']) &&
-             data.fieldName is string && data.ndvi is number && data.timestamp is string;
+      return hasOnlyAllowedFields(['fieldName', 'ndvi', 'moisture', 'chlorophyll', 'temp', 'biomass', 'recommendation', 'timestamp', 'createdAt', 'updatedAt']) &&
+             (!('fieldName' in data) || (data.fieldName is string));
+    }
+
+    function isValidFertilizerCalculation(data) {
+      return hasOnlyAllowedFields(['crop', 'soilType', 'areaValue', 'areaUnit', 'totalAcres', 'reqN', 'reqP', 'reqK', 'ureaKg', 'dapKg', 'mopKg', 'totalEstCost', 'createdAt', 'updatedAt', 'notes', 'aiAdvice']) &&
+             (!('crop' in data) || (data.crop is string));
+    }
+
+    function isValidSprayLog(data) {
+      return hasOnlyAllowedFields(['crop', 'pest', 'chemical', 'area', 'unit', 'tankSize', 'tanksNeeded', 'totalChemical', 'advice', 'timestamp', 'createdAt', 'updatedAt']) &&
+             (!('crop' in data) || (data.crop is string));
     }
 
     function isValidProduceBatch(data) {
@@ -238,44 +236,46 @@ service cloud.firestore {
     // ===============================================================
 
     match /users/{userId} {
-      allow read: if isAuthenticated() || userId.matches('^demo_.*') || userId.matches('^google_sim_.*');
+      allow read: if isOwner(userId) || isTeamMember(userId) || isAdmin();
       allow create: if isOwner(userId) && isValidUser(request.resource.data) && (request.resource.data.role == 'farmer' || isAdmin());
       allow update: if isOwner(userId) && isValidUser(request.resource.data) && (request.resource.data.role == resource.data.role || isAdmin());
       allow delete: if isAdmin();
 
-      match /{document=**} {
-        allow read: if isAuthenticated() || userId.matches('^demo_.*') || userId.matches('^google_sim_.*');
-      }
-
       match /memberships/{membershipId} {
+        allow read: if isOwner(userId) || isAdmin();
         allow write: if isAdmin();
       }
 
       match /fields/{fieldId} {
+        allow read: if isOwner(userId) || isTeamMember(userId) || isAdmin();
         allow create: if isOwner(userId) || isManager(userId);
         allow update: if isOwner(userId) || isManager(userId);
         allow delete: if isOwner(userId) || isAdmin();
       }
 
       match /tasks/{taskId} {
+        allow read: if isOwner(userId) || isTeamMember(userId) || isAdmin();
         allow create: if isOwner(userId) || isTeamMember(userId);
         allow update: if isOwner(userId) || isTeamMember(userId);
         allow delete: if isOwner(userId) || isManager(userId) || isAdmin();
       }
 
       match /inventory/{itemId} {
+        allow read: if isOwner(userId) || isTeamMember(userId) || isAdmin();
         allow create: if isOwner(userId) || isTeamMember(userId);
         allow update: if isOwner(userId) || isTeamMember(userId);
         allow delete: if isOwner(userId) || isManager(userId) || isAdmin();
       }
 
       match /transactions/{transactionId} {
+        allow read: if isOwner(userId) || isManager(userId) || isAdmin();
         allow create: if isOwner(userId) || isManager(userId);
         allow update: if isOwner(userId) || isManager(userId);
         allow delete: if isOwner(userId) || isAdmin();
       }
 
       match /journal/{entryId} {
+        allow read: if isOwner(userId) || isTeamMember(userId) || isAdmin();
         allow create: if isOwner(userId) || isTeamMember(userId);
         allow update: if isOwner(userId) || isTeamMember(userId);
         allow delete: if isOwner(userId) || isManager(userId) || isAdmin();
@@ -289,50 +289,72 @@ service cloud.firestore {
       }
 
       match /alerts/{alertId} {
+        allow read: if isOwner(userId) || isTeamMember(userId) || isAdmin();
         allow create: if isOwner(userId) || isAdmin();
         allow update: if isOwner(userId) || isAdmin();
         allow delete: if isOwner(userId) || isAdmin();
       }
 
       match /soilReports/{reportId} {
+        allow read: if isOwner(userId) || isTeamMember(userId) || isAdmin();
         allow create: if isOwner(userId) && isValidSoilReport(request.resource.data);
         allow update: if isOwner(userId) && isValidSoilReport(request.resource.data);
         allow delete: if isOwner(userId) || isAdmin();
       }
 
       match /scanHistory/{scanId} {
+        allow read: if isOwner(userId) || isTeamMember(userId) || isAdmin();
         allow create: if isOwner(userId) && isValidScanRecord(request.resource.data);
         allow update: if isOwner(userId) && isValidScanRecord(request.resource.data);
         allow delete: if isOwner(userId) || isAdmin();
       }
 
       match /cropStrategies/{strategyId} {
+        allow read: if isOwner(userId) || isTeamMember(userId) || isAdmin();
         allow create: if isOwner(userId) && isValidCropStrategy(request.resource.data);
         allow update: if isOwner(userId) && isValidCropStrategy(request.resource.data);
         allow delete: if isOwner(userId) || isAdmin();
       }
 
+      match /sprayLogs/{logId} {
+        allow read: if isOwner(userId) || isTeamMember(userId) || isAdmin();
+        allow create: if isOwner(userId) && isValidSprayLog(request.resource.data);
+        allow update: if isOwner(userId) && isValidSprayLog(request.resource.data);
+        allow delete: if isOwner(userId) || isAdmin();
+      }
+
       match /irrigationZones/{zoneId} {
+        allow read: if isOwner(userId) || isTeamMember(userId) || isAdmin();
         allow create: if isOwner(userId) && isValidIrrigationZone(request.resource.data);
         allow update: if isOwner(userId) && isValidIrrigationZone(request.resource.data);
         allow delete: if isOwner(userId) || isAdmin();
       }
 
       match /livestockHistory/{diagnosisId} {
+        allow read: if isOwner(userId) || isTeamMember(userId) || isAdmin();
         allow create: if isOwner(userId) && isValidLivestockDiagnosis(request.resource.data);
         allow update: if isOwner(userId) && isValidLivestockDiagnosis(request.resource.data);
         allow delete: if isOwner(userId) || isAdmin();
       }
 
       match /yieldPredictions/{predictionId} {
+        allow read: if isOwner(userId) || isTeamMember(userId) || isAdmin();
         allow create: if isOwner(userId) && isValidYieldPrediction(request.resource.data);
         allow update: if isOwner(userId) && isValidYieldPrediction(request.resource.data);
         allow delete: if isOwner(userId) || isAdmin();
       }
 
       match /cropHealthReports/{reportId} {
+        allow read: if isOwner(userId) || isTeamMember(userId) || isAdmin();
         allow create: if isOwner(userId) && isValidCropHealthReport(request.resource.data);
         allow update: if isOwner(userId) && isValidCropHealthReport(request.resource.data);
+        allow delete: if isOwner(userId) || isAdmin();
+      }
+
+      match /fertilizerCalculations/{calcId} {
+        allow read: if isOwner(userId) || isTeamMember(userId) || isAdmin();
+        allow create: if isOwner(userId) && isValidFertilizerCalculation(request.resource.data);
+        allow update: if isOwner(userId) && isValidFertilizerCalculation(request.resource.data);
         allow delete: if isOwner(userId) || isAdmin();
       }
     }

@@ -298,6 +298,24 @@
         "timestamp": { "type": "string", "description": "Report timestamp" }
       },
       "required": ["fieldName", "ndvi", "timestamp"]
+    },
+    "SprayLog": {
+      "title": "Spray Log",
+      "description": "Record of chemical or organic spraying operations.",
+      "type": "object",
+      "properties": {
+        "crop": { "type": "string", "description": "Target crop name" },
+        "pest": { "type": "string", "description": "Target pest or disease" },
+        "chemical": { "type": "string", "description": "Chemical name used" },
+        "area": { "type": "string", "description": "Field area covered" },
+        "unit": { "type": "string", "description": "Unit of area" },
+        "tankSize": { "type": "string", "description": "Tank size capacity" },
+        "tanksNeeded": { "type": "number", "description": "Number of tanks used" },
+        "totalChemical": { "type": "string", "description": "Total chemical volume or mass" },
+        "advice": { "type": "string", "description": "Safety advice or protocol" },
+        "timestamp": { "type": "string", "description": "Timestamp of application" }
+      },
+      "required": ["crop", "pest", "chemical", "timestamp"]
     }
   },
   "firestore": {
@@ -344,6 +362,10 @@
     "/users/{userId}/cropStrategies/{strategyId}": {
       "schema": "CropStrategy",
       "description": "User's saved crop strategies"
+    },
+    "/users/{userId}/sprayLogs/{logId}": {
+      "schema": "SprayLog",
+      "description": "User's spray application logs"
     },
     "/users/{userId}/irrigationZones/{zoneId}": {
       "schema": "IrrigationZone",

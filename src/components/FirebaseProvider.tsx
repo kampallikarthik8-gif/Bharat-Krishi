@@ -82,11 +82,19 @@ export const FirebaseProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         setMemberships([]);
         setLoading(false);
       } else if (firebaseUser) {
-        if (firebaseUser.isAnonymous || localStorage.getItem('agri_is_simulated') === 'true') {
+        if (localStorage.getItem('agri_is_simulated') === 'true') {
           setIsSimulated(true);
           if (simulatedUser) {
             setActiveFarmId(simulatedUser.uid);
           }
+        } else if (firebaseUser.isAnonymous) {
+          // Anonymous user without simulation flag is logged out
+          setIsSimulated(false);
+          setUser(null);
+          setProfile(null);
+          setActiveFarmId(null);
+          setMemberships([]);
+          setLoading(false);
         } else {
           setIsSimulated(false); // real user takes precedence
           setActiveFarmId(firebaseUser.uid);
@@ -249,12 +257,22 @@ export const FirebaseProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     localStorage.removeItem('agri_is_simulated');
     localStorage.removeItem('agri_simulated_uid');
     localStorage.removeItem('agri_simulated_email');
+    localStorage.removeItem('agri_farmer_name');
+    localStorage.removeItem('agri_farmer_phone');
+    localStorage.removeItem('agri_farm_name');
+    localStorage.removeItem('agri_state');
+    localStorage.removeItem('agri_district');
+    localStorage.removeItem('agri_mandal');
+    localStorage.removeItem('agri_revenue_village');
+    localStorage.removeItem('agri_soil_type');
+    localStorage.removeItem('agri_units');
     localStorage.setItem('agri_session_active', 'false');
     setIsSimulated(false);
     setUser(null);
     setProfile(null);
     setActiveFarmId(null);
     setMemberships([]);
+    setLoading(false);
     await signOut(auth).catch(err => console.warn("Firebase signout error:", err));
   };
 

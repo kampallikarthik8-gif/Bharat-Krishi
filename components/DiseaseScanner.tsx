@@ -50,6 +50,7 @@ import { triggerHaptic, triggerSelectionHaptic } from '../src/utils/haptics';
 import { ImpactStyle } from '@capacitor/haptics';
 import { motion, AnimatePresence } from 'motion/react';
 import { useDialogs } from '../src/components/DialogProvider';
+import BandwidthProgressLoading from './BandwidthProgressLoading';
 
 interface SavedScan {
   id: string;
@@ -974,31 +975,18 @@ const DiseaseScanner: React.FC<DiseaseScannerProps> = ({ language }) => {
         </div>
       )}
 
-      {/* Loading State - Immersive */}
+      {/* Low-Bandwidth-Aware Loading State */}
       {loading && (
-        <div className="fixed inset-0 bg-black/95 backdrop-blur-3xl z-50 flex flex-col items-center justify-center gap-16 p-12 animate-in fade-in duration-700">
-          <div className="relative">
-            <div className="w-48 h-48 border-[12px] border-white/5 rounded-full shadow-inner opacity-50"></div>
-            <div className="absolute inset-0 w-48 h-48 border-[12px] border-amber-500 border-t-transparent rounded-full animate-spin"></div>
-            <div className="absolute inset-0 flex items-center justify-center">
-              {scanMode === 'disease' ? (
-                <Sprout className="w-16 h-16 text-amber-500 animate-bounce" />
-              ) : (
-                <Bug className="w-16 h-16 text-amber-500 animate-bounce" />
-              )}
-            </div>
-          </div>
-          <div className="text-center space-y-6">
-            <div className="flex items-center justify-center gap-4">
-              <div className="w-2 h-2 bg-amber-500 rounded-full animate-pulse shadow-[0_0_15px_rgba(245,158,11,0.8)]"></div>
-              <p className="font-black text-white text-base uppercase tracking-[0.2em] animate-pulse font-display">
-                {scanMode === 'disease' ? 'Neural Diagnosis...' : 'Specimen Mapping...'}
-              </p>
-            </div>
-            <p className="text-[11px] text-white/20 font-black uppercase tracking-[0.1em] max-w-[280px] leading-relaxed mx-auto">
-              Synthesizing biometric markers with global agricultural intelligence database
-            </p>
-          </div>
+        <div className="fixed inset-0 bg-black/95 backdrop-blur-3xl z-50 flex items-center justify-center p-6 animate-in fade-in duration-300">
+          <BandwidthProgressLoading
+            label={scanMode === 'disease' ? 'Scanning Crop Disease Biometrics...' : 'Identifying Pest Specimen...'}
+            onRetry={() => {
+              if (image) {
+                const base64Clean = image.split(',')[1];
+                handleScan(base64Clean);
+              }
+            }}
+          />
         </div>
       )}
     </div>

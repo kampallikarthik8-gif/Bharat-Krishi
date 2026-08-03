@@ -1,8 +1,7 @@
 
 import React from 'react';
-import { getAIClient } from '../services/geminiService';
 import { Mic, MicOff, Loader2, Volume2, MessageSquare, AlertCircle, Sunrise, ChevronLeft } from 'lucide-react';
-import { LiveServerMessage, Modality } from '@google/genai';
+import { GoogleGenAI, LiveServerMessage, Modality } from '@google/genai';
 
 const decode = (base64: string) => {
   const binaryString = atob(base64);
@@ -64,7 +63,10 @@ const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ language }) => {
   const startSession = async () => {
     try {
       setError(null);
-      const ai = getAIClient();
+      const tokenRes = await fetch('/api/gemini/token');
+      if (!tokenRes.ok) throw new Error("Failed to initialize AI connection");
+      const { token } = await tokenRes.json();
+      const ai = new GoogleGenAI({ apiKey: token });
       const inputCtx = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 16000 });
       const outputCtx = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 24000 });
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });

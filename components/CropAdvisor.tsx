@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import html2canvas from 'html2canvas';
@@ -33,25 +33,49 @@ import {
   TrendingUp,
   ClipboardList,
   AlertCircle,
-  GripVertical,
   Sun,
   Wind,
   MessageCircle,
-  Info
+  Info,
+  ArrowLeft,
+  Compass,
+  Bookmark,
+  Share2,
+  Check,
+  RefreshCw
 } from 'lucide-react';
-import Markdown from 'react-markdown';
-import { motion, AnimatePresence } from 'motion/react';
+import ReactMarkdown from 'react-markdown';
 
 import { useFirebase } from '../src/components/FirebaseProvider';
 import { useDialogs } from '../src/components/DialogProvider';
 import { db } from '../src/firebase';
 import { collection, query, onSnapshot, addDoc, deleteDoc, doc, orderBy } from 'firebase/firestore';
 import { handleFirestoreError, OperationType } from '../src/utils/firestoreErrorHandler';
+import { showToast } from '../src/utils/toast';
 
 const WEATHER_API_KEY = import.meta.env.VITE_WEATHER_API_KEY;
 
 const INDIAN_CROPS = [
-  'Paddy (Rice)', 'Wheat', 'Sugarcane', 'Cotton', 'Mustard', 'Bajra', 'Moong Dal', 'Tomato', 'Onion', 'Potato', 'Maize', 'Soybean'
+  { name: 'Paddy (Rice)', emoji: '🌾' },
+  { name: 'Wheat', emoji: '🌾' },
+  { name: 'Sugarcane', emoji: '🎋' },
+  { name: 'Cotton', emoji: '☁️' },
+  { name: 'Mustard', emoji: '🌼' },
+  { name: 'Bajra', emoji: '🌾' },
+  { name: 'Moong Dal', emoji: '🌱' },
+  { name: 'Tomato', emoji: '🍅' },
+  { name: 'Onion', emoji: '🧅' },
+  { name: 'Potato', emoji: '🥔' },
+  { name: 'Maize', emoji: '🌽' },
+  { name: 'Soybean', emoji: '🫘' }
+];
+
+const SOIL_TYPES = [
+  { id: 'Alluvial', name: 'Alluvial Soil', desc: 'High fertility, indoor plains' },
+  { id: 'Black Cotton', name: 'Black Cotton', desc: 'Clay rich, retains moisture' },
+  { id: 'Red/Yellow', name: 'Red / Yellow Soil', desc: 'Iron rich, porous loam' },
+  { id: 'Laterite', name: 'Laterite Soil', desc: 'Weathered acidic soil' },
+  { id: 'Desert/Sandy', name: 'Desert / Sandy', desc: 'Light texture loamy' }
 ];
 
 const LANGUAGES = [
@@ -82,18 +106,20 @@ interface SavedStrategy {
 
 interface CropAdvisorProps {
   language: string;
+  onBack?: () => void;
 }
 
-const CropAdvisor: React.FC<CropAdvisorProps> = ({ language: initialLanguage }) => {
+const CropAdvisor: React.FC<CropAdvisorProps> = ({ language: initialLanguage, onBack }) => {
   const { profile, activeFarmId } = useFirebase();
   const { confirm } = useDialogs();
-  const [formData, setFormData] = React.useState({
-    crop: '',
-    location: profile?.location || '',
-    soil: profile?.soilType || ''
+
+  const [formData, setFormData] = useState({
+    crop: 'Paddy (Rice)',
+    location: profile?.location || localStorage.getItem('agri_farm_location') || 'Punjab, India',
+    soil: profile?.soilType || localStorage.getItem('agri_soil_type') || 'Alluvial'
   });
 
-  React.useEffect(() => {
+  useEffect(() => {
     if (profile) {
       setFormData(prev => ({
         ...prev,
@@ -103,18 +129,21 @@ const CropAdvisor: React.FC<CropAdvisorProps> = ({ language: initialLanguage }) 
     }
   }, [profile]);
 
-  const [language, setLanguage] = React.useState(initialLanguage);
-  const [advice, setAdvice] = React.useState('');
-  const [fertilizerPlan, setFertilizerPlan] = React.useState<FertilizerPlan | null>(null);
-  const [weatherData, setWeatherData] = React.useState<any>(null);
-  const [loading, setLoading] = React.useState(false);
-  const [detecting, setDetecting] = React.useState(false);
-  const [saveStatus, setSaveStatus] = React.useState<'idle' | 'saved'>('idle');
-  
-  const [savedStrategies, setSavedStrategies] = React.useState<SavedStrategy[]>([]);
-  const reportRef = React.useRef<HTMLDivElement>(null);
+  const [language, setLanguage] = useState(initialLanguage);
+  const [advice, setAdvice] = useState('');
+  const [fertilizerPlan, setFertilizerPlan] = useState<FertilizerPlan | null>(null);
+  const [weatherData, setWeatherData] = useState<any>(null);
+  const [loading, setLoading] = useState(false);
+  const [detecting, setDetecting] = useState(false);
+  const [saveStatus, setSaveStatus] = useState<'idle' | 'saved'>('idle');
 
-  React.useEffect(() => {
+  // Android Navigation Tabs
+  const [activeTab, setActiveTab] = useState<'planner' | 'strategy' | 'nutrients' | 'saved'>('planner');
+  
+  const [savedStrategies, setSavedStrategies] = useState<SavedStrategy[]>([]);
+  const reportRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
     if (!activeFarmId) return;
 
     const path = `users/${activeFarmId}/cropStrategies`;
@@ -135,28 +164,46 @@ const CropAdvisor: React.FC<CropAdvisorProps> = ({ language: initialLanguage }) 
 
   const detectLocation = () => {
     setDetecting(true);
+    if (!navigator.geolocation) {
+      showToast('Geolocation not supported');
+      setDetecting(false);
+      return;
+    }
     navigator.geolocation.getCurrentPosition(
       async (pos) => {
         try {
           const res = await fetch(
             `https://api.openweathermap.org/data/2.5/weather?lat=${pos.coords.latitude}&lon=${pos.coords.longitude}&appid=${WEATHER_API_KEY}&units=metric`
           );
+          if (!res.ok) throw new Error('Location fetch failed');
           const data = await res.json();
-          setFormData(prev => ({ ...prev, location: data.name ? `${data.name}, ${data.sys.country}` : 'Current Region' }));
+          const region = data.name ? `${data.name}, ${data.sys?.country || 'India'}` : 'Current Region';
+          setFormData(prev => ({ ...prev, location: region }));
           setWeatherData(data);
-        } catch (err) { console.error(err); }
-        finally { setDetecting(false); }
+          showToast(`Location set to ${region}`);
+        } catch (err) {
+          console.error(err);
+          showToast('Could not resolve location');
+        } finally {
+          setDetecting(false);
+        }
       },
-      () => setDetecting(false)
+      () => {
+        showToast('Location access denied');
+        setDetecting(false);
+      }
     );
   };
 
   const handleFetchAdvice = async (targetLanguage: string) => {
-    if (!formData.crop) return;
+    if (!formData.crop) {
+      showToast('Please select a target crop');
+      return;
+    }
     setLoading(true);
     setSaveStatus('idle');
     const weatherContext = weatherData ? 
-      `${weatherData.main.temp}°C, Humidity: ${weatherData.main.humidity}%, ${weatherData.weather[0].description}` : 
+      `${weatherData.main?.temp}°C, Humidity: ${weatherData.main?.humidity}%, ${weatherData.weather?.[0]?.description}` : 
       '';
     try {
       const [adviceRes, fertRes] = await Promise.all([
@@ -165,8 +212,14 @@ const CropAdvisor: React.FC<CropAdvisorProps> = ({ language: initialLanguage }) 
       ]);
       setAdvice(adviceRes || '');
       setFertilizerPlan(fertRes);
-    } catch (err) { console.error(err); }
-    finally { setLoading(false); }
+      setActiveTab('strategy');
+      showToast('Crop Strategy & Fertilizer Plan Ready!');
+    } catch (err) {
+      console.error(err);
+      showToast('Failed to generate crop strategy');
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -182,7 +235,10 @@ const CropAdvisor: React.FC<CropAdvisorProps> = ({ language: initialLanguage }) 
   };
 
   const saveToArchive = async () => {
-    if (!advice || !fertilizerPlan || !activeFarmId) return;
+    if (!advice || !fertilizerPlan || !activeFarmId) {
+      showToast('Sign in or select farm to save to cloud');
+      return;
+    }
     
     const path = `users/${activeFarmId}/cropStrategies`;
     try {
@@ -195,6 +251,7 @@ const CropAdvisor: React.FC<CropAdvisorProps> = ({ language: initialLanguage }) 
         fertilizerPlan
       });
       setSaveStatus('saved');
+      showToast('Strategy archived to farm cloud!');
       setTimeout(() => setSaveStatus('idle'), 3000);
     } catch (error) {
       handleFirestoreError(error, OperationType.CREATE, path);
@@ -207,12 +264,13 @@ const CropAdvisor: React.FC<CropAdvisorProps> = ({ language: initialLanguage }) 
     
     confirm({
       title: 'Delete Strategy',
-      message: 'Are you sure you want to remove this archived strategy? This action cannot be undone.',
+      message: 'Are you sure you want to remove this archived strategy?',
       type: 'danger',
       onConfirm: async () => {
         const path = `users/${activeFarmId}/cropStrategies/${id}`;
         try {
           await deleteDoc(doc(db, path));
+          showToast('Strategy deleted');
         } catch (error) {
           handleFirestoreError(error, OperationType.DELETE, path);
         }
@@ -228,19 +286,20 @@ const CropAdvisor: React.FC<CropAdvisorProps> = ({ language: initialLanguage }) 
     });
     setAdvice(strategy.advice);
     setFertilizerPlan(strategy.fertilizerPlan);
-    window.scrollTo({ top: 0, behavior: 'smooth' });
+    setActiveTab('strategy');
   };
 
   const shareOnWhatsApp = () => {
     if (!advice) return;
     
-    const farmName = localStorage.getItem('agri_farm_name') || 'My Farm';
-    const message = `*Bharat Kisan - Crop Strategy Report*%0A%0A` +
-      `*Farm:* ${farmName}%0A` +
-      `*Crop:* ${formData.crop}%0A` +
-      `*Location:* ${formData.location}%0A%0A` +
-      `*Strategic Advice:*%0A${advice.substring(0, 500)}${advice.length > 500 ? '...' : ''}%0A%0A` +
-      `Generated via Bharat Kisan App`;
+    const farmName = profile?.farmName || localStorage.getItem('agri_farm_name') || 'Bharat Kisan Farm';
+    const message = `🌾 *Bharat Kisan - Crop Precision Strategy*%0A%0A` +
+      `🏡 *Farm:* ${farmName}%0A` +
+      `🌱 *Target Crop:* ${formData.crop}%0A` +
+      `📍 *Location:* ${formData.location}%0A` +
+      `🧪 *Soil Profile:* ${formData.soil}%0A%0A` +
+      `💡 *Agronomy Guidance:*%0A${advice.substring(0, 220)}...%0A%0A` +
+      `📲 *Optimized via Bharat Kisan App*`;
     
     window.open(`https://wa.me/?text=${message}`, '_blank');
   };
@@ -249,6 +308,7 @@ const CropAdvisor: React.FC<CropAdvisorProps> = ({ language: initialLanguage }) 
     if (!advice || !reportRef.current) return;
 
     try {
+      showToast('Generating PDF Document...');
       const canvas = await html2canvas(reportRef.current, {
         scale: 2,
         useCORS: true,
@@ -258,8 +318,8 @@ const CropAdvisor: React.FC<CropAdvisorProps> = ({ language: initialLanguage }) 
 
       const imgData = canvas.toDataURL('image/png');
       const pdf = new jsPDF('p', 'mm', 'a4');
-      const imgWidth = 210; // A4 width in mm
-      const pageHeight = 297; // A4 height in mm
+      const imgWidth = 210;
+      const pageHeight = 297;
       const imgHeight = (canvas.height * imgWidth) / canvas.width;
       let heightLeft = imgHeight;
       let position = 0;
@@ -274,377 +334,550 @@ const CropAdvisor: React.FC<CropAdvisorProps> = ({ language: initialLanguage }) 
         heightLeft -= pageHeight;
       }
 
-      pdf.save(`AgriAssist_Report_${formData.crop.replace(/\s+/g, '_')}_${new Date().getTime()}.pdf`);
+      pdf.save(`BharatKisan_CropStrategy_${formData.crop.replace(/\s+/g, '_')}.pdf`);
+      showToast('PDF Document Exported!');
     } catch (error) {
       console.error('Error generating PDF:', error);
+      showToast('PDF export failed');
     }
   };
 
   return (
-    <div className="space-y-8 pb-32 animate-in fade-in">
-      <div className="bg-black rounded-[3rem] p-6 md:p-10 shadow-sm border border-white/10">
-        <div className="flex justify-between items-start mb-10">
-          <div>
-            <h2 className="text-3xl font-black mb-2 flex items-center gap-4 text-white tracking-tight">
-              <div className="bg-amber-500 p-3 rounded-2xl shadow-lg shadow-amber-500/20 text-black">
-                <Lightbulb className="w-8 h-8" />
-              </div>
-              Precision Strategy
-            </h2>
-            <p className="text-stone-400 text-sm font-medium">Personalized agronomy reports grounded in local field conditions.</p>
+    <div className="w-full flex flex-col min-h-screen bg-[#070b09] text-stone-100 pb-32 animate-in fade-in duration-300">
+      
+      {/* Android Top Header Navigation Bar */}
+      <header className="px-4 py-3 bg-[#0c1410]/95 backdrop-blur-xl border-b border-stone-800/80 sticky top-0 z-50 flex items-center justify-between">
+        <div className="flex items-center gap-2.5">
+          {onBack && (
+            <button 
+              onClick={onBack}
+              className="p-2.5 rounded-full bg-stone-900 border border-stone-800 text-stone-300 hover:text-white active:scale-90 transition-all min-w-[44px] min-h-[44px] flex items-center justify-center"
+            >
+              <ArrowLeft className="w-5 h-5" />
+            </button>
+          )}
+          <div className="p-2 bg-amber-500/20 rounded-xl border border-amber-500/30 text-amber-400">
+            <Lightbulb className="w-5 h-5" />
           </div>
-          <div className="bg-stone-900 p-2 rounded-2xl border border-white/5 hidden sm:block">
-            <Zap className="w-5 h-5 text-amber-500 animate-pulse" />
+          <div>
+            <h1 className="text-base font-black text-white tracking-tight leading-none">Crop Advisor</h1>
+            <p className="text-[10px] text-amber-400 font-mono mt-0.5 flex items-center gap-1">
+              <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse inline-block" />
+              Agronomy & Fertilizer Protocol
+            </p>
           </div>
         </div>
 
-        <form onSubmit={handleSubmit} className="space-y-8">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div className="space-y-2">
-              <label className="text-[10px] font-black text-stone-500 ml-4 uppercase tracking-[0.2em]">Crop Selection</label>
-              <div className="relative group">
-                <input 
-                  list="crop-options" 
-                  placeholder="e.g. Paddy" 
-                  value={formData.crop} 
-                  onChange={e => setFormData({...formData, crop: e.target.value})} 
-                  className="w-full bg-stone-900 border-2 border-white/5 p-5 rounded-[1.75rem] font-bold text-sm outline-none shadow-inner pl-14 focus:border-amber-500/50 focus:bg-stone-800 text-white transition-all" 
-                />
-                <Database className="absolute left-5 top-1/2 -translate-y-1/2 w-6 h-6 text-stone-600 group-focus-within:text-amber-500 transition-colors" />
-                <datalist id="crop-options">
-                  {INDIAN_CROPS.map(c => <option key={c} value={c} />)}
-                </datalist>
-              </div>
-            </div>
-            <div className="space-y-2">
-              <label className="text-[10px] font-black text-stone-500 ml-4 uppercase tracking-[0.2em]">District / Region</label>
-              <div className="relative group">
-                <input 
-                  placeholder="e.g. Punjab" 
-                  value={formData.location} 
-                  onChange={e => setFormData({...formData, location: e.target.value})} 
-                  className="w-full bg-stone-900 border-2 border-white/5 p-5 rounded-[1.75rem] font-bold text-sm outline-none shadow-inner pl-14 focus:border-amber-500/50 focus:bg-stone-800 text-white transition-all" 
-                />
-                <MapPin className="absolute left-5 top-1/2 -translate-y-1/2 w-6 h-6 text-stone-600 group-focus-within:text-amber-500 transition-colors" />
-                <button type="button" onClick={detectLocation} className="absolute right-4 top-1/2 -translate-y-1/2 p-2.5 bg-stone-800 rounded-xl shadow-md text-amber-500 active:scale-90 transition-all border border-white/5">
-                  <Navigation className={`w-4 h-4 ${detecting ? 'animate-spin' : ''}`} />
-                </button>
-              </div>
-              {weatherData && (
-                <div className="flex items-center gap-4 mt-3 px-4 py-2 bg-stone-900 rounded-2xl border border-white/5 w-fit animate-in fade-in slide-in-from-left-4">
-                  <div className="flex items-center gap-2">
-                    <Sun className="w-4 h-4 text-amber-500" />
-                    <span className="text-[10px] font-black text-stone-300 uppercase tracking-widest">{weatherData.main.temp}°C</span>
-                  </div>
-                  <div className="w-px h-3 bg-white/10" />
-                  <div className="flex items-center gap-2">
-                    <Droplets className="w-4 h-4 text-blue-400" />
-                    <span className="text-[10px] font-black text-stone-300 uppercase tracking-widest">{weatherData.main.humidity}%</span>
-                  </div>
-                  <div className="w-px h-3 bg-white/10" />
-                  <div className="flex items-center gap-2">
-                    <Wind className="w-4 h-4 text-stone-500" />
-                    <span className="text-[10px] font-black text-stone-300 uppercase tracking-widest">{Math.round(weatherData.wind.speed * 3.6)} km/h</span>
-                  </div>
-                </div>
-              )}
-            </div>
-          </div>
+        <button
+          onClick={detectLocation}
+          disabled={detecting}
+          className="p-2.5 rounded-xl bg-stone-900 border border-stone-800 text-amber-400 hover:text-white active:scale-90 transition-all min-w-[44px] min-h-[44px] flex items-center justify-center"
+          title="Detect GPS"
+        >
+          {detecting ? <Loader2 className="w-4 h-4 animate-spin text-amber-400" /> : <Navigation className="w-4 h-4" />}
+        </button>
+      </header>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div className="space-y-2">
-              <label className="text-[10px] font-black text-stone-500 ml-4 uppercase tracking-[0.2em]">Soil Health Metric</label>
-              <div className="relative group">
-                <select value={formData.soil} onChange={e => setFormData({...formData, soil: e.target.value})} className="w-full bg-stone-900 border-2 border-white/5 p-5 rounded-[1.75rem] font-bold text-sm outline-none appearance-none shadow-inner pl-14 focus:border-amber-500/50 focus:bg-stone-800 text-white transition-all">
-                  <option value="" className="bg-stone-900">Select Soil Profile</option>
-                  <option value="Alluvial" className="bg-stone-900">Alluvial (High Fertility)</option>
-                  <option value="Black Cotton" className="bg-stone-900">Black Cotton (Rich Clay)</option>
-                  <option value="Red/Yellow" className="bg-stone-900">Red/Yellow (Iron Rich)</option>
-                  <option value="Laterite" className="bg-stone-900">Laterite (Weathered)</option>
-                  <option value="Desert/Sandy" className="bg-stone-900">Desert/Sandy (Loamy)</option>
-                </select>
-                <FlaskConical className="absolute left-5 top-1/2 -translate-y-1/2 w-6 h-6 text-stone-600 group-focus-within:text-amber-500 transition-colors pointer-events-none" />
-              </div>
-            </div>
-            <div className="space-y-2">
-              <label className="text-[10px] font-black text-stone-500 ml-4 uppercase tracking-[0.2em]">Vernacular Delivery</label>
-              <div className="relative group">
-                <select 
-                  value={language}
-                  onChange={(e) => onLanguageChange(e.target.value)}
-                  className="w-full bg-stone-900 border-2 border-white/5 p-5 rounded-[1.75rem] font-bold text-sm outline-none appearance-none shadow-inner pl-14 focus:border-amber-500/50 focus:bg-stone-800 text-white transition-all"
-                >
-                  {LANGUAGES.map(l => (
-                    <option key={l.name} value={l.name} className="bg-stone-900">{l.label}</option>
-                  ))}
-                </select>
-                <LangIcon className="absolute left-5 top-1/2 -translate-y-1/2 w-6 h-6 text-stone-600 group-focus-within:text-amber-500 transition-colors pointer-events-none" />
-              </div>
-            </div>
-          </div>
-
-          <button type="submit" disabled={loading} className="w-full bg-amber-500 text-black font-black py-6 rounded-[2rem] shadow-2xl flex items-center justify-center gap-4 active:scale-[0.98] transition-all disabled:opacity-50 group">
-            {loading ? <Loader2 className="animate-spin w-6 h-6" /> : <Zap className="w-6 h-6 text-black group-hover:scale-110 transition-transform" />}
-            <span className="uppercase tracking-[0.2em] text-sm">Generate Biological Protocol</span>
+      {/* Android Top Segmented Navigation Tabs */}
+      <div className="px-3 py-2 bg-stone-950/80 border-b border-stone-850 sticky top-[57px] z-40 overflow-x-auto no-scrollbar">
+        <div className="flex items-center gap-1.5 min-w-max">
+          
+          <button
+            onClick={() => setActiveTab('planner')}
+            className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 min-h-[44px] ${
+              activeTab === 'planner'
+                ? 'bg-amber-500 text-stone-950 shadow-md shadow-amber-950/50'
+                : 'bg-stone-900 text-stone-400 hover:text-stone-200 border border-stone-800'
+            }`}
+          >
+            <Compass className="w-4 h-4" />
+            <span>Field Parameters</span>
           </button>
-        </form>
 
-        {advice && !loading && (
-          <div className="mt-20 space-y-16 animate-in zoom-in-95 duration-700">
-            {/* Header / Actions */}
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-6 px-4">
-               <div className="flex items-center gap-4">
-                  <div className="bg-amber-500 p-2 rounded-full"><ShieldCheck className="w-5 h-5 text-black" /></div>
-                  <h3 className="text-white font-black text-2xl tracking-tighter">Protocol Finalized</h3>
-               </div>
-               <div className="flex gap-3">
-                 <button 
-                  onClick={saveToArchive}
-                  disabled={saveStatus === 'saved'}
-                  className={`flex items-center gap-3 px-6 py-3 rounded-2xl font-black text-[10px] uppercase tracking-widest transition-all shadow-lg ${saveStatus === 'saved' ? 'bg-amber-500 text-black' : 'bg-stone-900 text-stone-300 hover:bg-stone-800 border border-white/5'}`}
-                 >
-                   {saveStatus === 'saved' ? <CheckCircle2 className="w-4 h-4" /> : <Archive className="w-4 h-4" />}
-                   {saveStatus === 'saved' ? 'Archived' : 'Archive Plan'}
-                 </button>
-                 <button 
-                  onClick={downloadReport}
-                  className="flex items-center gap-3 bg-amber-600 text-black px-6 py-3 rounded-2xl font-black text-[10px] uppercase tracking-widest hover:bg-amber-500 active:scale-95 transition-all shadow-xl"
-                 >
-                   <Download className="w-4 h-4" /> Export Document
-                 </button>
-                 <button 
-                  onClick={shareOnWhatsApp}
-                  className="flex items-center gap-3 bg-[#25D366] text-white px-6 py-3 rounded-2xl font-black text-[10px] uppercase tracking-widest hover:bg-[#128C7E] active:scale-95 transition-all shadow-xl"
-                 >
-                   <MessageCircle className="w-4 h-4" /> Share WhatsApp
-                 </button>
-               </div>
-            </div>
+          <button
+            onClick={() => setActiveTab('strategy')}
+            className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 min-h-[44px] ${
+              activeTab === 'strategy'
+                ? 'bg-amber-500 text-stone-950 shadow-md shadow-amber-950/50'
+                : 'bg-stone-900 text-stone-400 hover:text-stone-200 border border-stone-800'
+            }`}
+          >
+            <Sparkles className="w-4 h-4" />
+            <span>AI Crop Strategy</span>
+          </button>
 
-            {/* Main Advisor Module */}
-            <div className="relative">
-              <div className="absolute inset-0 bg-amber-500/10 rounded-[3.5rem] blur-3xl -z-10"></div>
-              <div className="bg-stone-950 border-2 border-amber-500/20 p-10 md:p-14 rounded-[3.5rem] shadow-sm relative overflow-hidden group">
-                <div className="absolute top-0 right-0 p-10 opacity-[0.03] group-hover:opacity-5 transition-opacity">
-                  <Sprout className="w-96 h-96 -mr-20 -mt-20 rotate-12 text-amber-500" />
+          <button
+            onClick={() => setActiveTab('nutrients')}
+            className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 min-h-[44px] ${
+              activeTab === 'nutrients'
+                ? 'bg-amber-500 text-stone-950 shadow-md shadow-amber-950/50'
+                : 'bg-stone-900 text-stone-400 hover:text-stone-200 border border-stone-800'
+            }`}
+          >
+            <Beaker className="w-4 h-4" />
+            <span>Fertilizers & Schedule</span>
+          </button>
+
+          <button
+            onClick={() => setActiveTab('saved')}
+            className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 min-h-[44px] ${
+              activeTab === 'saved'
+                ? 'bg-amber-500 text-stone-950 shadow-md shadow-amber-950/50'
+                : 'bg-stone-900 text-stone-400 hover:text-stone-200 border border-stone-800'
+            }`}
+          >
+            <Bookmark className="w-4 h-4" />
+            <span>Archives ({savedStrategies.length})</span>
+          </button>
+
+        </div>
+      </div>
+
+      <main className="px-3.5 sm:px-6 mt-4 space-y-5 max-w-3xl mx-auto w-full">
+
+        {/* TAB 1: FIELD PARAMETERS FORM */}
+        {activeTab === 'planner' && (
+          <form onSubmit={handleSubmit} className="space-y-4 animate-in fade-in duration-200">
+            
+            <div className="bg-stone-900/90 border border-stone-800 rounded-2xl p-4 space-y-4 shadow-xl">
+              
+              <div className="flex items-center justify-between border-b border-stone-800 pb-2.5">
+                <div className="flex items-center gap-2">
+                  <Sprout className="w-4 h-4 text-amber-400" />
+                  <h2 className="text-xs font-black uppercase tracking-wider text-white">Target Crop & Location</h2>
                 </div>
-                <h3 className="text-amber-500 font-black text-[11px] uppercase mb-10 tracking-[0.4em] flex items-center gap-3 bg-amber-500/10 w-fit px-6 py-2.5 rounded-full border border-amber-500/20 shadow-sm">
-                  <TrendingUp className="w-4 h-4" /> Regional Strategic Audit
-                </h3>
-                <div className="prose prose-invert max-w-none text-base md:text-lg font-medium text-stone-300 leading-relaxed italic">
-                  <Markdown>{advice}</Markdown>
+                <span className="text-[10px] font-mono text-amber-400 bg-amber-950/80 px-2 py-0.5 rounded border border-amber-500/30">
+                  Precision Engine
+                </span>
+              </div>
+
+              {/* Crop Input & Fast Selection Chips */}
+              <div className="space-y-2">
+                <label className="text-[10px] font-bold text-stone-400 uppercase tracking-wider block">Target Crop Name</label>
+                <div className="relative">
+                  <input
+                    type="text"
+                    value={formData.crop}
+                    onChange={e => setFormData({ ...formData, crop: e.target.value })}
+                    placeholder="e.g. Paddy, Wheat, Cotton..."
+                    className="w-full bg-stone-950 border border-stone-800 rounded-xl p-3 pl-9 text-xs text-white font-bold outline-none focus:border-amber-500"
+                  />
+                  <Database className="w-4 h-4 text-amber-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                </div>
+
+                {/* Popular Crops Quick Chips */}
+                <div className="space-y-1.5 pt-1">
+                  <span className="text-[10px] text-stone-500 font-bold uppercase tracking-wider block">Quick Choose Crop:</span>
+                  <div className="flex gap-1.5 overflow-x-auto no-scrollbar pb-1">
+                    {INDIAN_CROPS.map(c => (
+                      <button
+                        key={c.name}
+                        type="button"
+                        onClick={() => setFormData({ ...formData, crop: c.name })}
+                        className={`px-2.5 py-1.5 rounded-lg text-xs font-bold whitespace-nowrap transition-all flex items-center gap-1 border ${
+                          formData.crop === c.name
+                            ? 'bg-amber-500 text-stone-950 border-amber-400 shadow-md'
+                            : 'bg-stone-950 text-stone-300 border-stone-800 hover:border-amber-500/40'
+                        }`}
+                      >
+                        <span>{c.emoji}</span>
+                        <span>{c.name}</span>
+                      </button>
+                    ))}
+                  </div>
                 </div>
               </div>
-            </div>
-            
-            {fertilizerPlan && (
-              <div className="space-y-20">
-                 {/* Intelligence Briefs */}
-                 <div className="grid grid-cols-1 md:grid-cols-2 gap-8 px-2">
-                    <div className="bg-stone-900 p-10 rounded-[3rem] shadow-2xl relative overflow-hidden group border border-white/5">
-                       <Target className="absolute -right-8 -bottom-8 w-40 h-40 text-amber-500/10 group-hover:scale-110 transition-transform" />
-                       <div className="relative z-10">
-                          <div className="bg-amber-500 p-3 rounded-2xl w-fit mb-8 shadow-xl text-black"><Target className="w-6 h-6" /></div>
-                          <h4 className="text-[10px] font-black text-amber-500 uppercase tracking-[0.3em] mb-4">Focus Requirements</h4>
-                          <p className="text-lg font-black text-white leading-snug">{fertilizerPlan.cropRequirements}</p>
-                       </div>
-                    </div>
-                    <div className="bg-stone-900 p-10 rounded-[3rem] shadow-inner relative overflow-hidden group border border-white/5">
-                       <Atom className="absolute -right-8 -bottom-8 w-40 h-40 text-amber-500/10 group-hover:scale-110 transition-transform" />
-                       <div className="relative z-10">
-                          <div className="bg-stone-800 p-3 rounded-2xl w-fit mb-8 shadow-md text-amber-500 border border-white/5"><Atom className="w-6 h-6" /></div>
-                          <h4 className="text-[10px] font-black text-stone-500 uppercase tracking-[0.3em] mb-4">Soil Adjustments</h4>
-                          <p className="text-lg font-black text-stone-300 leading-snug">{fertilizerPlan.soilAdjustments}</p>
-                       </div>
-                    </div>
-                 </div>
 
-                 {/* NUTRIENT MODULE */}
-                 <div className="space-y-8">
-                    <div className="flex flex-col gap-3 px-4">
-                      <div className="flex items-center gap-4 text-amber-500">
-                        <Beaker className="w-8 h-8" />
-                        <h3 className="text-2xl font-black tracking-tight text-white">Nutrient Inventory</h3>
-                      </div>
-                      <p className="text-stone-500 text-xs font-bold uppercase tracking-widest ml-12">Precision Engineered Nutrient Matrix</p>
-                    </div>
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                       {fertilizerPlan.fertilizers.map((f, i) => (
-                         <div key={i} className="bg-stone-900 border-2 border-white/5 p-8 rounded-[3rem] shadow-2xl relative overflow-hidden group hover:border-amber-500 transition-all">
-                            <div className="absolute top-0 right-0 p-6 opacity-5 group-hover:rotate-6 transition-transform">
-                               {f.isOrganic ? <Leaf className="w-24 h-24 text-amber-500" /> : <Zap className="w-24 h-24 text-amber-500" />}
-                            </div>
-                            <div className="relative z-10">
-                               <div className={`w-fit px-4 py-1.5 rounded-xl text-[9px] font-black uppercase tracking-widest mb-6 border-2 ${f.isOrganic ? 'bg-amber-500/10 text-amber-500 border-amber-500/20' : 'bg-amber-600/10 text-amber-600 border-amber-600/20'}`}>
-                                 {f.isOrganic ? 'Biological Base' : 'High Efficiency Synthetics'}
-                               </div>
-                               <h4 className="font-black text-2xl mb-4 text-white tracking-tighter leading-none">{f.name}</h4>
-                               <div className="bg-black rounded-[1.25rem] px-6 py-3 w-fit mb-8 shadow-xl border border-white/5">
-                                  <span className="text-xs font-black tracking-[0.2em] text-amber-500 uppercase">NPK {f.npk}</span>
-                               </div>
-                               <p className="text-sm font-medium text-stone-400 leading-relaxed italic border-l-4 border-amber-500/30 pl-4">"{f.description}"</p>
-                            </div>
-                         </div>
-                       ))}
-                    </div>
-                 </div>
+              {/* District / Location */}
+              <div className="space-y-1.5 pt-2 border-t border-stone-850">
+                <label className="text-[10px] font-bold text-stone-400 uppercase tracking-wider block">District / State</label>
+                <div className="relative flex items-center gap-1.5">
+                  <div className="relative flex-1">
+                    <input
+                      type="text"
+                      value={formData.location}
+                      onChange={e => setFormData({ ...formData, location: e.target.value })}
+                      placeholder="e.g. Punjab, Indore, Nashik..."
+                      className="w-full bg-stone-950 border border-stone-800 rounded-xl p-3 pl-9 text-xs text-white outline-none focus:border-amber-500 font-bold"
+                    />
+                    <MapPin className="w-4 h-4 text-amber-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                  </div>
+                  <button
+                    type="button"
+                    onClick={detectLocation}
+                    disabled={detecting}
+                    className="p-3 bg-stone-950 border border-stone-800 rounded-xl text-amber-400 active:scale-90 transition-all hover:bg-stone-850 shrink-0 min-w-[44px] min-h-[44px] flex items-center justify-center"
+                    title="Detect GPS"
+                  >
+                    {detecting ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
+                  </button>
+                </div>
 
-                 {/* APPLICATION TIMELINE */}
-                 <div className="space-y-12">
-                    <div className="flex flex-col gap-3 px-4">
-                      <div className="flex items-center gap-4 text-amber-500">
-                        <CalendarCheck className="w-8 h-8" />
-                        <h3 className="text-2xl font-black tracking-tight text-white">Deployment Schedule</h3>
-                      </div>
-                      <p className="text-stone-500 text-xs font-bold uppercase tracking-widest ml-12">Critical Operations Timeline</p>
+                {/* Live Weather Strip */}
+                {weatherData && (
+                  <div className="flex items-center gap-3 mt-2 px-3 py-2 bg-stone-950 rounded-xl border border-stone-800">
+                    <div className="flex items-center gap-1.5 text-amber-400 text-xs font-bold">
+                      <Sun className="w-3.5 h-3.5" />
+                      <span>{weatherData.main?.temp}°C</span>
                     </div>
-                    <div className="relative pl-8 md:pl-16 space-y-16 before:absolute before:left-[16px] md:before:left-[44px] before:top-4 before:bottom-4 before:w-1 before:bg-gradient-to-b before:from-amber-500 before:via-amber-600 before:to-stone-800 before:rounded-full">
-                       {fertilizerPlan.schedule.map((s, i) => (
-                         <div key={i} className="relative group">
-                            <div className={`absolute -left-[24px] md:-left-[52px] top-1.5 w-12 h-12 rounded-[1.5rem] border-4 border-black z-10 shadow-2xl transition-all group-hover:scale-125 flex items-center justify-center ${i === 0 ? 'bg-amber-500 animate-pulse' : 'bg-stone-800'}`}>
-                                {i === 0 ? <Clock className="w-5 h-5 text-black" /> : <CheckCircle2 className="w-5 h-5 text-amber-500" />}
-                            </div>
-                            <div className="bg-stone-900 border-2 border-white/5 rounded-[3rem] p-8 md:p-10 shadow-sm group-hover:border-amber-500/50 group-hover:shadow-2xl transition-all relative">
-                               <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-8 pb-8 border-b border-white/5">
-                                  <div className="flex items-center gap-6">
-                                     <div className="w-14 h-14 rounded-2xl bg-stone-800 flex items-center justify-center text-amber-500 text-xl font-black shadow-inner">
-                                        0{i + 1}
-                                     </div>
-                                     <div>
-                                        <h4 className="text-xl font-black text-white tracking-tight leading-none mb-2">{s.stage}</h4>
-                                        <div className="flex items-center gap-2">
-                                           <div className="w-1.5 h-1.5 rounded-full bg-amber-500"></div>
-                                           <p className="text-[11px] font-black text-stone-500 uppercase tracking-widest">{s.timing}</p>
-                                        </div>
-                                     </div>
-                                  </div>
-                                  <div className="bg-black px-6 py-2.5 rounded-2xl shadow-xl border border-white/5">
-                                     <span className="text-[10px] font-black text-white uppercase tracking-[0.2em]">Deployment Cycle</span>
-                                  </div>
-                               </div>
-                               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                  <div className="bg-stone-800 p-6 rounded-[2rem] border border-white/5 flex items-center gap-6 group/item hover:bg-stone-700 transition-colors">
-                                     <div className="p-4 bg-stone-900 rounded-2xl shadow-sm text-amber-500 group-hover/item:scale-110 transition-transform"><Beaker className="w-6 h-6" /></div>
-                                     <div>
-                                        <p className="text-[10px] font-black text-stone-500 uppercase tracking-widest mb-1">Target Dosage</p>
-                                        <p className="text-base font-black text-white">{s.dosage}</p>
-                                     </div>
-                                  </div>
-                                  <div className="bg-stone-800 p-6 rounded-[2rem] border border-white/5 flex items-center gap-6 group/item hover:bg-stone-700 transition-colors">
-                                     <div className="p-4 bg-stone-900 rounded-2xl shadow-sm text-blue-400 group-hover/item:scale-110 transition-transform"><Droplets className="w-6 h-6" /></div>
-                                     <div>
-                                        <p className="text-[10px] font-black text-stone-500 uppercase tracking-widest mb-1">Application Method</p>
-                                        <p className="text-base font-black text-white">{s.method}</p>
-                                     </div>
-                                  </div>
-                               </div>
-                            </div>
-                         </div>
-                       ))}
+                    <span className="text-stone-700">•</span>
+                    <div className="flex items-center gap-1.5 text-blue-400 text-xs font-bold">
+                      <Droplets className="w-3.5 h-3.5" />
+                      <span>{weatherData.main?.humidity}% Humidity</span>
                     </div>
-                 </div>
+                    <span className="text-stone-700">•</span>
+                    <div className="flex items-center gap-1.5 text-stone-400 text-xs font-bold">
+                      <Wind className="w-3.5 h-3.5" />
+                      <span>{Math.round((weatherData.wind?.speed || 0) * 3.6)} km/h</span>
+                    </div>
+                  </div>
+                )}
+              </div>
 
-                 {/* BIO-SHIELD: MICRONUTRIENTS */}
-                 {fertilizerPlan.micronutrients && fertilizerPlan.micronutrients.length > 0 && (
-                   <div className="space-y-10">
-                      <div className="flex flex-col gap-3 px-4">
-                        <div className="flex items-center gap-4 text-amber-500">
-                          <ShieldCheck className="w-8 h-8" />
-                          <h3 className="text-2xl font-black tracking-tight text-white">Bio-Fortification</h3>
+              {/* Soil Composition Selection */}
+              <div className="space-y-2 pt-2 border-t border-stone-850">
+                <label className="text-[10px] font-bold text-stone-400 uppercase tracking-wider block">Soil Health Profile</label>
+                <div className="grid grid-cols-1 gap-2">
+                  {SOIL_TYPES.map(s => (
+                    <button
+                      key={s.id}
+                      type="button"
+                      onClick={() => setFormData({ ...formData, soil: s.id })}
+                      className={`p-3 rounded-xl border text-left transition-all flex items-center justify-between active:scale-98 min-h-[48px] ${
+                        formData.soil === s.id
+                          ? 'bg-amber-950/80 border-amber-500 text-white shadow-md'
+                          : 'bg-stone-950 border-stone-850 text-stone-400 hover:text-stone-200'
+                      }`}
+                    >
+                      <div className="space-y-0.5">
+                        <div className="flex items-center gap-2">
+                          <FlaskConical className={`w-3.5 h-3.5 ${formData.soil === s.id ? 'text-amber-400' : 'text-stone-500'}`} />
+                          <span className="text-xs font-bold">{s.name}</span>
                         </div>
-                        <p className="text-stone-500 text-xs font-bold uppercase tracking-widest ml-12">Essential Micro-Elements Cluster</p>
+                        <p className="text-[10px] text-stone-400 font-sans">{s.desc}</p>
                       </div>
-                      <div className="bg-stone-900 p-10 md:p-14 rounded-[4rem] flex flex-wrap justify-center gap-4 shadow-2xl relative overflow-hidden border-8 border-stone-800/50">
-                         <div className="absolute inset-0 bg-gradient-to-br from-amber-500/5 to-transparent"></div>
-                         <Sparkles className="absolute top-0 left-0 w-64 h-64 text-amber-500/5 -ml-20 -mt-20" />
-                         {fertilizerPlan.micronutrients.map((micro, i) => (
-                           <div key={i} className="bg-white/5 backdrop-blur-xl px-8 py-4 rounded-[1.75rem] border border-white/10 flex items-center gap-4 animate-in zoom-in group hover:bg-amber-500 hover:border-amber-500 transition-all shadow-xl relative z-10">
-                              <div className="w-3 h-3 rounded-full bg-amber-500 shadow-[0_0_15px_rgba(245,158,11,1)] group-hover:bg-black" />
-                              <span className="text-sm font-black text-white group-hover:text-black uppercase tracking-[0.15em]">{micro}</span>
-                           </div>
-                         ))}
-                      </div>
-                   </div>
-                 )}
+                      {formData.soil === s.id && <CheckCircle2 className="w-4 h-4 text-amber-400 shrink-0 ml-2" />}
+                    </button>
+                  ))}
+                </div>
+              </div>
 
-                 {/* EXPERT GUIDANCE: TIPS */}
-                 {fertilizerPlan.tips && fertilizerPlan.tips.length > 0 && (
-                    <div className="bg-stone-950 rounded-[4rem] p-10 md:p-16 text-white shadow-2xl relative overflow-hidden border-t-8 border-amber-500/30">
-                       <div className="absolute top-0 right-0 p-12 opacity-10">
-                          <ClipboardList className="w-48 h-48 rotate-12 text-amber-500" />
-                       </div>
-                       <div className="relative z-10 max-w-4xl">
-                          <h4 className="text-amber-500 font-black text-[11px] uppercase tracking-[0.5em] mb-12 flex items-center gap-4 bg-white/5 w-fit px-8 py-3 rounded-full border border-white/10">
-                             <CheckCircle2 className="w-5 h-5 text-amber-500" /> Expert Management Directives
-                          </h4>
-                          <div className="grid grid-cols-1 md:grid-cols-2 gap-x-12 gap-y-8">
-                             {fertilizerPlan.tips.map((tip, i) => (
-                               <div key={i} className="flex gap-6 items-start group">
-                                  <div className="mt-2.5 w-2 h-2 rounded-full bg-amber-500 shrink-0 group-hover:scale-150 transition-all shadow-[0_0_15px_#f59e0b]" />
-                                  <p className="text-sm md:text-base font-medium text-stone-300 leading-relaxed italic opacity-80 group-hover:opacity-100 transition-opacity">"{tip}"</p>
-                               </div>
-                             ))}
-                          </div>
-                          <div className="mt-16 pt-10 border-t border-white/5 flex items-center gap-4 opacity-40">
-                             <AlertCircle className="w-5 h-5" />
-                             <p className="text-[10px] font-bold uppercase tracking-widest leading-relaxed max-w-lg">AI Generated Protocol. Consult District Agricultural Officers (DAO) before mass-scale implementation.</p>
-                          </div>
-                       </div>
+              {/* Vernacular Language Choice */}
+              <div className="space-y-1.5 pt-2 border-t border-stone-850">
+                <label className="text-[10px] font-bold text-stone-400 uppercase tracking-wider block">Response Language</label>
+                <div className="relative">
+                  <select
+                    value={language}
+                    onChange={e => onLanguageChange(e.target.value)}
+                    className="w-full bg-stone-950 border border-stone-800 rounded-xl p-3 pl-9 text-xs text-white font-bold outline-none focus:border-amber-500 appearance-none"
+                  >
+                    {LANGUAGES.map(l => (
+                      <option key={l.name} value={l.name} className="bg-stone-900">{l.label}</option>
+                    ))}
+                  </select>
+                  <LangIcon className="w-4 h-4 text-amber-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                </div>
+              </div>
+
+              {/* CTA Button */}
+              <button
+                type="submit"
+                disabled={loading || !formData.crop}
+                className="w-full py-3.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-stone-950 font-black text-xs flex items-center justify-center gap-2 shadow-lg shadow-amber-950/50 transition-all active:scale-98 disabled:opacity-50 min-h-[48px]"
+              >
+                {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Zap className="w-4 h-4 text-stone-950 fill-current" />}
+                <span>{loading ? 'Analyzing Soil & Crop Parameters...' : 'Generate Agronomy Protocol'}</span>
+              </button>
+
+            </div>
+
+          </form>
+        )}
+
+        {/* LOADING OVERLAY */}
+        {loading && (
+          <div className="py-12 bg-stone-900/60 rounded-2xl border border-stone-800 text-center space-y-3">
+            <div className="relative w-12 h-12 mx-auto">
+              <div className="w-12 h-12 border-4 border-stone-800 border-t-amber-500 rounded-full animate-spin" />
+              <Lightbulb className="w-5 h-5 text-amber-500 absolute inset-0 m-auto animate-pulse" />
+            </div>
+            <p className="text-xs font-bold text-stone-200">Calculating NPK Ratio & Fertilizer Deployment Schedule...</p>
+            <p className="text-[10px] text-stone-500 font-mono">Tailoring protocol for {formData.crop} in {formData.location}</p>
+          </div>
+        )}
+
+        {/* TAB 2: AI STRATEGY */}
+        {!loading && activeTab === 'strategy' && (
+          <div className="space-y-4 animate-in fade-in duration-200">
+            {advice ? (
+              <div className="space-y-4">
+                
+                {/* Header Action Bar */}
+                <div className="flex items-center justify-between bg-stone-900/90 p-3 rounded-2xl border border-stone-800">
+                  <div className="flex items-center gap-2">
+                    <ShieldCheck className="w-4 h-4 text-amber-400" />
+                    <span className="text-xs font-bold text-white uppercase tracking-wider">{formData.crop} Strategy</span>
+                  </div>
+
+                  <div className="flex items-center gap-1.5">
+                    <button
+                      onClick={shareOnWhatsApp}
+                      className="px-3 py-1.5 bg-[#25D366] hover:bg-[#128C7E] text-stone-950 font-black text-[10px] uppercase rounded-xl flex items-center gap-1 shadow-md active:scale-95 transition-all min-h-[36px]"
+                    >
+                      <MessageCircle className="w-3.5 h-3.5 text-stone-950 fill-current" />
+                      <span>Share</span>
+                    </button>
+
+                    <button
+                      onClick={downloadReport}
+                      className="p-2 bg-stone-950 border border-stone-800 text-amber-400 rounded-xl hover:text-white transition-all active:scale-95 min-h-[36px]"
+                      title="Export PDF"
+                    >
+                      <Download className="w-4 h-4" />
+                    </button>
+
+                    <button
+                      onClick={saveToArchive}
+                      disabled={saveStatus === 'saved'}
+                      className={`p-2 rounded-xl border text-xs font-bold flex items-center gap-1 transition-all active:scale-95 min-h-[36px] ${
+                        saveStatus === 'saved'
+                          ? 'bg-amber-500/20 border-amber-500/40 text-amber-300'
+                          : 'bg-stone-950 border-stone-800 text-stone-300 hover:text-white'
+                      }`}
+                      title="Archive Strategy"
+                    >
+                      <Archive className="w-4 h-4 text-amber-400" />
+                    </button>
+                  </div>
+                </div>
+
+                {/* Strategic Audit Markdown */}
+                <div className="bg-gradient-to-br from-stone-900 via-stone-900 to-amber-950/40 border border-amber-500/30 rounded-2xl p-4 space-y-3 shadow-xl">
+                  
+                  <div className="flex items-center justify-between border-b border-stone-800 pb-2.5">
+                    <div className="flex items-center gap-2">
+                      <TrendingUp className="w-4 h-4 text-amber-400" />
+                      <h3 className="text-xs font-black text-white uppercase tracking-wider">Agronomic Guidance</h3>
                     </div>
-                 )}
+                    <span className="text-[10px] font-mono text-amber-400 bg-amber-950 px-2 py-0.5 rounded border border-amber-500/30">
+                      {formData.soil} Soil
+                    </span>
+                  </div>
+
+                  <div className="text-xs text-stone-300 leading-relaxed font-sans pt-1">
+                    <ReactMarkdown>{advice}</ReactMarkdown>
+                  </div>
+                </div>
+
+                {/* Quick Button to Switch to Fertilizers Tab */}
+                {fertilizerPlan && (
+                  <button
+                    onClick={() => setActiveTab('nutrients')}
+                    className="w-full py-3 bg-stone-900 hover:bg-stone-850 border border-stone-800 text-amber-400 font-bold text-xs rounded-xl flex items-center justify-center gap-2 transition-all active:scale-98 min-h-[44px]"
+                  >
+                    <Beaker className="w-4 h-4" />
+                    <span>View Fertilizer Plan & Deployment Timeline</span>
+                    <ChevronRight className="w-4 h-4" />
+                  </button>
+                )}
+
+              </div>
+            ) : (
+              <div className="text-center py-12 px-4 bg-stone-900/80 rounded-2xl border border-stone-800 space-y-3">
+                <Lightbulb className="w-8 h-8 text-amber-500 mx-auto animate-pulse" />
+                <h3 className="text-xs font-bold text-stone-200">No Crop Strategy Active</h3>
+                <p className="text-[11px] text-stone-500 max-w-sm mx-auto">
+                  Select your crop and location under Field Parameters tab to generate an expert agronomic protocol.
+                </p>
+                <button
+                  onClick={() => setActiveTab('planner')}
+                  className="px-4 py-2.5 bg-amber-500 text-stone-950 rounded-xl font-bold text-xs uppercase tracking-wider active:scale-95 transition-all shadow-md min-h-[44px]"
+                >
+                  Configure Parameters
+                </button>
               </div>
             )}
           </div>
         )}
-      </div>
 
-      {/* Historical strategies Section */}
-      {savedStrategies.length > 0 && (
-        <div className="px-4 space-y-6">
-          <div className="flex items-center justify-between px-2">
-             <div className="flex items-center gap-3">
-                <History className="w-5 h-5 text-stone-500" />
-                <h3 className="text-xs font-black text-stone-500 uppercase tracking-[0.2em]">Strategy Archives</h3>
-             </div>
-             <span className="text-[10px] font-bold text-stone-600 uppercase">{savedStrategies.length} Entries</span>
-          </div>
-          <div className="grid grid-cols-1 gap-4">
-             {savedStrategies.map(s => (
-               <div 
-                key={s.id} 
-                onClick={() => loadArchived(s)}
-                className="bg-stone-900 border border-white/5 p-6 rounded-[2.5rem] flex items-center justify-between group active:scale-[0.98] transition-all hover:shadow-xl hover:border-amber-500/30 cursor-pointer shadow-sm"
-               >
-                  <div className="flex items-center gap-6">
-                    <div className="w-16 h-16 rounded-3xl bg-stone-800 flex items-center justify-center shadow-inner text-stone-500 group-hover:bg-amber-500/10 group-hover:text-amber-500 transition-all">
-                       <GripVertical className="w-6 h-6 opacity-20 group-hover:opacity-50" />
-                       <FileText className="w-7 h-7 absolute" />
+        {/* TAB 3: FERTILIZERS & SCHEDULE */}
+        {!loading && activeTab === 'nutrients' && (
+          <div className="space-y-4 animate-in fade-in duration-200">
+            {fertilizerPlan ? (
+              <div className="space-y-4">
+                
+                {/* Requirements & Adjustments Summary Cards */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                  <div className="bg-stone-900 p-3.5 rounded-2xl border border-stone-800 space-y-1">
+                    <div className="flex items-center gap-2 text-amber-400">
+                      <Target className="w-4 h-4" />
+                      <span className="text-[10px] font-bold uppercase tracking-wider">Crop Requirements</span>
                     </div>
-                    <div className="text-left">
-                       <p className="font-black text-white text-lg tracking-tighter leading-none mb-1.5">{s.crop}</p>
-                       <div className="flex items-center gap-3">
-                          <p className="text-[10px] text-stone-500 font-black uppercase tracking-widest">{s.soil} Profile</p>
-                          <div className="w-1 h-1 bg-stone-700 rounded-full" />
-                          <p className="text-[10px] text-stone-600 font-bold uppercase">{new Date(s.timestamp).toLocaleDateString()}</p>
-                       </div>
+                    <p className="text-xs text-stone-200 font-bold leading-snug">{fertilizerPlan.cropRequirements}</p>
+                  </div>
+
+                  <div className="bg-stone-900 p-3.5 rounded-2xl border border-stone-800 space-y-1">
+                    <div className="flex items-center gap-2 text-stone-400">
+                      <Atom className="w-4 h-4" />
+                      <span className="text-[10px] font-bold uppercase tracking-wider">Soil Adjustments</span>
+                    </div>
+                    <p className="text-xs text-stone-300 font-bold leading-snug">{fertilizerPlan.soilAdjustments}</p>
+                  </div>
+                </div>
+
+                {/* Recommended Fertilizers List */}
+                <div className="bg-stone-900/90 border border-stone-800 rounded-2xl p-4 space-y-3">
+                  <div className="flex items-center gap-2 border-b border-stone-800 pb-2.5">
+                    <Beaker className="w-4 h-4 text-amber-400" />
+                    <h3 className="text-xs font-black text-white uppercase tracking-wider">Recommended Fertilizer Inventory</h3>
+                  </div>
+
+                  <div className="space-y-2.5">
+                    {fertilizerPlan.fertilizers.map((f, i) => (
+                      <div key={i} className="bg-stone-950 p-3.5 rounded-xl border border-stone-850 space-y-2">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            {f.isOrganic ? <Leaf className="w-4 h-4 text-emerald-400" /> : <Zap className="w-4 h-4 text-amber-400" />}
+                            <span className="text-xs font-bold text-white">{f.name}</span>
+                          </div>
+                          <span className="text-[10px] font-mono font-bold text-amber-400 bg-amber-950 px-2 py-0.5 rounded border border-amber-500/30">
+                            NPK {f.npk}
+                          </span>
+                        </div>
+                        <p className="text-[11px] text-stone-400 italic">"{f.description}"</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Deployment Timeline */}
+                <div className="bg-stone-900/90 border border-stone-800 rounded-2xl p-4 space-y-3">
+                  <div className="flex items-center gap-2 border-b border-stone-800 pb-2.5">
+                    <CalendarCheck className="w-4 h-4 text-amber-400" />
+                    <h3 className="text-xs font-black text-white uppercase tracking-wider">Application Schedule</h3>
+                  </div>
+
+                  <div className="space-y-2.5">
+                    {fertilizerPlan.schedule.map((s, i) => (
+                      <div key={i} className="bg-stone-950 p-3.5 rounded-xl border border-stone-850 space-y-2">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <span className="w-5 h-5 rounded-full bg-amber-500/20 text-amber-400 font-mono text-[10px] font-black flex items-center justify-center border border-amber-500/30">
+                              {i + 1}
+                            </span>
+                            <span className="text-xs font-bold text-white">{s.stage}</span>
+                          </div>
+                          <span className="text-[10px] text-stone-400 font-mono">{s.timing}</span>
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-2 pt-1 border-t border-stone-900 text-[11px]">
+                          <div className="bg-stone-900 p-2 rounded-lg">
+                            <span className="text-[9px] text-stone-500 uppercase font-bold block">Dosage</span>
+                            <span className="text-stone-200 font-bold">{s.dosage}</span>
+                          </div>
+                          <div className="bg-stone-900 p-2 rounded-lg">
+                            <span className="text-[9px] text-stone-500 uppercase font-bold block">Method</span>
+                            <span className="text-stone-200 font-bold">{s.method}</span>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Micronutrients & Expert Directives */}
+                {fertilizerPlan.micronutrients && fertilizerPlan.micronutrients.length > 0 && (
+                  <div className="bg-stone-900/90 border border-stone-800 rounded-2xl p-4 space-y-2">
+                    <div className="flex items-center gap-2 border-b border-stone-800 pb-2">
+                      <Sparkles className="w-4 h-4 text-amber-400" />
+                      <h4 className="text-xs font-bold text-white uppercase tracking-wider">Essential Micronutrients</h4>
+                    </div>
+                    <div className="flex flex-wrap gap-1.5 pt-1">
+                      {fertilizerPlan.micronutrients.map((m, i) => (
+                        <span key={i} className="px-2.5 py-1 bg-amber-950 text-amber-300 text-xs font-bold rounded-lg border border-amber-500/30">
+                          ✨ {m}
+                        </span>
+                      ))}
                     </div>
                   </div>
-                  <div className="flex items-center gap-3">
-                    <button 
-                      onClick={(e) => deleteArchived(s.id, e)}
-                      className="p-3 bg-stone-800 rounded-2xl text-stone-500 hover:text-rose-500 hover:bg-rose-500/10 transition-all border border-transparent hover:border-rose-500/20 shadow-sm"
+                )}
+
+              </div>
+            ) : (
+              <div className="text-center py-12 px-4 bg-stone-900/80 rounded-2xl border border-stone-800 space-y-3">
+                <Beaker className="w-8 h-8 text-amber-500 mx-auto animate-pulse" />
+                <h3 className="text-xs font-bold text-stone-200">No Fertilizer Schedule Available</h3>
+                <p className="text-[11px] text-stone-500 max-w-sm mx-auto">
+                  Run a crop strategy report to view custom fertilizer dosage, NPK ratios, and deployment timing.
+                </p>
+                <button
+                  onClick={() => setActiveTab('planner')}
+                  className="px-4 py-2.5 bg-amber-500 text-stone-950 rounded-xl font-bold text-xs uppercase tracking-wider active:scale-95 transition-all shadow-md min-h-[44px]"
+                >
+                  Configure Parameters
+                </button>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* TAB 4: SAVED ARCHIVES */}
+        {activeTab === 'saved' && (
+          <div className="space-y-4 animate-in fade-in duration-200">
+            <div className="bg-stone-900/90 border border-stone-800 rounded-2xl p-4 space-y-3">
+              <div className="flex items-center justify-between border-b border-stone-800 pb-2.5">
+                <div className="flex items-center gap-2">
+                  <Bookmark className="w-4 h-4 text-amber-400" />
+                  <h3 className="text-xs font-extrabold text-white uppercase tracking-wider">Cloud Strategy Archives</h3>
+                </div>
+                <span className="text-[10px] font-mono text-amber-400 bg-amber-950 px-2 py-0.5 rounded border border-amber-500/30">
+                  {savedStrategies.length} Archived
+                </span>
+              </div>
+
+              {savedStrategies.length === 0 ? (
+                <div className="text-center py-8 px-4 bg-stone-950 rounded-xl border border-stone-850 space-y-2">
+                  <FileText className="w-8 h-8 text-stone-600 mx-auto" />
+                  <h4 className="text-xs font-bold text-stone-300">No archived strategies yet</h4>
+                  <p className="text-[11px] text-stone-500">
+                    Generate an agronomy protocol and tap Archive to store reports securely in your farm account.
+                  </p>
+                </div>
+              ) : (
+                <div className="space-y-2.5">
+                  {savedStrategies.map(item => (
+                    <div
+                      key={item.id}
+                      onClick={() => loadArchived(item)}
+                      className="bg-stone-950 p-3.5 rounded-xl border border-stone-850 hover:border-amber-500/40 space-y-2 cursor-pointer group transition-all"
                     >
-                       <Trash2 className="w-5 h-5" />
-                    </button>
-                    <div className="p-3 bg-stone-800 rounded-2xl text-stone-600 group-hover:text-amber-500 group-hover:bg-amber-500/10 transition-all shadow-sm">
-                       <ChevronRight className="w-6 h-6" />
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <h4 className="text-xs font-bold text-white group-hover:text-amber-300">🌱 {item.crop}</h4>
+                          <span className="text-[10px] font-mono text-stone-500">{new Date(item.timestamp).toLocaleDateString()}</span>
+                        </div>
+                        <button
+                          onClick={(e) => deleteArchived(item.id, e)}
+                          className="p-2 text-stone-500 hover:text-rose-400 transition-colors rounded-lg hover:bg-stone-900"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+
+                      <div className="flex items-center gap-2 text-[11px] text-stone-400 pt-1 border-t border-stone-900">
+                        <span>📍 {item.location}</span>
+                        <span>•</span>
+                        <span className="text-amber-400 font-bold">{item.soil} Soil</span>
+                      </div>
                     </div>
-                  </div>
-               </div>
-             ))}
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
-        </div>
-      )}
+        )}
+
+      </main>
 
       {/* Hidden Report Template for PDF Generation */}
       <div 
@@ -661,7 +894,7 @@ const CropAdvisor: React.FC<CropAdvisorProps> = ({ language: initialLanguage }) 
         }}
       >
         <div style={{ backgroundColor: '#1c1917', padding: '30px', borderRadius: '12px', marginBottom: '30px', color: 'white' }}>
-          <h1 style={{ fontSize: '28px', fontWeight: '900', margin: 0, letterSpacing: '-0.02em' }}>AGRIASSIST STRATEGIC REPORT</h1>
+          <h1 style={{ fontSize: '28px', fontWeight: '900', margin: 0, letterSpacing: '-0.02em' }}>BHARAT KISAN - CROP PRECISION REPORT</h1>
           <p style={{ fontSize: '12px', opacity: 0.7, marginTop: '8px' }}>Generated: {new Date().toLocaleString()}</p>
         </div>
 
@@ -669,7 +902,7 @@ const CropAdvisor: React.FC<CropAdvisorProps> = ({ language: initialLanguage }) 
           <div>
             <h3 style={{ fontSize: '14px', fontWeight: '900', borderBottom: '1px solid #e7e5e4', paddingBottom: '8px', marginBottom: '12px', color: '#78716c' }}>FARMER INFORMATION</h3>
             <p style={{ fontSize: '14px', margin: '4px 0' }}><strong>Farmer Name:</strong> {profile?.name || 'Valued Farmer'}</p>
-            <p style={{ fontSize: '14px', margin: '4px 0' }}><strong>Farm Unit:</strong> {profile?.farmName || 'Unnamed Farm'}</p>
+            <p style={{ fontSize: '14px', margin: '4px 0' }}><strong>Farm Unit:</strong> {profile?.farmName || 'Bharat Kisan Farm'}</p>
             <p style={{ fontSize: '14px', margin: '4px 0' }}><strong>Language:</strong> {language}</p>
           </div>
           <div>
@@ -683,7 +916,7 @@ const CropAdvisor: React.FC<CropAdvisorProps> = ({ language: initialLanguage }) 
         <div style={{ marginBottom: '40px' }}>
           <h3 style={{ fontSize: '16px', fontWeight: '900', borderBottom: '2px solid #1c1917', paddingBottom: '8px', marginBottom: '20px' }}>[1] STRATEGIC ADVISORY</h3>
           <div style={{ fontSize: '14px', lineHeight: '1.6', whiteSpace: 'pre-wrap' }}>
-            <Markdown>{advice}</Markdown>
+            <ReactMarkdown>{advice}</ReactMarkdown>
           </div>
         </div>
 
@@ -758,11 +991,12 @@ const CropAdvisor: React.FC<CropAdvisorProps> = ({ language: initialLanguage }) 
           </div>
         )}
 
-        <div style={{ marginTop: '60px', borderTop: '1px solid #e7e5e4', paddingTop: '20px', textAlign: 'center', fontSize: '10px', color: '#a8a29e' }}>
+        <div style={{ marginTop: '60px', borderTop: '1px solid #e7e5e4', paddingTop: '20px', textTransform: 'uppercase', textAlign: 'center', fontSize: '10px', color: '#a8a29e' }}>
           <p>Disclaimer: AI recommendations should be verified with local agricultural officers.</p>
-          <p>© 2026 AgriAssist Smart Farming Companion</p>
+          <p>© 2026 Bharat Kisan Smart Farming Companion</p>
         </div>
       </div>
+
     </div>
   );
 };

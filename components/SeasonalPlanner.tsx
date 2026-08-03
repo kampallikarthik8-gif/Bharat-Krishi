@@ -250,13 +250,13 @@ const SeasonalPlanner: React.FC<SeasonalPlannerProps> = ({ language: initialLang
       </div>
 
       {/* Weather Pulse Section */}
-      {weather && (
+      {weather?.main && (
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           <WeatherStat 
             icon={<Thermometer className="w-4 h-4" />} 
             label="Current Temp" 
             value={`${Math.round(weather.main.temp)}°C`} 
-            sub={weather.weather[0].description}
+            sub={weather.weather?.[0]?.description || 'Clear'}
           />
           <WeatherStat 
             icon={<Droplets className="w-4 h-4" />} 
@@ -267,7 +267,7 @@ const SeasonalPlanner: React.FC<SeasonalPlannerProps> = ({ language: initialLang
           <WeatherStat 
             icon={<Wind className="w-4 h-4" />} 
             label="Wind Velocity" 
-            value={`${Math.round(weather.wind.speed * 3.6)} km/h`} 
+            value={`${Math.round((weather.wind?.speed ?? 0) * 3.6)} km/h`} 
             sub="Drift Risk"
           />
         </div>

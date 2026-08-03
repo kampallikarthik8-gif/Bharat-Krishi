@@ -41,6 +41,7 @@ import ProduceLedger from './components/ProduceLedger';
 import CommunityDAO from './components/CommunityDAO';
 import P2PMarketplace from './components/P2PMarketplace';
 import ProjectDocs from './components/ProjectDocs';
+import FertilizerCalculator from './components/FertilizerCalculator';
 import { PublicLandingPage, PublicPrivacyPolicy, PublicTermsOfService } from './components/PublicPages';
 
 import { useFirebase } from './src/components/FirebaseProvider';
@@ -50,7 +51,7 @@ import { doc, setDoc } from 'firebase/firestore';
 import { Loader2 } from 'lucide-react';
 
 const App: React.FC = () => {
-  const { user, profile, loading, memberships, activeFarmId, setActiveFarmId, updateProfileLocal } = useFirebase();
+  const { user, profile, loading, memberships, activeFarmId, setActiveFarmId, updateProfileLocal, logout } = useFirebase();
   const [currentView, setCurrentView] = React.useState<AppView>(AppView.DASHBOARD);
   const [viewHistory, setViewHistory] = React.useState<AppView[]>([]);
   const [language, setLanguage] = React.useState<string>(() => {
@@ -79,11 +80,35 @@ const App: React.FC = () => {
     };
     window.addEventListener('hashchange', handleHashOrPopState);
     window.addEventListener('popstate', handleHashOrPopState);
+
+    // Register Capacitor backButton handler for Android system back gesture and physical back button
+    let capListenerHandle: any = null;
+    const initCapacitorBack = async () => {
+      try {
+        const { App: CapApp } = await import('@capacitor/app');
+        capListenerHandle = await CapApp.addListener('backButton', () => {
+          if (viewHistory.length > 0) {
+            handleBack();
+          } else if (currentView !== AppView.DASHBOARD) {
+            setCurrentView(AppView.DASHBOARD);
+          } else {
+            CapApp.minimizeApp();
+          }
+        });
+      } catch {
+        // Web fallback handled by popstate
+      }
+    };
+    initCapacitorBack();
+
     return () => {
       window.removeEventListener('hashchange', handleHashOrPopState);
       window.removeEventListener('popstate', handleHashOrPopState);
+      if (capListenerHandle && typeof capListenerHandle.remove === 'function') {
+        capListenerHandle.remove();
+      }
     };
-  }, []);
+  }, [viewHistory, currentView]);
 
   const setHash = (hash: string) => {
     if (typeof window !== 'undefined') {
@@ -190,8 +215,11 @@ const App: React.FC = () => {
 
   const handleLogout = async () => {
     try {
-      await signOut(auth);
-      localStorage.setItem('agri_session_active', 'false');
+      await logout();
+      setShowLogin(false);
+      setHash('');
+      setCurrentView(AppView.DASHBOARD);
+      setViewHistory([]);
     } catch (error) {
       console.error("Error signing out:", error);
     }
@@ -208,7 +236,7 @@ const App: React.FC = () => {
       case AppView.MARKET_PRICES:
         return <MarketPrices language={language} />;
       case AppView.CROP_ADVISOR:
-        return <CropAdvisor language={language} />;
+        return <CropAdvisor language={language} onBack={handleBack} />;
       case AppView.COMMUNITY_CHAT:
         return <ChatBot language={language} />;
       case AppView.VOICE_ASSISTANT:
@@ -220,7 +248,7 @@ const App: React.FC = () => {
       case AppView.SOIL_LAB:
         return <SoilLab language={language} />;
       case AppView.YIELD_PREDICTOR:
-        return <YieldPredictor language={language} />;
+        return <YieldPredictor language={language} onBack={handleBack} />;
       case AppView.AGRI_NEWS:
         return <AgriNews language={language} />;
       case AppView.IRRIGATION_HUB:
@@ -228,13 +256,13 @@ const App: React.FC = () => {
       case AppView.FIELD_MAP:
         return <FieldMap language={language} onBack={handleBack} />;
       case AppView.SPRAYING_ADVISOR:
-        return <SprayingAdvisor language={language} />;
+        return <SprayingAdvisor language={language} onBack={handleBack} />;
       case AppView.SETTINGS:
         return <Settings language={language} setLanguage={setLanguage} />;
       case AppView.PROFILE:
         return <Profile onLogout={handleLogout} onNavigate={navigateTo} />;
       case AppView.HARVEST_SCHEDULER:
-        return <HarvestScheduler language={language} />;
+        return <HarvestScheduler language={language} onBack={handleBack} />;
       case AppView.HELP_FEEDBACK:
         return <HelpFeedback />;
       case AppView.TASK_MANAGER:
@@ -250,11 +278,11 @@ const App: React.FC = () => {
       case AppView.SEASONAL_PLANNER:
         return <SeasonalPlanner language={language} />;
       case AppView.INPUT_ADVISOR:
-        return <InputAdvisor language={language} />;
+        return <InputAdvisor language={language} onBack={handleBack} />;
       case AppView.SMART_ALERTS:
         return <SmartAlerts />;
       case AppView.CROP_ROTATION_ADVISOR:
-        return <CropRotationAdvisor language={language} />;
+        return <CropRotationAdvisor language={language} onBack={handleBack} />;
       case AppView.CROP_HEALTH_MONITOR:
         return <CropHealthMonitor />;
       case AppView.ADMIN_PANEL:
@@ -267,6 +295,8 @@ const App: React.FC = () => {
         return <P2PMarketplace onBack={handleBack} />;
       case AppView.PROJECT_DOCS:
         return <ProjectDocs />;
+      case AppView.FERTILIZER_CALCULATOR:
+        return <FertilizerCalculator language={language} onBack={handleBack} />;
       default:
         return <Dashboard setView={navigateTo} />;
     }

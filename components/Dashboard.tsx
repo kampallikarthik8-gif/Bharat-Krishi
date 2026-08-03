@@ -91,7 +91,14 @@ const Dashboard: React.FC<DashboardProps> = ({ setView, language }) => {
           localStorage.setItem('agri_tip_lang', currentLang);
         }
       } catch (err) {
-        console.error("Failed to load daily agri-tip:", err);
+        console.warn("Using offline fallback for daily agri-tip:", err);
+        setAgriTip({
+          title: "Optimal Soil Moisture & Aeration",
+          category: "Soil",
+          advice: "Check soil moisture at root depth before irrigating today. Evening irrigation reduces moisture loss from heat evaporation.",
+          actionStep: "Inspect field soil moisture saturation today.",
+          seasonalContext: "Active Water Management"
+        });
       } finally {
         setLoadingTip(false);
       }
@@ -129,7 +136,14 @@ const Dashboard: React.FC<DashboardProps> = ({ setView, language }) => {
         localStorage.setItem('agri_tip_lang', currentLang);
       }
     } catch (err) {
-      console.error("Failed to refresh daily agri-tip:", err);
+      console.warn("Using offline fallback on refresh daily agri-tip:", err);
+      setAgriTip({
+        title: "Optimal Soil Moisture & Aeration",
+        category: "Soil",
+        advice: "Check soil moisture at root depth before irrigating today. Evening irrigation reduces moisture loss from heat evaporation.",
+        actionStep: "Inspect field soil moisture saturation today.",
+        seasonalContext: "Active Water Management"
+      });
     } finally {
       setLoadingTip(false);
     }
@@ -226,83 +240,84 @@ const Dashboard: React.FC<DashboardProps> = ({ setView, language }) => {
   };
 
   return (
-    <div className="w-full flex flex-col pb-40 bg-black min-h-screen">
+    <div className="w-full flex flex-col pb-40 min-h-screen bg-[#090e0c] text-stone-100">
       
       {/* Editorial Hero Header */}
-      <section className="px-6 pt-12 pb-10 relative overflow-hidden">
-        <div className="absolute top-0 right-0 w-80 h-80 bg-amber-500/5 rounded-full blur-[100px] -mr-40 -mt-40" />
+      <section className="px-6 pt-10 pb-6 relative overflow-hidden">
+        <div className="absolute top-0 right-0 w-80 h-80 bg-emerald-500/10 rounded-full blur-[100px] -mr-40 -mt-40 pointer-events-none" />
         <div className="relative z-10 flex items-start justify-between">
-          <div className="space-y-4">
-            <div className="flex items-center gap-3">
-              <span className="w-10 h-[1px] bg-amber-900" />
-              <span className="text-[10px] font-black text-amber-500/40 uppercase tracking-[0.4em]">Daily Briefing</span>
+          <div className="space-y-2">
+            <div className="flex items-center gap-2">
+              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
+              <span className="text-[11px] font-bold text-emerald-400 uppercase tracking-widest">Live Farm Intelligence</span>
             </div>
-            <h2 className="text-6xl font-black text-white tracking-tighter leading-[0.85]">
-              Namaste,<br/>
-              <span className="text-amber-500 font-serif italic font-light">{farmerName}.</span>
+            <h2 className="text-3xl font-extrabold text-white tracking-tight leading-tight">
+              Namaste, <span className="text-emerald-400 font-serif italic">{farmerName}</span>
             </h2>
-            <p className="text-[11px] font-bold text-stone-500 uppercase tracking-[0.2em] max-w-[200px] leading-relaxed">
-              Your farm is performing <span className="text-amber-400">optimally</span> today.
+            <p className="text-xs font-medium text-stone-400 max-w-[260px]">
+              Optimal field conditions today. {profile?.location ? `Location: ${profile.location}` : 'Monitoring active acres.'}
             </p>
           </div>
           <motion.button 
-            whileTap={{ scale: 0.9 }}
+            whileTap={{ scale: 0.95 }}
             onClick={() => handleSetView(AppView.SMART_ALERTS)}
-            className="w-14 h-14 rounded-full bg-stone-950 border border-amber-500/10 shadow-xl shadow-black/40 flex items-center justify-center relative group active:scale-95 transition-all"
+            className="w-12 h-12 rounded-2xl bg-emerald-950/60 border border-emerald-500/20 shadow-lg flex items-center justify-center relative group active:scale-95 transition-all glow-emerald"
           >
-            <Bell className="w-6 h-6 text-stone-500 group-hover:text-amber-500 transition-colors" />
-            <div className="absolute top-4 right-4 w-2.5 h-2.5 bg-amber-600 rounded-full border-2 border-black animate-pulse"></div>
+            <Bell className="w-5 h-5 text-emerald-300 group-hover:text-emerald-200 transition-colors" />
+            <div className="absolute top-3 right-3 w-2 h-2 bg-emerald-400 rounded-full animate-pulse" />
           </motion.button>
         </div>
       </section>
 
       {/* Bento Grid Stats & Weather */}
-      <section className="px-6 mb-12">
-        <div className="grid grid-cols-2 gap-4">
+      <section className="px-6 mb-8">
+        <div className="grid grid-cols-2 gap-3.5">
           {/* Weather Bento - Large */}
           <motion.div 
-            initial={{ opacity: 0, y: 20 }}
+            initial={{ opacity: 0, y: 15 }}
             animate={{ opacity: 1, y: 0 }}
             onClick={() => handleSetView(AppView.WEATHER_HUB)}
-            className="col-span-2 bg-stone-950 p-8 rounded-[3rem] relative overflow-hidden group shadow-2xl shadow-black/40 border border-amber-500/5"
+            className="col-span-2 glass-card glass-card-hover p-6 rounded-3xl relative overflow-hidden group cursor-pointer border border-emerald-500/20 shadow-xl"
           >
-            <div className="absolute top-0 right-0 p-12 opacity-[0.05] group-hover:opacity-[0.1] transition-opacity">
-              {weather && getWeatherIcon(weather.description, "w-64 h-64 -mr-16 -mt-16 rotate-12")}
+            <div className="absolute top-0 right-0 p-8 opacity-[0.08] group-hover:opacity-[0.15] transition-opacity">
+              {weather && getWeatherIcon(weather.description, "w-48 h-48 -mr-12 -mt-12 rotate-12")}
             </div>
             
             {loadingWeather ? (
-              <div className="flex items-center justify-center py-10">
-                <Loader2 className="w-8 h-8 animate-spin text-amber-500/50" />
+              <div className="flex items-center justify-center py-8">
+                <Loader2 className="w-6 h-6 animate-spin text-emerald-400" />
               </div>
             ) : (
-              <div className="relative z-10 flex flex-col justify-between h-full min-h-[160px]">
+              <div className="relative z-10 flex flex-col justify-between h-full min-h-[140px]">
                 <div className="flex justify-between items-start">
                   <div className="space-y-1">
-                    <div className="flex items-center gap-2 text-amber-400">
-                      <MapPin className="w-4 h-4" />
-                      <span className="text-[10px] font-black uppercase tracking-widest">{weather.city}</span>
+                    <div className="flex items-center gap-1.5 text-emerald-400">
+                      <MapPin className="w-3.5 h-3.5" />
+                      <span className="text-xs font-bold uppercase tracking-wider">{weather.city || 'My Location'}</span>
                     </div>
-                    <div className="flex items-baseline gap-3">
-                      <span className="text-7xl font-black text-white tracking-tighter">{weather.temp}°</span>
-                      <span className="text-lg font-serif italic text-white/40 capitalize">{weather.description}</span>
+                    <div className="flex items-baseline gap-3 pt-1">
+                      <span className="text-5xl font-extrabold text-white tracking-tight">{weather.temp}°C</span>
+                      <span className="text-sm font-serif italic text-emerald-200/70 capitalize">{weather.description}</span>
                     </div>
                   </div>
-                  {getWeatherIcon(weather.description, "w-16 h-16")}
+                  <div className="p-2.5 bg-emerald-950/80 rounded-2xl border border-emerald-500/20 shadow-inner">
+                    {getWeatherIcon(weather.description, "w-10 h-10")}
+                  </div>
                 </div>
                 
-                <div className="flex gap-8 mt-8">
-                  <div className="flex flex-col">
-                    <span className="text-[8px] font-black text-white/20 uppercase tracking-[0.3em] mb-1">Humidity</span>
-                    <div className="flex items-center gap-2 text-white/60">
-                      <Droplets className="w-4 h-4 text-amber-600" />
-                      <span className="text-sm font-bold">{weather.humidity}%</span>
+                <div className="flex gap-6 mt-6 pt-4 border-t border-emerald-500/10">
+                  <div className="flex items-center gap-2">
+                    <Droplets className="w-4 h-4 text-emerald-400" />
+                    <div>
+                      <span className="text-[10px] text-stone-400 font-medium block">Humidity</span>
+                      <span className="text-xs font-bold text-white">{weather.humidity}%</span>
                     </div>
                   </div>
-                  <div className="flex flex-col">
-                    <span className="text-[8px] font-black text-white/20 uppercase tracking-[0.3em] mb-1">Wind Speed</span>
-                    <div className="flex items-center gap-2 text-white/60">
-                      <Wind className="w-4 h-4 text-amber-400" />
-                      <span className="text-sm font-bold">{weather.wind} km/h</span>
+                  <div className="flex items-center gap-2">
+                    <Wind className="w-4 h-4 text-amber-400" />
+                    <div>
+                      <span className="text-[10px] text-stone-400 font-medium block">Wind Speed</span>
+                      <span className="text-xs font-bold text-white">{weather.wind} km/h</span>
                     </div>
                   </div>
                 </div>
@@ -311,25 +326,31 @@ const Dashboard: React.FC<DashboardProps> = ({ setView, language }) => {
           </motion.div>
 
           {/* Quick Stats Bento */}
-          <div className="bg-stone-950 p-6 rounded-[2.5rem] border border-amber-500/5 shadow-sm flex flex-col justify-between min-h-[140px]">
-            <div className="w-10 h-10 bg-amber-500/10 text-amber-500 rounded-xl flex items-center justify-center border border-amber-500/20">
-              <TrendingUp className="w-5 h-5" />
+          <div className="glass-card p-5 rounded-3xl border border-emerald-500/15 shadow-sm flex flex-col justify-between min-h-[120px]">
+            <div className="flex items-center justify-between">
+              <div className="w-9 h-9 bg-emerald-500/15 text-emerald-400 rounded-xl flex items-center justify-center border border-emerald-500/20">
+                <TrendingUp className="w-4 h-4" />
+              </div>
+              <span className="text-[10px] font-bold text-emerald-400 bg-emerald-950/60 px-2 py-0.5 rounded-full border border-emerald-500/20">Optimal</span>
             </div>
-            <div>
-              <p className="text-[8px] font-black text-stone-500 uppercase tracking-widest mb-1">Field NDVI Index</p>
-              <h4 className="text-2xl font-black text-white tracking-tight">
+            <div className="mt-3">
+              <p className="text-[11px] font-semibold text-stone-400 tracking-wide">Crop NDVI Index</p>
+              <h4 className="text-2xl font-extrabold text-white tracking-tight mt-0.5">
                 {latestReport ? latestReport.ndvi : '0.82'}
               </h4>
             </div>
           </div>
 
-          <div className="bg-stone-950 p-6 rounded-[2.5rem] border border-amber-500/5 shadow-sm flex flex-col justify-between min-h-[140px]">
-            <div className="w-10 h-10 bg-amber-500/10 text-amber-500 rounded-xl flex items-center justify-center border border-amber-500/20">
-              <Droplets className="w-5 h-5" />
+          <div className="glass-card p-5 rounded-3xl border border-emerald-500/15 shadow-sm flex flex-col justify-between min-h-[120px]">
+            <div className="flex items-center justify-between">
+              <div className="w-9 h-9 bg-amber-500/15 text-amber-400 rounded-xl flex items-center justify-center border border-amber-500/20">
+                <Droplets className="w-4 h-4" />
+              </div>
+              <span className="text-[10px] font-bold text-amber-400 bg-amber-950/60 px-2 py-0.5 rounded-full border border-amber-500/20">Good</span>
             </div>
-            <div>
-              <p className="text-[8px] font-black text-stone-500 uppercase tracking-widest mb-1">Soil Moisture</p>
-              <h4 className="text-2xl font-black text-white tracking-tight">
+            <div className="mt-3">
+              <p className="text-[11px] font-semibold text-stone-400 tracking-wide">Soil Moisture</p>
+              <h4 className="text-2xl font-extrabold text-white tracking-tight mt-0.5">
                 {latestReport ? latestReport.moisture : (weather ? `${weather.humidity - 6}%` : '64%')}
               </h4>
             </div>
@@ -337,84 +358,79 @@ const Dashboard: React.FC<DashboardProps> = ({ setView, language }) => {
         </div>
       </section>
 
-      {/* Quick Actions - Pills */}
-      <section className="px-6 mb-12 overflow-x-auto no-scrollbar">
-        <div className="flex gap-3 pb-2">
-          <QuickActionPill icon={<Camera />} label="Scan" onClick={() => handleSetView(AppView.DISEASE_SCANNER)} />
-          <QuickActionPill icon={<TrendingUp />} label="Prices" onClick={() => handleSetView(AppView.MARKET_PRICES)} />
-          <QuickActionPill icon={<MapPin />} label="Map" onClick={() => handleSetView(AppView.FIELD_MAP)} />
+      {/* Quick Actions - Horizontal Scroll Pills */}
+      <section className="px-6 mb-8">
+        <div className="flex gap-2.5 overflow-x-auto no-scrollbar pb-1">
+          <QuickActionPill icon={<Camera />} label="Scan Crop" onClick={() => handleSetView(AppView.DISEASE_SCANNER)} />
+          <QuickActionPill icon={<TrendingUp />} label="Mandi Prices" onClick={() => handleSetView(AppView.MARKET_PRICES)} />
+          <QuickActionPill icon={<MapPin />} label="Field Map" onClick={() => handleSetView(AppView.FIELD_MAP)} />
           <QuickActionPill icon={<Database />} label="Ledger" onClick={() => handleSetView(AppView.PRODUCE_LEDGER)} />
-          <QuickActionPill icon={<Users />} label="DAO" onClick={() => handleSetView(AppView.COMMUNITY_DAO)} />
+          <QuickActionPill icon={<Users />} label="Farmer DAO" onClick={() => handleSetView(AppView.COMMUNITY_DAO)} />
           <QuickActionPill icon={<ShoppingBag />} label="Market" onClick={() => handleSetView(AppView.P2P_MARKETPLACE)} />
-          <QuickActionPill icon={<LayoutGrid />} label="Tools" onClick={() => handleSetView(AppView.TOOLS_HUB)} />
+          <QuickActionPill icon={<LayoutGrid />} label="All Tools" onClick={() => handleSetView(AppView.TOOLS_HUB)} />
         </div>
       </section>
 
       {/* Daily Agri-Tip Card */}
-      <section className="px-6 mb-12 space-y-6">
+      <section className="px-6 mb-8 space-y-4">
         <div className="flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <span className="text-2xl font-black text-amber-950 font-mono">✦</span>
-            <h3 className="text-[11px] font-black text-amber-500/40 uppercase tracking-[0.3em]">Smart Agri-Tip</h3>
+          <div className="flex items-center gap-2">
+            <Sparkles className="w-4 h-4 text-emerald-400" />
+            <h3 className="text-xs font-extrabold text-stone-300 uppercase tracking-widest">Daily Smart Agri-Tip</h3>
           </div>
-          <div className="h-px flex-1 bg-amber-500/10 ml-6" />
+          <div className="h-px flex-1 bg-emerald-500/10 ml-4" />
         </div>
 
         <motion.div
-          initial={{ opacity: 0, y: 15 }}
+          initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
-          className="bg-stone-950 p-8 rounded-[3rem] border border-amber-500/10 relative overflow-hidden group shadow-2xl shadow-black/40"
+          className="glass-card p-6 rounded-3xl border border-emerald-500/20 relative overflow-hidden shadow-xl"
         >
-          {/* Subtle glow / visual effect */}
-          <div className="absolute top-0 right-0 w-64 h-64 bg-amber-500/5 rounded-full blur-[80px] -mr-24 -mt-24 pointer-events-none group-hover:bg-amber-500/10 transition-colors duration-500" />
+          <div className="absolute top-0 right-0 w-48 h-48 bg-emerald-500/5 rounded-full blur-3xl -mr-16 -mt-16 pointer-events-none" />
           
           {loadingTip ? (
-            <div className="flex flex-col items-center justify-center py-8 space-y-4">
-              <Loader2 className="w-8 h-8 animate-spin text-amber-500/50" />
-              <p className="text-[10px] font-mono text-stone-500 uppercase tracking-widest animate-pulse">Consulting Gemini for localized advice...</p>
+            <div className="flex flex-col items-center justify-center py-6 space-y-3">
+              <Loader2 className="w-6 h-6 animate-spin text-emerald-400" />
+              <p className="text-xs text-stone-400 font-medium">Fetching customized agronomic tip...</p>
             </div>
           ) : agriTip ? (
-            <div className="space-y-6 relative z-10">
-              {/* Header inside tip */}
+            <div className="space-y-4 relative z-10">
               <div className="flex items-start justify-between">
-                <div className="space-y-1">
-                  <div className="flex items-center gap-2">
-                    <Sparkles className="w-4 h-4 text-amber-500 animate-pulse" />
-                    <span className="text-[9px] font-black text-amber-500 uppercase tracking-[0.2em]">{agriTip.category} • {agriTip.seasonalContext}</span>
-                  </div>
-                  <h4 className="text-xl font-black text-white tracking-tight leading-snug">{agriTip.title}</h4>
+                <div>
+                  <span className="text-[10px] font-bold text-emerald-400 bg-emerald-950/80 px-2.5 py-1 rounded-full border border-emerald-500/30">
+                    {agriTip.category} • {agriTip.seasonalContext}
+                  </span>
+                  <h4 className="text-base font-bold text-white mt-2 leading-snug">{agriTip.title}</h4>
                 </div>
                 
                 <button
                   onClick={handleRefreshTip}
                   disabled={loadingTip}
-                  className="p-3 bg-stone-900/80 hover:bg-stone-900 text-stone-400 hover:text-amber-500 rounded-2xl border border-white/5 active:scale-90 transition-all"
+                  className="p-2.5 bg-emerald-950/60 hover:bg-emerald-900/60 text-emerald-300 rounded-xl border border-emerald-500/20 active:scale-95 transition-all shadow-sm"
                   title="Generate fresh advice"
                 >
-                  <RefreshCw className="w-4 h-4" />
+                  <RefreshCw className="w-3.5 h-3.5" />
                 </button>
               </div>
 
-              {/* Main tip advice text */}
-              <p className="text-xs text-stone-400 font-bold leading-relaxed">
+              <p className="text-xs text-stone-300 font-medium leading-relaxed">
                 {agriTip.advice}
               </p>
 
-              {/* Specific priority action step */}
-              <div className="bg-stone-900/40 p-4 rounded-2xl border border-amber-500/5 space-y-2">
-                <span className="text-[8px] font-black text-amber-500/60 uppercase tracking-widest">Recommended Action Today</span>
-                <p className="text-[11px] text-stone-200 font-black flex items-start gap-2.5">
-                  <span className="text-amber-500 text-xs font-mono">•</span>
+              <div className="bg-emerald-950/40 p-3.5 rounded-2xl border border-emerald-500/20 space-y-1">
+                <span className="text-[10px] font-bold text-emerald-400 uppercase tracking-wider block">Recommended Action</span>
+                <p className="text-xs text-stone-100 font-semibold flex items-center gap-2">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
                   <span>{agriTip.actionStep}</span>
                 </p>
               </div>
             </div>
           ) : (
-            <div className="text-center py-6">
-              <p className="text-[10px] font-black text-stone-500 uppercase tracking-widest">No agri-tip loaded</p>
+            <div className="text-center py-4">
+              <p className="text-xs text-stone-400">No tip loaded for today.</p>
               <button
                 onClick={handleRefreshTip}
-                className="mt-4 px-6 py-2.5 bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 border border-amber-500/20 rounded-full text-[10px] font-black uppercase tracking-widest transition-all"
+                className="mt-3 px-5 py-2 bg-emerald-500 text-stone-950 rounded-xl text-xs font-bold transition-all shadow-md"
               >
                 Load Daily Tip
               </button>
@@ -423,46 +439,46 @@ const Dashboard: React.FC<DashboardProps> = ({ setView, language }) => {
         </motion.div>
       </section>
 
-      {/* Legacy Recommended */}
-      <section className="px-6 mb-12 space-y-8">
+      {/* Recommended Protocols */}
+      <section className="px-6 mb-8 space-y-4">
         <div className="flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <span className="text-2xl font-black text-amber-900 font-mono">01</span>
-            <h3 className="text-[11px] font-black text-amber-500/40 uppercase tracking-[0.3em]">Advanced Planning</h3>
+          <div className="flex items-center gap-2">
+            <Sprout className="w-4 h-4 text-emerald-400" />
+            <h3 className="text-xs font-extrabold text-stone-300 uppercase tracking-widest">Crop Management</h3>
           </div>
-          <div className="h-px flex-1 bg-amber-500/10 ml-6" />
+          <div className="h-px flex-1 bg-emerald-500/10 ml-4" />
         </div>
         
-        <div className="grid grid-cols-1 gap-4">
+        <div className="grid grid-cols-1 gap-3">
           <ActionCard 
-            icon={<Sprout className="w-6 h-6" />} 
+            icon={<Sprout className="w-5 h-5 text-emerald-400" />} 
             label="Crop Rotation Advisor" 
-            sub="Optimize soil health with AI-driven rotation protocols."
+            sub="Optimize soil nutrient health with AI rotation strategies."
             onClick={() => handleSetView(AppView.CROP_ROTATION_ADVISOR)}
-            theme="amber"
           />
         </div>
       </section>
 
-      {/* Tasks Section */}
-      <section className="px-6 mb-12 space-y-8">
+      {/* Active Tasks Section */}
+      <section className="px-6 mb-8 space-y-4">
         <div className="flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <span className="text-2xl font-black text-amber-900 font-mono">02</span>
-            <h3 className="text-[11px] font-black text-amber-500/40 uppercase tracking-[0.3em]">Active Tasks</h3>
+          <div className="flex items-center gap-2">
+            <Calendar className="w-4 h-4 text-emerald-400" />
+            <h3 className="text-xs font-extrabold text-stone-300 uppercase tracking-widest">Active Farm Tasks</h3>
           </div>
           <button 
             onClick={() => handleSetView(AppView.TASK_MANAGER)}
-            className="text-[10px] font-black text-amber-500 uppercase tracking-widest hover:translate-x-1 transition-transform"
+            className="text-xs font-bold text-emerald-400 hover:underline flex items-center gap-1"
           >
-            View All
+            <span>View All</span>
+            <ChevronRight className="w-3.5 h-3.5" />
           </button>
         </div>
         
-        <div className="space-y-4">
+        <div className="space-y-3">
           {loadingTasks ? (
-            <div className="flex items-center justify-center py-10">
-              <Loader2 className="w-6 h-6 animate-spin text-amber-500/50" />
+            <div className="flex items-center justify-center py-6">
+              <Loader2 className="w-5 h-5 animate-spin text-emerald-400" />
             </div>
           ) : tasks.length > 0 ? (
             tasks.map((task, i) => (
@@ -470,99 +486,93 @@ const Dashboard: React.FC<DashboardProps> = ({ setView, language }) => {
                 key={task.id} 
                 initial={{ opacity: 0, x: -10 }}
                 animate={{ opacity: 1, x: 0 }}
-                transition={{ delay: i * 0.1 }}
+                transition={{ delay: i * 0.05 }}
                 onClick={() => handleSetView(AppView.TASK_MANAGER)}
-                className="flex items-center gap-6 p-6 bg-stone-950 border border-amber-500/5 rounded-[2.5rem] active:scale-[0.98] transition-all group shadow-sm hover:shadow-xl hover:shadow-black/40"
+                className="flex items-center gap-4 p-4 glass-card glass-card-hover rounded-2xl cursor-pointer shadow-sm group"
               >
-                <div className={`p-4 rounded-2xl border transition-all group-hover:scale-110 ${
-                  task.priority === 'High' ? 'bg-amber-500/10 text-amber-500 border-amber-500/20' : 'bg-stone-900 text-stone-500 border-stone-800'
+                <div className={`p-3 rounded-xl border ${
+                  task.priority === 'High' 
+                    ? 'bg-amber-500/15 text-amber-400 border-amber-500/30' 
+                    : 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30'
                 }`}>
-                  <Calendar className="w-6 h-6" />
+                  <Calendar className="w-5 h-5" />
                 </div>
                 <div className="flex-1">
-                  <h4 className="text-xs font-black text-white uppercase tracking-wider mb-1">{task.title}</h4>
-                  <p className="text-[9px] text-stone-500 font-bold uppercase tracking-widest">{task.category} • {task.priority} Priority</p>
+                  <h4 className="text-xs font-bold text-white mb-0.5">{task.title}</h4>
+                  <p className="text-[10px] text-stone-400 font-medium">{task.category} • <span className={task.priority === 'High' ? 'text-amber-400 font-bold' : 'text-emerald-400'}>{task.priority} Priority</span></p>
                 </div>
-                <ChevronRight className="w-5 h-5 text-stone-700 group-hover:text-amber-500 transition-colors" />
+                <ChevronRight className="w-4 h-4 text-stone-500 group-hover:text-emerald-400 transition-colors" />
               </motion.div>
             ))
           ) : (
-            <div className="py-16 bg-stone-950/50 rounded-[3rem] text-center border border-dashed border-amber-500/10">
-               <CheckCircle2 className="w-12 h-12 text-amber-500 mx-auto mb-4 opacity-20" />
-               <p className="text-[10px] font-black text-stone-600 uppercase tracking-[0.3em]">All protocols completed</p>
+            <div className="py-8 glass-card rounded-2xl text-center border border-dashed border-emerald-500/20">
+               <CheckCircle2 className="w-8 h-8 text-emerald-400 mx-auto mb-2 opacity-40" />
+               <p className="text-xs font-bold text-stone-400">All field tasks completed</p>
             </div>
           )}
         </div>
       </section>
 
       {/* Dapp Ecosystem */}
-      <section className="px-6 mb-12 space-y-8">
+      <section className="px-6 mb-8 space-y-4">
         <div className="flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <span className="text-2xl font-black text-amber-900 font-mono">03</span>
-            <h3 className="text-[11px] font-black text-amber-500/40 uppercase tracking-[0.3em]">Dapp Ecosystem</h3>
+          <div className="flex items-center gap-2">
+            <Database className="w-4 h-4 text-emerald-400" />
+            <h3 className="text-xs font-extrabold text-stone-300 uppercase tracking-widest">Web3 Ecosystem</h3>
           </div>
-          <div className="h-px flex-1 bg-amber-500/10 ml-6" />
+          <div className="h-px flex-1 bg-emerald-500/10 ml-4" />
         </div>
         
-        <div className="grid grid-cols-1 gap-4">
+        <div className="grid grid-cols-1 gap-3">
           <ActionCard 
-            icon={<Database className="w-6 h-6" />} 
+            icon={<Database className="w-5 h-5 text-emerald-400" />} 
             label="Produce Ledger" 
-            sub="Immutable crop traceability for premium market access."
+            sub="Immutable crop traceability for premium market pricing."
             onClick={() => handleSetView(AppView.PRODUCE_LEDGER)}
-            theme="amber"
           />
           <ActionCard 
-            icon={<Users className="w-6 h-6" />} 
+            icon={<Users className="w-5 h-5 text-amber-400" />} 
             label="Farmer DAO" 
-            sub="Participate in community governance and local voting."
+            sub="Participate in local community governance and equipment sharing."
             onClick={() => handleSetView(AppView.COMMUNITY_DAO)}
-            theme="orange"
           />
           <ActionCard 
-            icon={<ShoppingBag className="w-6 h-6" />} 
+            icon={<ShoppingBag className="w-5 h-5 text-emerald-400" />} 
             label="P2P Marketplace" 
-            sub="Buy and sell tools, seeds, and produce directly."
+            sub="Buy and sell tools, seeds, and crops directly with farmers."
             onClick={() => handleSetView(AppView.P2P_MARKETPLACE)}
-            theme="amber"
           />
         </div>
       </section>
 
-      {/* FAB - Quick Scan */}
+      {/* Floating Camera Button */}
       <motion.button 
-        whileHover={{ scale: 1.1, rotate: 5 }}
+        whileHover={{ scale: 1.05 }}
         whileTap={{ scale: 0.9 }}
         onClick={() => handleSetView(AppView.DISEASE_SCANNER)}
-        className="fixed bottom-28 right-6 w-16 h-16 bg-amber-600 text-black rounded-[1.5rem] flex items-center justify-center shadow-2xl shadow-amber-900/40 z-50 border-t border-white/20"
+        className="fixed bottom-24 right-5 w-14 h-14 bg-gradient-to-br from-emerald-400 to-emerald-600 text-stone-950 rounded-2xl flex items-center justify-center shadow-xl z-50 border border-emerald-300/40 glow-emerald"
       >
-        <Camera className="w-7 h-7" />
+        <Camera className="w-6 h-6 text-stone-950" />
       </motion.button>
     </div>
   );
 };
 
-const ActionCard: React.FC<{ icon: React.ReactNode, label: string, sub: string, onClick: () => void, theme: 'amber' | 'orange' }> = ({ icon, label, sub, onClick, theme }) => {
-  const themes = {
-    amber: 'bg-amber-500/10 text-amber-500 border-amber-500/20',
-    orange: 'bg-orange-500/10 text-orange-500 border-orange-500/20'
-  };
-
+const ActionCard: React.FC<{ icon: React.ReactNode, label: string, sub: string, onClick: () => void }> = ({ icon, label, sub, onClick }) => {
   return (
     <motion.button 
       whileTap={{ scale: 0.98 }}
       onClick={onClick}
-      className="w-full bg-stone-950 p-8 rounded-[3rem] border border-amber-500/5 flex items-center gap-6 text-left active:scale-[0.98] transition-all group shadow-sm hover:shadow-2xl hover:shadow-black/40"
+      className="w-full glass-card glass-card-hover p-4.5 rounded-2xl border border-emerald-500/15 flex items-center gap-4 text-left shadow-sm group"
     >
-      <div className={`${themes[theme]} p-5 rounded-[1.5rem] border transition-all group-hover:scale-110 group-hover:rotate-6`}>
+      <div className="p-3 bg-emerald-950/80 rounded-xl border border-emerald-500/20 group-hover:scale-105 transition-all">
         {icon}
       </div>
-      <div>
-        <h4 className="text-sm font-black text-white uppercase tracking-wider mb-1 group-hover:text-amber-500 transition-colors">{label}</h4>
-        <p className="text-[10px] text-stone-500 font-bold uppercase tracking-widest leading-relaxed max-w-[200px]">{sub}</p>
+      <div className="flex-1">
+        <h4 className="text-sm font-bold text-white group-hover:text-emerald-300 transition-colors">{label}</h4>
+        <p className="text-xs text-stone-400 font-normal leading-snug mt-0.5">{sub}</p>
       </div>
-      <ArrowUpRight className="w-6 h-6 text-stone-700 ml-auto group-hover:text-amber-500 transition-colors" />
+      <ArrowUpRight className="w-5 h-5 text-stone-500 group-hover:text-emerald-400 transition-colors" />
     </motion.button>
   );
 };
@@ -570,12 +580,12 @@ const ActionCard: React.FC<{ icon: React.ReactNode, label: string, sub: string, 
 const QuickActionPill: React.FC<{ icon: any, label: string, onClick: () => void }> = ({ icon, label, onClick }) => (
   <button
     onClick={onClick}
-    className="flex items-center gap-3 px-6 py-4 bg-stone-950 border border-amber-500/5 rounded-full whitespace-nowrap active:scale-90 transition-all shadow-sm hover:shadow-md hover:border-amber-500/20 group"
+    className="flex items-center gap-2 px-4 py-2.5 bg-[#121a14] border border-emerald-500/20 rounded-full whitespace-nowrap active:scale-95 transition-all shadow-sm hover:border-emerald-500/40 group min-h-[42px]"
   >
-    <div className="text-stone-500 group-hover:text-amber-500 transition-colors">
+    <div className="text-emerald-400 group-hover:text-emerald-300 transition-colors">
       {React.cloneElement(icon as React.ReactElement<any>, { className: "w-4 h-4" })}
     </div>
-    <span className="text-[10px] font-black text-stone-400 uppercase tracking-widest group-hover:text-white transition-colors">{label}</span>
+    <span className="text-xs font-bold text-stone-200 group-hover:text-white transition-colors">{label}</span>
   </button>
 );
 

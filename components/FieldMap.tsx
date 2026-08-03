@@ -43,18 +43,25 @@ import {
   Compass,
   FileJson,
   Navigation2,
+  Footprints,
+  Wand2,
+  Grid,
+  Sparkles,
+  Maximize2,
+  Crosshair,
   ArrowUpRight,
   Settings2,
   Magnet,
-  Sparkles
+  Share2,
+  FileText
 } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import { motion, AnimatePresence } from 'motion/react';
 import L from 'leaflet';
 import { db, auth } from '../src/firebase';
+import { signInAnonymously } from 'firebase/auth';
 import { collection, query, onSnapshot, addDoc, updateDoc, deleteDoc, doc, orderBy, setDoc, serverTimestamp } from 'firebase/firestore';
 import { handleFirestoreError, OperationType } from '../src/utils/firestoreErrorHandler';
-
 import { useFirebase } from '../src/components/FirebaseProvider';
 
 const FIELD_COLORS = [
@@ -83,7 +90,7 @@ const POI_TYPES: { type: FieldPOI['type'], label: string, color: string, svg: st
     svg: '<path d="M12 2v2m0 16v2M4.93 4.93l1.41 1.41m11.32 11.32l1.41 1.41M2 12h2m16 0h2M4.93 19.07l1.41-1.41m11.32-11.32l1.41-1.41M12 7a5 5 0 1 0 0 10 5 5 0 0 0 0-10z"/>'
   },
   { 
-    type: 'Gate', label: 'Entry Gate', color: '#44403c',
+    type: 'Gate', label: 'Entry Gate', color: '#a8a29e',
     svg: '<path d="M13 4h3a2 2 0 0 1 2 2v14M2 20h3M13 20h3M5 20V6a2 2 0 0 1 2-2h6M9 12v.01"/>'
   },
   { 
@@ -113,14 +120,14 @@ const ZONE_COLORS = [
 ];
 
 const STATUS_CONFIG: Record<Field['status'], { color: string, bg: string, text: string }> = {
-  'Active': { color: '#FF7E5F', bg: 'bg-amber-500/10', text: 'text-amber-400' },
+  'Active': { color: '#10b981', bg: 'bg-emerald-500/10', text: 'text-emerald-400' },
   'Fallow': { color: '#FEB47B', bg: 'bg-orange-500/10', text: 'text-orange-400' },
-  'Harvested': { color: '#FFD194', bg: 'bg-yellow-500/10', text: 'text-yellow-400' },
+  'Harvested': { color: '#FFD194', bg: 'bg-amber-500/10', text: 'text-amber-400' },
   'Prepping': { color: '#FF9A8B', bg: 'bg-rose-500/10', text: 'text-rose-400' }
 };
 
 const POI_STATUS_THEMES: Record<string, { ring: string, animate: string, label: string, badge: string }> = {
-  'Operational': { ring: 'border-white', animate: '', label: 'Operational', badge: 'bg-amber-500' },
+  'Operational': { ring: 'border-emerald-500', animate: '', label: 'Operational', badge: 'bg-emerald-500' },
   'Maintenance': { ring: 'border-amber-400', animate: 'animate-pulse', label: 'Needs Maint.', badge: 'bg-amber-500' },
   'Critical': { ring: 'border-rose-500', animate: 'animate-ping', label: 'Critical Issue', badge: 'bg-rose-500' }
 };
@@ -197,10 +204,14 @@ interface ContextMenuState {
 const ControlBtn: React.FC<{ active: boolean, onClick: () => void, icon: any, label: string }> = ({ active, onClick, icon: Icon, label }) => (
   <button 
     onClick={onClick} 
-    className={`w-12 h-12 rounded-xl shadow-2xl border flex flex-col items-center justify-center transition-all group active:scale-90 ${active ? 'bg-amber-500 text-stone-950 border-amber-400' : 'bg-stone-950/80 backdrop-blur-xl text-stone-500 border-white/10 hover:text-white'}`}
+    className={`w-11 h-11 rounded-2xl shadow-lg border flex flex-col items-center justify-center transition-all active:scale-90 ${
+      active 
+        ? 'bg-amber-500 text-stone-950 border-amber-400' 
+        : 'bg-stone-900/90 backdrop-blur-md text-stone-300 border-stone-800 hover:text-white'
+    }`}
   >
-    <Icon className="w-5 h-5" />
-    <span className="text-[7px] font-black uppercase tracking-tighter mt-0.5">{label}</span>
+    <Icon className="w-4 h-4" />
+    <span className="text-[8px] font-bold uppercase tracking-tight mt-0.5">{label}</span>
   </button>
 );
 
@@ -230,13 +241,72 @@ const calculateDistance = (p1: { lat: number; lng: number }, p2: { lat: number; 
   return L.latLng(p1).distanceTo(L.latLng(p2));
 };
 
+const calculateBearing = (p1: { lat: number; lng: number }, p2: { lat: number; lng: number }) => {
+  const dLng = (p2.lng - p1.lng) * Math.PI / 180;
+  const lat1 = p1.lat * Math.PI / 180;
+  const lat2 = p2.lat * Math.PI / 180;
+  const y = Math.sin(dLng) * Math.cos(lat2);
+  const x = Math.cos(lat1) * Math.sin(lat2) - Math.sin(lat1) * Math.cos(lat2) * Math.cos(dLng);
+  let brng = Math.atan2(y, x) * 180 / Math.PI;
+  return (brng + 360) % 360;
+};
+
+const straightenPolygon = (points: { lat: number; lng: number }[]) => {
+  if (points.length < 3) return points;
+  const avgLat = points.reduce((s, p) => s + p.lat, 0) / points.length;
+  const avgLng = points.reduce((s, p) => s + p.lng, 0) / points.length;
+  const latFactor = 111132.92;
+  const lonFactor = 111319.49 * Math.cos(avgLat * Math.PI / 180);
+
+  const localMeters = points.map(p => ({
+    x: (p.lng - avgLng) * lonFactor,
+    y: (p.lat - avgLat) * latFactor
+  }));
+
+  const cleanedMeters = localMeters.map(m => ({ ...m }));
+  for (let i = 0; i < cleanedMeters.length; i++) {
+    const prev = cleanedMeters[(i - 1 + cleanedMeters.length) % cleanedMeters.length];
+    const curr = cleanedMeters[i];
+    const next = cleanedMeters[(i + 1) % cleanedMeters.length];
+
+    const dx1 = curr.x - prev.x;
+    const dy1 = curr.y - prev.y;
+    const dx2 = next.x - curr.x;
+    const dy2 = next.y - curr.y;
+
+    const angle1 = Math.atan2(dy1, dx1) * 180 / Math.PI;
+    const angle2 = Math.atan2(dy2, dx2) * 180 / Math.PI;
+    let diff = Math.abs(angle2 - angle1);
+    if (diff > 180) diff = 360 - diff;
+
+    if (diff >= 70 && diff <= 110) {
+      const perpAngle = angle1 + (angle2 > angle1 ? 90 : -90);
+      const rad = perpAngle * Math.PI / 180;
+      const len2 = Math.hypot(dx2, dy2);
+      next.x = curr.x + Math.cos(rad) * len2;
+      next.y = curr.y + Math.sin(rad) * len2;
+    }
+  }
+
+  return cleanedMeters.map(m => ({
+    lat: avgLat + (m.y / latFactor),
+    lng: avgLng + (m.x / lonFactor)
+  }));
+};
+
 const FieldMap = ({ language, onBack }: { language: string, onBack: () => void }) => {
   const { activeFarmId } = useFirebase();
   const [isSatellite, setIsSatellite] = React.useState(true);
-  const [activeMode, setActiveMode] = React.useState<'Navigate' | 'Boundary' | 'Asset' | 'Ruler' | 'Zone' | 'Discovery'>('Navigate');
+  const [activeMode, setActiveMode] = React.useState<'Navigate' | 'Boundary' | 'WalkTrace' | 'Asset' | 'Ruler' | 'Zone' | 'Discovery'>('Navigate');
+  const [isWalkTracing, setIsWalkTracing] = React.useState(false);
+  const [walkStats, setWalkStats] = React.useState<{ accuracy: number; distance: number; speed: number; count: number } | null>(null);
+  const [userGpsLocation, setUserGpsLocation] = React.useState<{ lat: number; lng: number } | null>(null);
+  const [showPresetModal, setShowPresetModal] = React.useState(false);
   const [showLabels, setShowLabels] = React.useState(true);
   const [snappingEnabled, setSnappingEnabled] = React.useState(true);
-  
+  const [mobileTab, setMobileTab] = React.useState<'map' | 'parcels' | 'khasra' | 'export'>('map');
+  const [showSearchInput, setShowSearchInput] = React.useState(false);
+
   const [drawingPoints, setDrawingPoints] = React.useState<{ lat: number; lng: number }[]>([]);
   const [tempMarkers, setTempMarkers] = React.useState<FieldPOI[]>([]);
   const [tempZones, setTempZones] = React.useState<any[]>([]);
@@ -260,6 +330,15 @@ const FieldMap = ({ language, onBack }: { language: string, onBack: () => void }
   const [adviceLoading, setAdviceLoading] = React.useState(false);
   const [mapReady, setMapReady] = React.useState(false);
 
+  // Indian Land Khasra Record State
+  const [khasraDetails, setKhasraDetails] = React.useState(() => {
+    try {
+      return JSON.parse(localStorage.getItem('agri_khasra_survey_records') || '{}');
+    } catch {
+      return {};
+    }
+  });
+
   const registryRef = React.useRef<HTMLElement>(null);
   const hasCenteredOnFields = React.useRef(false);
 
@@ -267,7 +346,9 @@ const FieldMap = ({ language, onBack }: { language: string, onBack: () => void }
     name: '',
     crop: '',
     status: 'Active' as Field['status'],
-    color: FIELD_COLORS[0]
+    color: FIELD_COLORS[0],
+    khasraNo: '',
+    subDivision: ''
   });
 
   const [zoneFormData, setZoneFormData] = React.useState({
@@ -295,9 +376,9 @@ const FieldMap = ({ language, onBack }: { language: string, onBack: () => void }
   }>({ isOpen: false, title: '', message: '' });
 
   React.useEffect(() => {
-    if (!activeFarmId) return;
+    const effectiveFarmId = activeFarmId || auth.currentUser?.uid || localStorage.getItem('agri_simulated_uid') || 'demo_user_123';
 
-    const path = `users/${activeFarmId}/fields`;
+    const path = `users/${effectiveFarmId}/fields`;
     const q = query(collection(db, path), orderBy('createdAt', 'desc'));
 
     const unsubscribe = onSnapshot(q, (snapshot) => {
@@ -306,13 +387,23 @@ const FieldMap = ({ language, onBack }: { language: string, onBack: () => void }
         fields.push({ id: doc.id, ...doc.data() } as Field);
       });
       setSavedFields(fields);
+      try {
+        localStorage.setItem('agri_cached_fields', JSON.stringify(fields));
+      } catch (e) {}
       setLoading(false);
     }, (error) => {
-      handleFirestoreError(error, OperationType.LIST, path);
+      console.warn("Firestore subscription error, loading cached fields:", error);
+      try {
+        const cached = localStorage.getItem('agri_cached_fields');
+        if (cached) {
+          setSavedFields(JSON.parse(cached));
+        }
+      } catch (e) {}
+      setLoading(false);
     });
 
     return () => unsubscribe();
-  }, []);
+  }, [activeFarmId]);
 
   const mapRef = React.useRef<L.Map | null>(null);
   const mapContainerRef = React.useRef<HTMLDivElement>(null);
@@ -334,10 +425,10 @@ const FieldMap = ({ language, onBack }: { language: string, onBack: () => void }
     let best: SnapResult | null = null;
     let minDist = threshold;
 
-    // Check existing fields
     fields.forEach(f => {
       f.points.forEach(p => {
-        const d = mapRef.current!.latLngToContainerPoint(latlng).distanceTo(mapRef.current!.latLngToContainerPoint(L.latLng(p)));
+        if (!mapRef.current) return;
+        const d = mapRef.current.latLngToContainerPoint(latlng).distanceTo(mapRef.current.latLngToContainerPoint(L.latLng(p)));
         if (d < minDist) {
           minDist = d;
           best = { point: p, type: 'Boundary', label: f.name };
@@ -345,9 +436,9 @@ const FieldMap = ({ language, onBack }: { language: string, onBack: () => void }
       });
     });
 
-    // Check current drawing
     current.forEach(p => {
-      const d = mapRef.current!.latLngToContainerPoint(latlng).distanceTo(mapRef.current!.latLngToContainerPoint(L.latLng(p)));
+      if (!mapRef.current) return;
+      const d = mapRef.current.latLngToContainerPoint(latlng).distanceTo(mapRef.current.latLngToContainerPoint(L.latLng(p)));
       if (d < minDist) {
         minDist = d;
         best = { point: p, type: 'Boundary', label: 'Current Path' };
@@ -358,7 +449,7 @@ const FieldMap = ({ language, onBack }: { language: string, onBack: () => void }
   };
 
   const undoDrawingPoint = () => {
-    if (activeMode === 'Boundary' || activeMode === 'Zone') {
+    if (activeMode === 'Boundary' || activeMode === 'Zone' || activeMode === 'WalkTrace') {
       setDrawingPoints(prev => prev.slice(0, -1));
     } else if (activeMode === 'Ruler') {
       setRulerPoints(prev => prev.slice(0, -1));
@@ -371,7 +462,89 @@ const FieldMap = ({ language, onBack }: { language: string, onBack: () => void }
     setTempMarkers([]);
     setTempZones([]);
     setSnapIndicator(null);
+    setIsWalkTracing(false);
+    setWalkStats(null);
   };
+
+  const createQuickPresetPlot = (acres: number) => {
+    if (!mapRef.current) return;
+    const center = mapRef.current.getCenter();
+    const sideMeters = Math.sqrt(acres * 4046.86);
+    const latFactor = 111132.92;
+    const lonFactor = 111319.49 * Math.cos(center.lat * Math.PI / 180);
+
+    const halfLat = (sideMeters / 2) / latFactor;
+    const halfLng = (sideMeters / 2) / lonFactor;
+
+    const points = [
+      { lat: center.lat + halfLat, lng: center.lng - halfLng },
+      { lat: center.lat + halfLat, lng: center.lng + halfLng },
+      { lat: center.lat - halfLat, lng: center.lng + halfLng },
+      { lat: center.lat - halfLat, lng: center.lng - halfLng },
+    ];
+
+    setDrawingPoints(points);
+    setActiveMode('Boundary');
+    setShowPresetModal(false);
+  };
+
+  const handleAIStraighten = () => {
+    if (drawingPoints.length < 3) return;
+    const cleaned = straightenPolygon(drawingPoints);
+    setDrawingPoints(cleaned);
+  };
+
+  React.useEffect(() => {
+    if (!isWalkTracing) return;
+    if (!navigator.geolocation) {
+      alert('GPS Geolocation is not supported on this device.');
+      setIsWalkTracing(false);
+      return;
+    }
+
+    const watchId = navigator.geolocation.watchPosition(
+      (pos) => {
+        const { latitude, longitude, accuracy, speed } = pos.coords;
+        const newPt = { lat: latitude, lng: longitude };
+        setUserGpsLocation(newPt);
+
+        if (mapRef.current) {
+          mapRef.current.panTo([latitude, longitude]);
+        }
+
+        setDrawingPoints(prev => {
+          if (prev.length === 0) return [newPt];
+          const lastPt = prev[prev.length - 1];
+          const dist = calculateDistance(lastPt, newPt);
+          if (dist >= 3.5) {
+            const totalDist = prev.reduce((acc, p, i) => acc + (i > 0 ? calculateDistance(prev[i-1], p) : 0), 0) + dist;
+            setWalkStats({
+              accuracy: Math.round(accuracy),
+              distance: Math.round(totalDist),
+              speed: Math.round((speed || 0) * 3.6),
+              count: prev.length + 1
+            });
+            return [...prev, newPt];
+          } else {
+            const totalDist = prev.reduce((acc, p, i) => acc + (i > 0 ? calculateDistance(prev[i-1], p) : 0), 0);
+            setWalkStats({
+              accuracy: Math.round(accuracy),
+              distance: Math.round(totalDist),
+              speed: Math.round((speed || 0) * 3.6),
+              count: prev.length
+            });
+            return prev;
+          }
+        });
+      },
+      (err) => {
+        console.warn("GPS Walk trace error:", err);
+      },
+      { enableHighAccuracy: true, maximumAge: 1000, timeout: 10000 }
+    );
+
+    return () => navigator.geolocation.clearWatch(watchId);
+  }, [isWalkTracing]);
 
   const handlePincodeSearch = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -388,7 +561,6 @@ const FieldMap = ({ language, onBack }: { language: string, onBack: () => void }
           mapRef.current.setView([parseFloat(lat), parseFloat(lon)], 16);
         }
       } else {
-        // Fallback to zone approximation even if search results are empty
         const fallback = getPincodeFallbackCoords(pincode);
         if (fallback && mapRef.current) {
           mapRef.current.setView([fallback.lat, fallback.lon], 13);
@@ -415,6 +587,10 @@ const FieldMap = ({ language, onBack }: { language: string, onBack: () => void }
     onSuccess: (lat: number, lon: number) => void,
     onFailure: (err?: any) => void
   ) => {
+    if (!('geolocation' in navigator)) {
+      onFailure('Geolocation not supported');
+      return;
+    }
     navigator.geolocation.getCurrentPosition(
       (pos) => onSuccess(pos.coords.latitude, pos.coords.longitude),
       (err) => {
@@ -495,7 +671,7 @@ const FieldMap = ({ language, onBack }: { language: string, onBack: () => void }
   };
 
   const getDrawingStats = () => {
-    if (activeMode === 'Boundary' && drawingPoints.length > 2) {
+    if ((activeMode === 'Boundary' || activeMode === 'Zone' || activeMode === 'WalkTrace') && drawingPoints.length > 2) {
       const area = calculateArea(drawingPoints) / 10000;
       const perimeter = drawingPoints.reduce((acc, p, i) => acc + (i > 0 ? calculateDistance(drawingPoints[i-1], p) : 0), 0);
       return { area, perimeter };
@@ -542,11 +718,9 @@ const FieldMap = ({ language, onBack }: { language: string, onBack: () => void }
       const pt: { lat: number; lng: number } = snap ? snap.point : { lat: e.latlng.lat, lng: e.latlng.lng };
       
       if (mode === 'Boundary' || mode === 'Zone') {
-        // Check if clicking near the first point to complete the polygon
         if (currentPoints.length >= 3) {
           const firstPt = currentPoints[0];
           const dist = calculateDistance(pt, firstPt);
-          // If within 10 meters, complete the polygon
           if (dist < 10) {
             if (mode === 'Boundary') setShowSaveModal(true);
             else setShowZoneModal(true);
@@ -565,7 +739,6 @@ const FieldMap = ({ language, onBack }: { language: string, onBack: () => void }
         };
         
         if (activeField) {
-          // If a field is active, we can directly prompt to add it to this field
           setEditingPOI({ poi: newAsset, fieldId: activeField.id });
         } else {
           setTempMarkers(prev => [...prev, newAsset]);
@@ -590,7 +763,7 @@ const FieldMap = ({ language, onBack }: { language: string, onBack: () => void }
       if (field.points && field.points.length > 2) {
         const poly = L.polygon(field.points, { 
           color: field.color || '#10b981', 
-          fillOpacity: 0.3, 
+          fillOpacity: 0.35, 
           weight: 3 
         }).addTo(fieldLayersRef.current!);
         
@@ -598,7 +771,7 @@ const FieldMap = ({ language, onBack }: { language: string, onBack: () => void }
           poly.bindTooltip(`${field.name}<br/>${formatArea(field.area)}`, { 
             permanent: true, 
             direction: 'center',
-            className: 'bg-white/90 border-none shadow-xl px-2 py-1 rounded text-[10px] font-black uppercase text-stone-900'
+            className: 'bg-stone-900/90 text-white border border-stone-700 shadow-xl px-2 py-1 rounded-lg text-[10px] font-bold uppercase'
           });
         }
 
@@ -635,15 +808,15 @@ const FieldMap = ({ language, onBack }: { language: string, onBack: () => void }
           html: `
             <div class="relative flex items-center justify-center">
               <div class="absolute inset-0 rounded-full border-4 ${statusTheme.ring} ${statusTheme.animate} opacity-40"></div>
-              <div class="relative w-10 h-10 rounded-2xl border-2 border-white shadow-2xl flex items-center justify-center bg-white transition-all transform hover:scale-110" style="color: ${typeInfo.color}">
-                 <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+              <div class="relative w-9 h-9 rounded-2xl border-2 border-white shadow-2xl flex items-center justify-center bg-stone-900 text-white transition-all transform hover:scale-110" style="color: ${typeInfo.color}">
+                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
                    ${typeInfo.svg}
                  </svg>
                  <div class="absolute -top-1 -right-1 w-3 h-3 rounded-full border-2 border-white ${statusTheme.badge} shadow-sm"></div>
               </div>
             </div>
           `,
-          className: '', iconSize: [40, 40], iconAnchor: [20, 20]
+          className: '', iconSize: [36, 36], iconAnchor: [18, 18]
         });
         
         const marker = L.marker(poi.point, { icon: poiIcon }).addTo(fieldLayersRef.current!);
@@ -668,10 +841,13 @@ const FieldMap = ({ language, onBack }: { language: string, onBack: () => void }
   React.useEffect(() => { renderUserFields(); }, [renderUserFields]);
 
   const handlePOISave = async (updatedPOI: FieldPOI) => {
-    if (!auth.currentUser) return;
+    const effectiveFarmId = activeFarmId || auth.currentUser?.uid || localStorage.getItem('agri_simulated_uid') || 'demo_user_123';
+    if (!auth.currentUser) {
+      try { await signInAnonymously(auth); } catch (e) {}
+    }
 
     if (editingPOI?.fieldId) {
-      const path = `users/${activeFarmId}/fields/${editingPOI.fieldId}`;
+      const path = `users/${effectiveFarmId}/fields/${editingPOI.fieldId}`;
       const field = savedFields.find(f => f.id === editingPOI.fieldId);
       if (field) {
         const existingMarkerIdx = (field.markers || []).findIndex(m => m.id === updatedPOI.id);
@@ -686,8 +862,9 @@ const FieldMap = ({ language, onBack }: { language: string, onBack: () => void }
         try {
           await updateDoc(doc(db, path), { markers: updatedMarkers });
         } catch (error) {
-          handleFirestoreError(error, OperationType.UPDATE, path);
+          console.warn("Update POI in Firestore failed, applying locally:", error);
         }
+        setSavedFields(prev => prev.map(f => f.id === editingPOI.fieldId ? { ...f, markers: updatedMarkers } : f));
       }
     } else {
       setTempMarkers(prev => prev.map(m => m.id === updatedPOI.id ? updatedPOI : m));
@@ -755,17 +932,22 @@ const FieldMap = ({ language, onBack }: { language: string, onBack: () => void }
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.download = `Farm_Registry_Export_${new Date().toISOString().split('T')[0]}.json`;
+    link.download = `BharatKisan_FieldRegistry_${new Date().toISOString().split('T')[0]}.json`;
     link.click();
     URL.revokeObjectURL(url);
+  };
+
+  const shareParcelWhatsApp = (field: Field) => {
+    const text = `🌾 *Bharat Kisan Land Parcel Details* (${field.name})\n\n📏 Coverage: ${formatArea(field.area)}\n🌱 Crop: ${field.cropType || 'N/A'}\n📍 Status: ${field.status}\n\n_Shared via Bharat Kisan Smart Farming Companion_`;
+    window.open(`https://api.whatsapp.com/send?text=${encodeURIComponent(text)}`, '_blank');
   };
 
   const fetchDetailedPlan = async (field: Field) => {
     if (!field.cropType) {
       setAlertDialog({
         isOpen: true,
-        title: 'Missing Data',
-        message: 'Please specify a focus crop for this parcel first.'
+        title: 'Missing Crop Name',
+        message: 'Please specify a target crop for this parcel first.'
       });
       return;
     }
@@ -775,7 +957,6 @@ const FieldMap = ({ language, onBack }: { language: string, onBack: () => void }
       const advice = await getFertilizerAdvice(field.cropType, location, 'Alluvial', language);
       setDetailedAdvice(advice);
       
-      // Save advice to Firestore for persistence
       if (activeFarmId) {
         const path = `users/${activeFarmId}/fields/${field.id}`;
         try {
@@ -873,10 +1054,10 @@ const FieldMap = ({ language, onBack }: { language: string, onBack: () => void }
           }
         });
         if (bounds.isValid()) {
-          mapRef.current.fitBounds(bounds, { padding: [50, 50], maxZoom: 18 });
+          mapRef.current.fitBounds(bounds, { padding: [40, 40], maxZoom: 18 });
         }
       } catch (err) {
-        console.error("Error biological fitting bounds to saved fields:", err);
+        console.error("Error fitting bounds to saved fields:", err);
       }
     }
   }, [mapReady, savedFields]);
@@ -909,21 +1090,86 @@ const FieldMap = ({ language, onBack }: { language: string, onBack: () => void }
       rulerPoints.forEach(p => L.circleMarker(p, { radius: 5, color: '#f97316', fillOpacity: 1, fillColor: 'white', weight: 2 }).addTo(drawingLayersRef.current!));
     }
     
-    if (activeMode === 'Boundary' || activeMode === 'Zone') {
+    if (activeMode === 'Boundary' || activeMode === 'Zone' || activeMode === 'WalkTrace') {
+      const polyColor = activeMode === 'Zone' ? '#fbbf24' : (activeMode === 'WalkTrace' ? '#06b6d4' : '#10b981');
+      
       if (drawingPoints.length > 1) {
-        L.polyline(drawingPoints, { color: activeMode === 'Zone' ? '#fbbf24' : 'white', weight: 4, dashArray: '5, 10' }).addTo(drawingLayersRef.current);
         if (drawingPoints.length >= 3) {
-          // Show closing line
-          L.polyline([drawingPoints[drawingPoints.length - 1], drawingPoints[0]], { color: activeMode === 'Zone' ? '#fbbf24' : 'white', weight: 2, dashArray: '2, 5', opacity: 0.5 }).addTo(drawingLayersRef.current);
+          L.polygon(drawingPoints, { 
+            color: polyColor, 
+            fillColor: polyColor,
+            fillOpacity: 0.25, 
+            weight: 3, 
+            dashArray: '6, 6' 
+          }).addTo(drawingLayersRef.current!);
+
+          const avgLat = drawingPoints.reduce((s, p) => s + p.lat, 0) / drawingPoints.length;
+          const avgLng = drawingPoints.reduce((s, p) => s + p.lng, 0) / drawingPoints.length;
+          const areaHectares = calculateArea(drawingPoints) / 10000;
+
+          L.marker([avgLat, avgLng], {
+            icon: L.divIcon({
+              html: `<div class="bg-stone-900/95 text-amber-400 px-2.5 py-1 rounded-xl text-[10px] font-black shadow-2xl border border-amber-500/40 whitespace-nowrap flex items-center gap-1">✨ ${formatArea(areaHectares)}</div>`,
+              className: ''
+            })
+          }).addTo(drawingLayersRef.current!);
+        } else {
+          L.polyline(drawingPoints, { color: polyColor, weight: 3, dashArray: '5, 8' }).addTo(drawingLayersRef.current!);
+        }
+
+        for (let i = 1; i < drawingPoints.length; i++) {
+          const p1 = drawingPoints[i - 1];
+          const p2 = drawingPoints[i];
+          const dist = calculateDistance(p1, p2);
+          const bearing = Math.round(calculateBearing(p1, p2));
+          const midLat = (p1.lat + p2.lat) / 2;
+          const midLng = (p1.lng + p2.lng) / 2;
+
+          L.marker([midLat, midLng], {
+            icon: L.divIcon({
+              html: `<div class="bg-stone-950/90 text-stone-200 px-2 py-0.5 rounded-lg text-[8px] font-bold border border-stone-700 shadow-md whitespace-nowrap">${dist.toFixed(1)}m · ${bearing}°</div>`,
+              className: ''
+            })
+          }).addTo(drawingLayersRef.current!);
         }
       }
-      drawingPoints.forEach(p => L.circleMarker(p, { radius: 6, color: activeMode === 'Zone' ? '#fbbf24' : '#10b981', fillOpacity: 1, fillColor: 'white', weight: 2 }).addTo(drawingLayersRef.current!));
+
+      drawingPoints.forEach((p, idx) => {
+        L.circleMarker(p, { 
+          radius: 7, 
+          color: polyColor, 
+          fillOpacity: 1, 
+          fillColor: '#ffffff', 
+          weight: 3 
+        }).addTo(drawingLayersRef.current!);
+
+        L.marker(p, {
+          icon: L.divIcon({
+            html: `<div class="w-4 h-4 bg-stone-950 text-emerald-400 text-[8px] font-black rounded-full flex items-center justify-center border border-emerald-500 shadow -translate-x-2 -translate-y-2">#${idx + 1}</div>`,
+            className: ''
+          })
+        }).addTo(drawingLayersRef.current!);
+      });
+    }
+
+    if (userGpsLocation || isWalkTracing) {
+      if (userGpsLocation) {
+        const gpsIcon = L.divIcon({
+          html: `
+            <div class="relative flex items-center justify-center">
+              <div class="absolute inset-0 w-8 h-8 rounded-full bg-cyan-500/40 animate-ping"></div>
+              <div class="w-4 h-4 rounded-full bg-cyan-400 border-2 border-white shadow-xl"></div>
+            </div>
+          `,
+          className: '', iconSize: [32, 32], iconAnchor: [16, 16]
+        });
+        L.marker([userGpsLocation.lat, userGpsLocation.lng], { icon: gpsIcon }).addTo(drawingLayersRef.current!);
+      }
     }
 
     if (discoveryResults.length > 0) {
       discoveryResults.forEach(async (result) => {
         if (result.maps?.title) {
-          // We try to find if we already have a marker for this title to avoid duplicates
           let exists = false;
           discoveryLayersRef.current?.eachLayer((layer: any) => {
             if (layer.options?.title === result.maps?.title) exists = true;
@@ -954,7 +1200,7 @@ const FieldMap = ({ language, onBack }: { language: string, onBack: () => void }
                 <div class="p-3 bg-white rounded-xl">
                   <h3 class="font-black text-[10px] uppercase text-stone-900 mb-2 tracking-tight">${result.maps.title}</h3>
                   <a href="${result.maps.uri}" target="_blank" class="inline-flex items-center gap-1.5 px-3 py-1.5 bg-amber-500 text-stone-950 rounded-lg text-[8px] font-black uppercase tracking-widest no-underline">
-                    View on Maps <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+                    View on Maps
                   </a>
                 </div>
               `, { className: 'custom-popup' });
@@ -974,947 +1220,1252 @@ const FieldMap = ({ language, onBack }: { language: string, onBack: () => void }
          html: `
             <div class="relative flex items-center justify-center">
               <div class="absolute inset-0 rounded-full border-4 ${statusTheme.ring} ${statusTheme.animate} opacity-40"></div>
-              <div class="relative w-10 h-10 rounded-2xl border-2 border-white shadow-2xl flex items-center justify-center bg-white" style="color: ${typeInfo.color}">
-                 <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+              <div class="relative w-9 h-9 rounded-2xl border-2 border-white shadow-2xl flex items-center justify-center bg-white" style="color: ${typeInfo.color}">
+                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
                    ${typeInfo.svg}
                  </svg>
               </div>
             </div>
          `,
-         className: '', iconSize: [40, 40], iconAnchor: [20, 20]
+         className: '', iconSize: [36, 36], iconAnchor: [18, 18]
        });
        L.marker(m.point, { icon }).addTo(drawingLayersRef.current!);
     });
-  }, [drawingPoints, tempMarkers, rulerPoints, activeMode, mapReady, snapIndicator]);
+  }, [drawingPoints, tempMarkers, rulerPoints, activeMode, mapReady, snapIndicator, discoveryResults]);
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-stone-50 flex items-center justify-center">
-        <Loader2 className="w-12 h-12 animate-spin text-amber-500" />
+      <div className="min-h-screen bg-stone-950 flex flex-col items-center justify-center gap-4 text-white">
+        <Loader2 className="w-10 h-10 animate-spin text-amber-500" />
+        <p className="text-xs font-bold text-stone-400 uppercase tracking-widest">Loading Field GIS Engine...</p>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-black space-y-0 pb-40 animate-in fade-in duration-700 relative flex flex-col">
-      {/* Standard Header */}
-      <section className="px-6 pt-8 pb-6 bg-black text-white relative overflow-hidden border-b border-white/5">
-        <div className="absolute top-0 right-0 p-8 opacity-10 rotate-12">
-          <MapIcon className="w-48 h-48" />
-        </div>
-        <div className="relative z-10 space-y-4">
+    <div className="min-h-screen bg-stone-950 text-white flex flex-col pb-28">
+      {/* Android Top Navigation Header */}
+      <header className="sticky top-0 z-50 bg-stone-950/95 backdrop-blur-md border-b border-stone-800 px-4 py-3 flex items-center justify-between gap-3 shadow-md">
+        <div className="flex items-center gap-3">
           <button 
             onClick={onBack}
-            className="w-10 h-10 bg-white/10 rounded-xl flex items-center justify-center border border-white/10 active:scale-95 transition-all"
+            className="w-10 h-10 bg-stone-900 border border-stone-800 rounded-xl flex items-center justify-center active:scale-90 transition-all text-stone-300 hover:text-white"
           >
-            <ChevronLeft className="w-5 h-5 text-white" />
+            <ChevronLeft className="w-5 h-5" />
           </button>
-          <div className="space-y-3">
-            <div className="flex items-center gap-3">
-              <div className="w-1.5 h-1.5 bg-amber-500 rounded-full animate-pulse" />
-              <span className="text-[8px] font-black uppercase tracking-[0.4em] text-amber-500/80">Geospatial Intelligence</span>
+          <div>
+            <div className="flex items-center gap-2">
+              <div className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse" />
+              <h1 className="text-base font-serif font-bold text-white leading-tight">Field Mapper</h1>
             </div>
-            <h1 className="text-4xl font-black tracking-tighter uppercase leading-[0.85]">
-              Field<br />
-              <span className="text-amber-500 italic">Mapper.</span>
-            </h1>
-          </div>
-          <div className="flex items-center gap-6 pt-2">
-            <div className="flex flex-col">
-              <span className="text-[7px] font-black text-stone-500 uppercase tracking-widest">Active Parcels</span>
-              <span className="text-lg font-black text-white">{savedFields.length}</span>
-            </div>
-            <div className="w-px h-6 bg-white/10" />
-            <div className="flex flex-col">
-              <span className="text-[7px] font-black text-stone-500 uppercase tracking-widest">Total Coverage</span>
-              <span className="text-lg font-black text-white">
-                {formatArea(savedFields.reduce((acc, f) => acc + f.area, 0))}
-              </span>
-            </div>
+            <p className="text-[10px] text-stone-400 font-bold uppercase tracking-wider">
+              {savedFields.length} Parcels • {formatArea(savedFields.reduce((acc, f) => acc + f.area, 0))} Total
+            </p>
           </div>
         </div>
-      </section>
 
-      <div className="relative -mt-6 px-4 z-20">
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setShowSearchInput(!showSearchInput)}
+            className="p-2.5 bg-stone-900 border border-stone-800 rounded-xl text-stone-300 hover:text-amber-400 active:scale-95 transition-all"
+            title="Search Pincode"
+          >
+            <Search className="w-4 h-4" />
+          </button>
+          <button
+            onClick={recenterMap}
+            className="p-2.5 bg-amber-500 text-stone-950 font-bold rounded-xl active:scale-95 transition-all flex items-center gap-1.5 text-xs"
+          >
+            <Navigation2 className="w-4 h-4" />
+            <span className="hidden sm:inline">GPS</span>
+          </button>
+        </div>
+      </header>
+
+      {/* Search Bar Slide Down (Mobile Friendly) */}
+      <AnimatePresence>
+        {showSearchInput && (
+          <motion.div
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: 'auto', opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            className="bg-stone-900 border-b border-stone-800 px-4 py-3"
+          >
+            <form onSubmit={handlePincodeSearch} className="flex gap-2">
+              <input 
+                type="text" 
+                placeholder="Enter 6-digit Indian Pincode (e.g. 500001)..." 
+                value={pincode}
+                onChange={(e) => setPincode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                className="flex-1 bg-stone-950 border border-stone-800 rounded-xl px-4 py-2.5 text-xs text-amber-400 placeholder:text-stone-600 outline-none focus:border-amber-500"
+              />
+              <button 
+                type="submit" 
+                className="bg-amber-500 text-stone-950 px-4 py-2.5 rounded-xl text-xs font-bold active:scale-95"
+              >
+                Find
+              </button>
+            </form>
+            {pincodeError && <p className="text-[10px] text-amber-400 mt-1 font-bold">{pincodeError}</p>}
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Main Map Canvas Area */}
+      <div className="relative w-full h-[58vh] sm:h-[65vh] bg-stone-900 overflow-hidden">
+        <div ref={mapContainerRef} className="w-full h-full z-0" />
+
+        {/* Floating Right Controls (Layer, Snap, Tags, Recenter) */}
+        <div className="absolute top-4 right-3 z-[1000] flex flex-col gap-2">
+          <ControlBtn 
+            active={isSatellite} 
+            onClick={toggleSatellite} 
+            icon={isSatellite ? Layers : Satellite} 
+            label={isSatellite ? "Map" : "Sat"}
+          />
+          <ControlBtn 
+            active={snappingEnabled} 
+            onClick={() => setSnappingEnabled(!snappingEnabled)} 
+            icon={Magnet} 
+            label="Snap"
+          />
+          <ControlBtn 
+            active={showLabels} 
+            onClick={() => setShowLabels(!showLabels)} 
+            icon={showLabels ? Eye : EyeOff} 
+            label="Tags"
+          />
+          <ControlBtn 
+            active={false} 
+            onClick={recenterMap} 
+            icon={Compass} 
+            label="Center"
+          />
+        </div>
+
+        {/* Top-Left Drawing Telemetry & Overlay Notice */}
+        {activeMode !== 'Navigate' && (
+          <div className="absolute top-4 left-3 z-[1000] max-w-[240px]">
+            <div className="bg-stone-950/90 backdrop-blur-md border border-amber-500/30 px-3.5 py-2 rounded-2xl shadow-xl space-y-1">
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-[10px] font-bold text-amber-400 uppercase tracking-wider">
+                  Mode: {activeMode}
+                </span>
+                <button 
+                  onClick={() => { setActiveMode('Navigate'); setDrawingPoints([]); }}
+                  className="p-1 text-stone-400 hover:text-white"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              </div>
+
+              {stats && (
+                <div className="pt-1 border-t border-stone-800 text-xs font-mono text-white flex items-center gap-3">
+                  {'area' in stats && (
+                    <>
+                      <div>
+                        <p className="text-[8px] text-stone-400 uppercase">Area</p>
+                        <p className="font-bold text-amber-300">{formatArea(stats.area)}</p>
+                      </div>
+                      <div>
+                        <p className="text-[8px] text-stone-400 uppercase">Perimeter</p>
+                        <p className="font-bold">{stats.perimeter.toFixed(0)}m</p>
+                      </div>
+                    </>
+                  )}
+                  {'distance' in stats && (
+                    <div>
+                      <p className="text-[8px] text-stone-400 uppercase">Distance</p>
+                      <p className="font-bold text-amber-300">{stats.distance.toFixed(1)}m</p>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              <p className="text-[9px] text-stone-300 leading-tight">
+                {drawingPoints.length >= 3 
+                  ? "Tap first point or 'Save' to close polygon" 
+                  : "Tap on map to add corner points"}
+              </p>
+            </div>
+          </div>
+        )}
+
+        {/* Floating Discovery Search Box */}
+        <AnimatePresence>
+          {activeMode === 'Discovery' && (
+            <motion.div 
+              initial={{ opacity: 0, y: -10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -10 }}
+              className="absolute top-4 left-3 right-16 z-[1000]"
+            >
+              <form onSubmit={handleDiscoverySearch} className="flex gap-2">
+                <input 
+                  type="text" 
+                  placeholder="Search nearby Mandi, Well, Seed shop..." 
+                  value={discoveryQuery}
+                  onChange={(e) => setDiscoveryQuery(e.target.value)}
+                  className="w-full bg-stone-950/90 backdrop-blur-md border border-stone-700 rounded-xl px-3.5 py-2.5 text-xs text-amber-400 placeholder:text-stone-500 outline-none"
+                />
+                <button type="submit" className="bg-amber-500 text-stone-950 px-3.5 py-2.5 rounded-xl font-bold text-xs">
+                  {isSearchingDiscovery ? <Loader2 className="w-4 h-4 animate-spin" /> : <Search className="w-4 h-4" />}
+                </button>
+              </form>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* Bottom Floating Mode Selector Bar (Android Optimized Touch Target >= 48px) */}
+        <div className="absolute bottom-3 inset-x-3 z-[1000] flex flex-col items-center gap-2">
+          {/* Advanced Plot Drawing Technology Toolbar */}
+          {(activeMode === 'Boundary' || activeMode === 'Zone' || activeMode === 'WalkTrace') && (
+            <motion.div 
+              initial={{ y: 10, opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
+              className="bg-stone-950/95 backdrop-blur-md p-1.5 rounded-2xl border border-stone-800 shadow-2xl flex items-center gap-1.5 max-w-md w-full justify-around overflow-x-auto"
+            >
+              <button
+                onClick={() => {
+                  const nextState = !isWalkTracing;
+                  setIsWalkTracing(nextState);
+                  if (nextState) {
+                    setActiveMode('WalkTrace');
+                  } else if (activeMode === 'WalkTrace') {
+                    setActiveMode('Boundary');
+                  }
+                }}
+                className={`px-3 py-1.5 rounded-xl flex items-center gap-1.5 text-[10px] font-bold transition-all min-h-[38px] whitespace-nowrap ${
+                  isWalkTracing ? 'bg-cyan-500 text-stone-950 shadow-lg animate-pulse' : 'bg-stone-900 text-stone-300 hover:bg-stone-800'
+                }`}
+              >
+                <Footprints className="w-3.5 h-3.5" />
+                <span>{isWalkTracing ? 'Walk GPS Tracing...' : 'Walk & Trace GPS'}</span>
+              </button>
+
+              <button
+                onClick={handleAIStraighten}
+                disabled={drawingPoints.length < 3}
+                className="px-3 py-1.5 bg-stone-900 hover:bg-stone-800 disabled:opacity-40 text-stone-300 rounded-xl flex items-center gap-1.5 text-[10px] font-bold transition-all min-h-[38px] whitespace-nowrap"
+              >
+                <Wand2 className="w-3.5 h-3.5 text-amber-400" />
+                <span>AI Straighten</span>
+              </button>
+
+              <button
+                onClick={() => setShowPresetModal(true)}
+                className="px-3 py-1.5 bg-stone-900 hover:bg-stone-800 text-stone-300 rounded-xl flex items-center gap-1.5 text-[10px] font-bold transition-all min-h-[38px] whitespace-nowrap"
+              >
+                <Box className="w-3.5 h-3.5 text-emerald-400" />
+                <span>Quick Preset</span>
+              </button>
+            </motion.div>
+          )}
+
+          {/* GPS Walk Telemetry Pill */}
+          {isWalkTracing && walkStats && (
+            <div className="bg-cyan-950/90 border border-cyan-500/40 px-3 py-1 rounded-xl text-[10px] text-cyan-300 font-mono flex items-center gap-3">
+              <span>🎯 GPS Accuracy: ±{walkStats.accuracy}m</span>
+              <span>📍 Walked: {walkStats.distance}m</span>
+              <span>⚡ Waypoints: {walkStats.count}</span>
+            </div>
+          )}
+
+          {/* Action buttons when drawing */}
+          <div className="flex items-center gap-2">
+            {(drawingPoints.length > 0 || rulerPoints.length > 0) && (
+              <div className="bg-stone-900/90 backdrop-blur-md px-3 py-1.5 rounded-2xl border border-stone-800 flex items-center gap-2">
+                <button 
+                  onClick={undoDrawingPoint} 
+                  className="p-2 text-stone-300 hover:text-amber-400 text-xs flex items-center gap-1 font-bold"
+                >
+                  <RefreshCw className="w-3.5 h-3.5 -scale-x-100"/> Undo
+                </button>
+                <div className="w-px h-4 bg-stone-800" />
+                <button 
+                  onClick={clearDrawing} 
+                  className="p-2 text-stone-300 hover:text-rose-400 text-xs flex items-center gap-1 font-bold"
+                >
+                  <Trash2 className="w-3.5 h-3.5"/> Clear
+                </button>
+              </div>
+            )}
+
+            {(drawingPoints.length >= 3 || tempMarkers.length > 0) && activeMode !== 'Navigate' && (
+              <motion.button 
+                initial={{ scale: 0.9 }}
+                animate={{ scale: 1 }}
+                onClick={() => activeMode === 'Zone' ? setShowZoneModal(true) : setShowSaveModal(true)} 
+                className="bg-amber-500 text-stone-950 px-5 py-2.5 rounded-2xl font-bold text-xs uppercase tracking-wider shadow-lg flex items-center gap-1.5 active:scale-95"
+              >
+                <CheckCircle2 className="w-4 h-4" /> Commit & Save
+              </motion.button>
+            )}
+          </div>
+
+          {/* Mode Selector Strip */}
+          <div className="w-full max-w-md bg-stone-950/95 backdrop-blur-md p-1.5 rounded-2xl border border-stone-800 flex items-center justify-around shadow-2xl">
+            <button
+              onClick={() => setActiveMode('Navigate')}
+              className={`flex-1 py-2 rounded-xl flex flex-col items-center gap-0.5 text-[9px] font-bold transition-all min-h-[44px] justify-center ${
+                activeMode === 'Navigate' ? 'bg-amber-500 text-stone-950' : 'text-stone-400 hover:text-white'
+              }`}
+            >
+              <MousePointer2 className="w-4 h-4" />
+              <span>Navigate</span>
+            </button>
+
+            <button
+              onClick={() => { setActiveMode('Boundary'); setDrawingPoints([]); }}
+              className={`flex-1 py-2 rounded-xl flex flex-col items-center gap-0.5 text-[9px] font-bold transition-all min-h-[44px] justify-center ${
+                activeMode === 'Boundary' ? 'bg-amber-500 text-stone-950' : 'text-stone-400 hover:text-white'
+              }`}
+            >
+              <PenTool className="w-4 h-4" />
+              <span>Draw Plot</span>
+            </button>
+
+            <button
+              onClick={() => { setActiveMode('Zone'); setDrawingPoints([]); }}
+              className={`flex-1 py-2 rounded-xl flex flex-col items-center gap-0.5 text-[9px] font-bold transition-all min-h-[44px] justify-center ${
+                activeMode === 'Zone' ? 'bg-amber-500 text-stone-950' : 'text-stone-400 hover:text-white'
+              }`}
+            >
+              <Layers className="w-4 h-4" />
+              <span>Zones</span>
+            </button>
+
+            <button
+              onClick={() => setActiveMode('Asset')}
+              className={`flex-1 py-2 rounded-xl flex flex-col items-center gap-0.5 text-[9px] font-bold transition-all min-h-[44px] justify-center ${
+                activeMode === 'Asset' ? 'bg-amber-500 text-stone-950' : 'text-stone-400 hover:text-white'
+              }`}
+            >
+              <MapPinned className="w-4 h-4" />
+              <span>Asset Pin</span>
+            </button>
+
+            <button
+              onClick={() => setActiveMode('Discovery')}
+              className={`flex-1 py-2 rounded-xl flex flex-col items-center gap-0.5 text-[9px] font-bold transition-all min-h-[44px] justify-center ${
+                activeMode === 'Discovery' ? 'bg-amber-500 text-stone-950' : 'text-stone-400 hover:text-white'
+              }`}
+            >
+              <Search className="w-4 h-4" />
+              <span>Nearby</span>
+            </button>
+
+            <button
+              onClick={() => { setActiveMode('Ruler'); setRulerPoints([]); }}
+              className={`flex-1 py-2 rounded-xl flex flex-col items-center gap-0.5 text-[9px] font-bold transition-all min-h-[44px] justify-center ${
+                activeMode === 'Ruler' ? 'bg-amber-500 text-stone-950' : 'text-stone-400 hover:text-white'
+              }`}
+            >
+              <Ruler className="w-4 h-4" />
+              <span>Ruler</span>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* Android Segmented Bottom Tabs */}
+      <div className="bg-stone-900 border-t border-b border-stone-800 px-2 flex items-center justify-around">
+        <button
+          onClick={() => setMobileTab('map')}
+          className={`flex-1 py-3 text-xs font-bold flex items-center justify-center gap-1.5 border-b-2 transition-all ${
+            mobileTab === 'map' ? 'border-amber-500 text-amber-400' : 'border-transparent text-stone-400'
+          }`}
+        >
+          <Target className="w-4 h-4" />
+          <span>My Parcels ({savedFields.length})</span>
+        </button>
+
+        <button
+          onClick={() => setMobileTab('khasra')}
+          className={`flex-1 py-3 text-xs font-bold flex items-center justify-center gap-1.5 border-b-2 transition-all ${
+            mobileTab === 'khasra' ? 'border-amber-500 text-amber-400' : 'border-transparent text-stone-400'
+          }`}
+        >
+          <FileText className="w-4 h-4" />
+          <span>Khasra Registry</span>
+        </button>
+
+        <button
+          onClick={() => setMobileTab('export')}
+          className={`flex-1 py-3 text-xs font-bold flex items-center justify-center gap-1.5 border-b-2 transition-all ${
+            mobileTab === 'export' ? 'border-amber-500 text-amber-400' : 'border-transparent text-stone-400'
+          }`}
+        >
+          <Download className="w-4 h-4" />
+          <span>Export Options</span>
+        </button>
+      </div>
+
+      {/* TAB 1: PARCELS REGISTRY */}
+      {mobileTab === 'map' && (
+        <section className="p-4 space-y-4">
+          <div className="flex items-center justify-between">
+            <h3 className="text-xs font-bold text-stone-400 uppercase tracking-widest">
+              Registered Land Parcels
+            </h3>
+            <button 
+              onClick={() => {
+                setActiveMode('Boundary');
+                setDrawingPoints([]);
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+              }}
+              className="flex items-center gap-1.5 bg-amber-500 text-stone-950 px-3 py-1.5 rounded-xl text-xs font-bold active:scale-95 transition-all"
+            >
+              <Plus className="w-4 h-4" /> Add Plot
+            </button>
+          </div>
+
+          {savedFields.length === 0 ? (
+            <div className="p-8 text-center border border-dashed border-stone-800 rounded-2xl bg-stone-900/40 space-y-2">
+              <MapPinned className="w-10 h-10 text-stone-600 mx-auto" />
+              <p className="text-xs font-bold text-stone-300">No Land Parcels Mapped Yet</p>
+              <p className="text-[10px] text-stone-500">Tap 'Draw Plot' above to start mapping field boundaries on satellite map.</p>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {savedFields.map(field => {
+                const isActive = activeField?.id === field.id;
+                const statusInfo = STATUS_CONFIG[field.status || 'Active'];
+                return (
+                  <div
+                    key={field.id}
+                    className={`bg-stone-900 border rounded-2xl p-4 space-y-3 transition-all ${
+                      isActive ? 'border-amber-500 bg-stone-900/90' : 'border-stone-800'
+                    }`}
+                  >
+                    <div 
+                      className="flex items-center justify-between cursor-pointer"
+                      onClick={() => {
+                        setActiveField(field);
+                        if (mapRef.current) {
+                          mapRef.current.fitBounds(L.latLngBounds(field.points), { padding: [30, 30] });
+                          window.scrollTo({ top: 0, behavior: 'smooth' });
+                        }
+                      }}
+                    >
+                      <div className="flex items-center gap-3">
+                        <div 
+                          className="w-10 h-10 rounded-xl flex items-center justify-center font-bold"
+                          style={{ backgroundColor: `${field.color}20`, color: field.color }}
+                        >
+                          <Target className="w-5 h-5" />
+                        </div>
+                        <div>
+                          <h4 className="text-sm font-bold text-white">{field.name}</h4>
+                          <p className="text-[10px] text-stone-400">
+                            {field.cropType ? `Crop: ${field.cropType}` : 'No crop specified'} • {field.points.length} boundary points
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="text-right">
+                        <p className="text-sm font-mono font-bold text-amber-400">{formatArea(field.area)}</p>
+                        <span className={`inline-block text-[8px] font-bold uppercase px-2 py-0.5 rounded-full ${statusInfo.bg} ${statusInfo.text}`}>
+                          {field.status}
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Quick Actions Bar */}
+                    <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-stone-800/80">
+                      <button
+                        onClick={() => handleFieldAnalysis(field)}
+                        disabled={isAnalyzingField}
+                        className="flex-1 py-2 px-3 bg-stone-950 hover:bg-stone-800 text-amber-400 border border-stone-800 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition-all"
+                      >
+                        <Sparkles className="w-3.5 h-3.5 text-amber-400" /> AI Report
+                      </button>
+
+                      <button
+                        onClick={() => fetchDetailedPlan(field)}
+                        disabled={adviceLoading}
+                        className="flex-1 py-2 px-3 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/20 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition-all"
+                      >
+                        <ClipboardList className="w-3.5 h-3.5" /> Protocol
+                      </button>
+
+                      <button
+                        onClick={() => shareParcelWhatsApp(field)}
+                        className="p-2 bg-stone-950 text-stone-400 hover:text-emerald-400 border border-stone-800 rounded-xl transition-all"
+                        title="Share on WhatsApp"
+                      >
+                        <Share2 className="w-4 h-4" />
+                      </button>
+
+                      <button
+                        onClick={() => {
+                          setConfirmDialog({
+                            isOpen: true,
+                            title: 'Delete Parcel',
+                            message: `Are you sure you want to delete ${field.name}? This action cannot be undone.`,
+                            type: 'danger',
+                            onConfirm: async () => {
+                              const effectiveFarmId = activeFarmId || auth.currentUser?.uid || localStorage.getItem('agri_simulated_uid') || 'demo_user_123';
+                              if (!auth.currentUser) {
+                                try { await signInAnonymously(auth); } catch (e) {}
+                              }
+                              const path = `users/${effectiveFarmId}/fields/${field.id}`;
+                              try {
+                                if (!field.id.startsWith('local_')) {
+                                  await deleteDoc(doc(db, path));
+                                }
+                              } catch (error) {
+                                console.warn("Delete parcel error:", error);
+                              }
+                              setSavedFields(prev => prev.filter(f => f.id !== field.id));
+                              if (activeField?.id === field.id) setActiveField(null);
+                            }
+                          });
+                        }}
+                        className="p-2 bg-rose-500/10 text-rose-400 hover:bg-rose-500 hover:text-white rounded-xl transition-all"
+                        title="Delete Parcel"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </section>
+      )}
+
+      {/* TAB 2: KHASRA / SURVEY NUMBER REGISTRY */}
+      {mobileTab === 'khasra' && (
+        <section className="p-4 space-y-4">
+          <div className="bg-stone-900 border border-stone-800 rounded-2xl p-4 space-y-4">
+            <div className="flex items-center gap-3">
+              <div className="p-2.5 bg-amber-500/10 text-amber-400 rounded-xl">
+                <FileText className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="text-sm font-bold text-white">Indian Revenue Land Khasra Logger</h3>
+                <p className="text-[10px] text-stone-400">Link survey numbers & Khatoni references to mapped plots.</p>
+              </div>
+            </div>
+
+            <div className="space-y-3 pt-2">
+              {savedFields.length === 0 ? (
+                <p className="text-xs text-stone-500 italic">Please draw at least one field plot first to attach survey numbers.</p>
+              ) : (
+                savedFields.map(field => {
+                  const currentKhasra = khasraDetails[field.id] || '';
+                  return (
+                    <div key={field.id} className="p-3 bg-stone-950 rounded-xl border border-stone-800 space-y-2">
+                      <div className="flex items-center justify-between text-xs">
+                        <span className="font-bold text-amber-300">{field.name}</span>
+                        <span className="text-[10px] text-stone-500">{formatArea(field.area)}</span>
+                      </div>
+                      <div className="flex gap-2">
+                        <input 
+                          type="text" 
+                          placeholder="e.g. Khasra 142/3A, Khatauni 88" 
+                          value={currentKhasra}
+                          onChange={(e) => {
+                            const updated = { ...khasraDetails, [field.id]: e.target.value };
+                            setKhasraDetails(updated);
+                            localStorage.setItem('agri_khasra_survey_records', JSON.stringify(updated));
+                          }}
+                          className="flex-1 bg-stone-900 border border-stone-800 rounded-lg px-3 py-1.5 text-xs text-stone-200 outline-none focus:border-amber-500"
+                        />
+                        <span className="text-[10px] font-bold text-emerald-400 bg-emerald-500/10 px-2 py-1.5 rounded-lg flex items-center">
+                          Saved
+                        </span>
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+          </div>
+        </section>
+      )}
+
+      {/* TAB 3: EXPORT & GEOJSON */}
+      {mobileTab === 'export' && (
+        <section className="p-4 space-y-4">
+          <div className="bg-stone-900 border border-stone-800 rounded-2xl p-5 space-y-4">
+            <div className="flex items-center gap-3">
+              <div className="p-3 bg-emerald-500/10 text-emerald-400 rounded-xl">
+                <Download className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="text-sm font-bold text-white">Geospatial Data Export</h3>
+                <p className="text-[10px] text-stone-400">Export field boundaries to standard GeoJSON for GIS software.</p>
+              </div>
+            </div>
+
+            <button
+              onClick={exportGeoJSON}
+              className="w-full py-3.5 bg-amber-500 text-stone-950 font-bold rounded-xl text-xs uppercase tracking-wider flex items-center justify-center gap-2 active:scale-95 transition-all shadow-md"
+            >
+              <Download className="w-4 h-4" /> Download GeoJSON Export
+            </button>
+          </div>
+        </section>
+      )}
+
+      {/* CONTEXT MENU MODAL FOR MAP */}
       {contextMenu && (
         <div 
-          className="absolute z-[2000] bg-stone-900 rounded-2xl shadow-2xl border border-white/10 p-2 animate-in zoom-in-95"
-          style={{ left: `${contextMenu.x}px`, top: `${contextMenu.y}px`, transform: 'translate(-50%, -100%) translateY(-20px)' }}
+          className="fixed z-[2000] bg-stone-900 rounded-2xl shadow-2xl border border-stone-700 p-2"
+          style={{ left: `${contextMenu.x}px`, top: `${contextMenu.y}px`, transform: 'translate(-50%, -100%) translateY(-10px)' }}
         >
           <div className="flex items-center gap-1">
-             <button onClick={() => setContextMenu(null)} className="p-2 text-stone-500 hover:text-white"><X className="w-4 h-4" /></button>
+             <button onClick={() => setContextMenu(null)} className="p-2 text-stone-400 hover:text-white"><X className="w-4 h-4" /></button>
              {contextMenu.type === 'field' && (
                 <div className="flex gap-1">
-                  <button onClick={() => { setActiveField(contextMenu.data); setContextMenu(null); }} className="px-4 py-2 bg-amber-500/10 text-amber-400 rounded-xl font-black text-[10px] uppercase">Analyze</button>
+                  <button onClick={() => { setActiveField(contextMenu.data); setContextMenu(null); handleFieldAnalysis(contextMenu.data); }} className="px-3 py-1.5 bg-amber-500/20 text-amber-300 rounded-xl font-bold text-xs">AI Report</button>
                   <button onClick={() => { 
                     setDrawingPoints(contextMenu.data.points); 
                     setActiveMode('Boundary'); 
                     setContextMenu(null); 
-                  }} className="px-4 py-2 bg-amber-500 text-stone-950 rounded-xl font-black text-[10px] uppercase">Redraw</button>
+                  }} className="px-3 py-1.5 bg-amber-500 text-stone-950 rounded-xl font-bold text-xs">Redraw</button>
                 </div>
              )}
              {contextMenu.type === 'poi' && (
-                <button onClick={() => { setEditingPOI({ poi: contextMenu.data, fieldId: contextMenu.fieldId }); setContextMenu(null); }} className="px-4 py-2 bg-amber-500/10 text-amber-400 rounded-xl font-black text-[10px] uppercase">Refine</button>
+                <button onClick={() => { setEditingPOI({ poi: contextMenu.data, fieldId: contextMenu.fieldId }); setContextMenu(null); }} className="px-3 py-1.5 bg-amber-500 text-stone-950 rounded-xl font-bold text-xs">Edit Asset</button>
              )}
           </div>
-          <div className="absolute left-1/2 -bottom-2 -translate-x-1/2 w-4 h-4 bg-stone-900 border-b border-r border-white/10 rotate-45" />
         </div>
       )}
 
-      {editingPOI && (
-        <div className="absolute inset-0 z-[6000] bg-black/85 backdrop-blur-2xl flex items-center justify-center p-6 animate-in fade-in">
-           <div className="bg-stone-900 w-full max-w-sm rounded-[3.5rem] p-10 shadow-2xl relative border border-white/10">
-              <div className="flex items-center gap-5 mb-10">
-                 <div className="p-4 bg-amber-500/10 rounded-2xl text-amber-500 shadow-inner">
-                    <Edit3 className="w-8 h-8" />
-                 </div>
-                 <div>
-                    <h3 className="text-2xl font-black text-white leading-none">Asset Intel</h3>
-                    <p className="text-[10px] font-bold text-stone-500 uppercase tracking-widest mt-1.5">Configure Marker</p>
-                 </div>
-              </div>
-              <div className="space-y-8 max-h-[60vh] overflow-y-auto no-scrollbar pr-2">
-                 <div className="space-y-2">
-                    <label className="text-[10px] font-black text-stone-500 uppercase tracking-widest ml-4">Identifier</label>
-                    <input 
-                      value={editingPOI.poi.label}
-                      onChange={e => setEditingPOI({ ...editingPOI, poi: { ...editingPOI.poi, label: e.target.value } })}
-                      className="w-full bg-black border border-white/10 p-5 rounded-3xl font-black text-sm outline-none shadow-inner focus:ring-2 focus:ring-amber-500 text-white" 
-                    />
-                 </div>
-                 <div className="space-y-2">
-                    <label className="text-[10px] font-black text-stone-500 uppercase tracking-widest ml-4">Status Severity</label>
-                    <div className="grid grid-cols-3 gap-2">
-                       {Object.keys(POI_STATUS_THEMES).map(status => (
-                         <button 
-                           key={status}
-                           onClick={() => setEditingPOI({ ...editingPOI, poi: { ...editingPOI.poi, status: status as any } })}
-                           className={`py-3 rounded-2xl text-[8px] font-black uppercase tracking-tighter transition-all border-2 ${editingPOI.poi.status === status ? 'bg-amber-500 border-amber-500 text-stone-950' : 'bg-black border-white/10 text-stone-500'}`}
-                         >
-                            {status}
-                         </button>
-                       ))}
-                    </div>
-                 </div>
-                 <div className="space-y-2">
-                    <label className="text-[10px] font-black text-stone-500 uppercase tracking-widest ml-4">Asset Type</label>
-                    <div className="grid grid-cols-3 gap-2">
-                      {POI_TYPES.map(type => (
-                        <button 
-                          key={type.type}
-                          onClick={() => setEditingPOI({ ...editingPOI, poi: { ...editingPOI.poi, type: type.type } })}
-                          className={`flex flex-col items-center gap-2 p-4 rounded-2xl border-2 transition-all ${editingPOI.poi.type === type.type ? 'bg-amber-500 border-amber-500 text-stone-950 shadow-xl scale-105' : 'bg-black border-white/10 text-stone-500'}`}
-                        >
-                          <div dangerouslySetInnerHTML={{ __html: `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">${type.svg}</svg>` }} />
-                          <span className="text-[7px] font-black uppercase tracking-tighter">{type.label}</span>
-                        </button>
-                      ))}
-                    </div>
-                 </div>
-              </div>
-              <div className="mt-8 flex gap-3">
-                 <button onClick={() => setEditingPOI(null)} className="flex-1 py-4 bg-white/5 text-stone-500 rounded-2xl font-black text-[10px] uppercase tracking-widest hover:bg-white/10 transition-all">Cancel</button>
-                 {editingPOI.fieldId && (
-                   <button 
-                     onClick={() => {
-                       if (!auth.currentUser || !editingPOI.fieldId) return;
-                        setConfirmDialog({
-                          isOpen: true,
-                          title: 'Delete Asset',
-                          message: 'Are you sure you want to remove this asset from the field map?',
-                          type: 'danger',
-                          onConfirm: async () => {
-                         const path = `users/${activeFarmId}/fields/${editingPOI.fieldId}`;
-                         const field = savedFields.find(f => f.id === editingPOI.fieldId);
-                         if (field) {
-                           const updatedMarkers = (field.markers || []).filter(m => m.id !== editingPOI.poi.id);
-                           try {
-                             await updateDoc(doc(db, path), { markers: updatedMarkers });
-                             setEditingPOI(null);
-                           } catch (error) {
-                             handleFirestoreError(error, OperationType.UPDATE, path);
-                           }
-                         }
-                       }
-                      });
-                    }}
-                     className="p-4 bg-rose-500/10 text-rose-500 rounded-2xl hover:bg-rose-500 hover:text-white transition-all border border-rose-500/20"
-                   >
-                     <Trash2 className="w-5 h-5" />
-                   </button>
-                 )}
-                 <button onClick={() => handlePOISave(editingPOI.poi)} className="flex-[2] bg-amber-500 text-stone-950 font-black py-4 rounded-2xl shadow-xl active:scale-95 shadow-amber-500/20">Finalize</button>
-              </div>
-           </div>
-        </div>
-      )}
-
-        <div className="bg-stone-950 rounded-[2.5rem] overflow-hidden border-4 border-stone-900 shadow-2xl relative h-[480px] ring-1 ring-white/10">
-          <div ref={mapContainerRef} className="w-full h-full z-0 grayscale-[0.2] contrast-[1.1]" />
-          
-          {/* Drawing Instructions Overlay */}
-          <AnimatePresence>
-            {activeMode === 'Discovery' && (
-              <motion.div 
-                initial={{ opacity: 0, y: -20 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -20 }}
-                className="absolute top-24 left-1/2 -translate-x-1/2 z-[1000] w-full max-w-sm px-4 pointer-events-auto"
-              >
-                <form onSubmit={handleDiscoverySearch} className="flex gap-2">
-                  <div className="relative flex-1 group">
-                    <input 
-                      type="text" 
-                      placeholder="SEARCH NEARBY (e.g. Mandi)..." 
-                      value={discoveryQuery}
-                      onChange={(e) => setDiscoveryQuery(e.target.value)}
-                      className="w-full bg-stone-950/90 backdrop-blur-xl border border-white/10 rounded-xl px-4 py-3 text-[10px] font-mono text-amber-500 placeholder:text-stone-600 outline-none focus:border-amber-500 transition-all shadow-2xl"
-                    />
-                    {isSearchingDiscovery && <Loader2 className="absolute right-3 top-3 w-4 h-4 text-amber-500 animate-spin" />}
-                  </div>
-                  <button type="submit" className="bg-amber-500 text-stone-950 p-3 rounded-xl hover:bg-amber-400 transition-all shadow-lg active:scale-90">
-                    <Search className="w-5 h-5" />
-                  </button>
-                </form>
-              </motion.div>
-            )}
-
-            {activeMode !== 'Navigate' && activeMode !== 'Discovery' && (
-              <motion.div 
-                initial={{ opacity: 0, scale: 0.9 }}
-                animate={{ opacity: 1, scale: 1 }}
-                exit={{ opacity: 0, scale: 0.9 }}
-                className="absolute top-24 left-1/2 -translate-x-1/2 z-[1000] pointer-events-none"
-              >
-                <div className="bg-stone-950/90 backdrop-blur-xl px-6 py-3 rounded-2xl border border-white/10 shadow-2xl flex items-center gap-4 ring-1 ring-white/5">
-                  <div className="w-8 h-8 bg-amber-500 rounded-lg flex items-center justify-center shadow-lg">
-                    <MousePointer2 className="w-4 h-4 text-stone-950" />
-                  </div>
-                  <div>
-                    <p className="text-[8px] font-black text-amber-500 uppercase tracking-widest leading-none mb-1">Drawing Active: {activeMode}</p>
-                    <p className="text-[10px] font-black text-white uppercase tracking-tight">
-                      {drawingPoints.length >= 3 
-                        ? "Click the first point to complete or use button" 
-                        : "Click on the map to define points"}
-                    </p>
-                  </div>
-                  <button 
-                    onClick={() => { setActiveMode('Navigate'); setDrawingPoints([]); }}
-                    className="pointer-events-auto ml-2 p-2 bg-white/10 hover:bg-rose-500/20 text-white/60 hover:text-rose-500 rounded-xl transition-all"
-                  >
-                    <X className="w-4 h-4" />
-                  </button>
-                </div>
-              </motion.div>
-            )}
-          </AnimatePresence>
-
-          {/* Hardware Style Controls */}
-          <div className="absolute top-6 inset-x-6 z-[1000] pointer-events-none flex justify-between items-start gap-4">
-             <div className="flex flex-col gap-3 pointer-events-auto w-72">
-                <div className="bg-stone-950/90 backdrop-blur-xl p-3 rounded-2xl border border-white/10 flex items-center gap-4 shadow-2xl">
-                   <div className="w-10 h-10 bg-amber-500 rounded-xl flex items-center justify-center shadow-lg shadow-amber-500/20">
-                     <Compass className="w-5 h-5 text-stone-950" />
-                   </div>
-                   <div className="flex-1">
-                      <p className="text-[7px] font-black uppercase text-amber-500 tracking-[0.2em] leading-none mb-1">Navigation Module</p>
-                      <div className="flex items-center gap-2">
-                        <div className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse" />
-                        <span className="text-[10px] font-black text-white uppercase tracking-widest">System Online</span>
-                      </div>
-                   </div>
-                </div>
-
-                <form onSubmit={handlePincodeSearch} className="flex gap-2">
-                  <div className="relative flex-1 group">
-                    <input 
-                      type="text" 
-                      placeholder="LOCATE PINCODE..." 
-                      value={pincode}
-                      onChange={(e) => setPincode(e.target.value.replace(/\D/g, '').slice(0, 6))}
-                      className="w-full bg-stone-950/90 backdrop-blur-xl border border-white/10 rounded-xl px-4 py-3 text-[10px] font-mono text-amber-500 placeholder:text-stone-600 outline-none focus:border-amber-500 transition-all shadow-2xl"
-                    />
-                    {isSearchingPincode && <Loader2 className="absolute right-3 top-3 w-4 h-4 text-amber-500 animate-spin" />}
-                  </div>
-                  <button type="submit" className="bg-amber-500 text-stone-950 p-3 rounded-xl hover:bg-amber-400 transition-all shadow-lg active:scale-90">
-                    <Search className="w-5 h-5" />
-                  </button>
-                </form>
-             </div>
-             
-             <div className="flex flex-col gap-2 pointer-events-auto">
-                <ControlBtn 
-                  active={false} 
-                  onClick={recenterMap} 
-                  icon={Navigation2} 
-                  label="GPS"
-                />
-                <ControlBtn 
-                  active={snappingEnabled} 
-                  onClick={() => setSnappingEnabled(!snappingEnabled)} 
-                  icon={Magnet} 
-                  label="Snap"
-                />
-                <ControlBtn 
-                  active={isSatellite} 
-                  onClick={toggleSatellite} 
-                  icon={isSatellite ? Layers : Satellite} 
-                  label="View"
-                />
-                <ControlBtn 
-                  active={showLabels} 
-                  onClick={() => setShowLabels(!showLabels)} 
-                  icon={showLabels ? Eye : EyeOff} 
-                  label="Tags"
-                />
-                <ControlBtn 
-                  active={false} 
-                  onClick={() => registryRef.current?.scrollIntoView({ behavior: 'smooth' })} 
-                  icon={ChevronDown} 
-                  label="Registry"
-                />
-             </div>
-          </div>
-
-          {/* Bottom Toolbar - Hardware Style */}
-          <div className="absolute bottom-8 inset-x-8 z-[1000] pointer-events-none flex flex-col items-center gap-6">
-             {stats && (
-               <motion.div 
-                 initial={{ opacity: 0, y: 20 }}
-                 animate={{ opacity: 1, y: 0 }}
-                 className="bg-stone-950/95 backdrop-blur-2xl px-8 py-4 rounded-[2rem] border border-white/10 flex items-center gap-8 shadow-2xl ring-1 ring-white/5"
-               >
-                 {'area' in stats && (
-                   <>
-                     <div className="flex flex-col">
-                       <span className="text-[8px] font-black text-amber-500 uppercase tracking-[0.3em] mb-1">Telemetry: Area</span>
-                       <span className="text-lg font-mono text-white tracking-tighter">{formatArea(stats.area)}</span>
-                     </div>
-                     <div className="w-px h-8 bg-white/10" />
-                     <div className="flex flex-col">
-                       <span className="text-[8px] font-black text-amber-500 uppercase tracking-[0.3em] mb-1">Telemetry: Perimeter</span>
-                       <span className="text-lg font-mono text-white tracking-tighter">{stats.perimeter.toFixed(1)}m</span>
-                     </div>
-                   </>
-                 )}
-                 {'distance' in stats && (
-                   <div className="flex flex-col">
-                     <span className="text-[8px] font-black text-amber-500 uppercase tracking-[0.3em] mb-1">Telemetry: Distance</span>
-                     <span className="text-lg font-mono text-white tracking-tighter">{stats.distance.toFixed(1)}m</span>
-                   </div>
-                 )}
-               </motion.div>
-             )}
-
-             <div className="bg-stone-950/90 backdrop-blur-2xl p-2 rounded-[2.5rem] border border-white/10 flex items-center gap-1 pointer-events-auto shadow-2xl ring-1 ring-white/5">
-                <ModeBtn id="Navigate" icon={MousePointer2} active={activeMode === 'Navigate'} onClick={setActiveMode} />
-                <div className="w-px h-6 bg-white/10 mx-1" />
-                <ModeBtn id="Draw" icon={PenTool} active={activeMode === 'Boundary'} onClick={() => { setActiveMode('Boundary'); setDrawingPoints([]); }} />
-                <ModeBtn id="Zone" icon={Layers} active={activeMode === 'Zone'} onClick={() => { setActiveMode('Zone'); setDrawingPoints([]); }} />
-                <ModeBtn id="Asset" icon={MapPinned} active={activeMode === 'Asset'} onClick={setActiveMode} />
-                <ModeBtn id="Discovery" icon={Search} active={activeMode === 'Discovery'} onClick={setActiveMode} />
-                <ModeBtn id="Ruler" icon={Ruler} active={activeMode === 'Ruler'} onClick={() => { setActiveMode('Ruler'); setRulerPoints([]); }} />
-                
-                {(drawingPoints.length > 0 || rulerPoints.length > 0) && (
-                   <div className="flex items-center gap-1 ml-2 pl-2 border-l border-white/10">
-                     <button onClick={undoDrawingPoint} className="p-3 text-stone-500 hover:text-amber-500 transition-colors"><RefreshCw className="w-4 h-4 -scale-x-100"/></button>
-                     <button onClick={clearDrawing} className="p-3 text-stone-500 hover:text-rose-500 transition-colors"><Trash2 className="w-4 h-4"/></button>
-                   </div>
-                )}
-                
-                {(drawingPoints.length >= 3 || tempMarkers.length > 0) && activeMode !== 'Navigate' && (
-                   <motion.button 
-                     initial={{ scale: 0.9, opacity: 0 }}
-                     animate={{ scale: 1, opacity: 1 }}
-                     whileHover={{ scale: 1.05 }}
-                     whileTap={{ scale: 0.95 }}
-                     onClick={() => activeMode === 'Zone' ? setShowZoneModal(true) : setShowSaveModal(true)} 
-                     className="bg-amber-500 text-stone-950 px-8 py-3 rounded-2xl font-black text-[10px] uppercase tracking-[0.2em] ml-3 transition-all shadow-lg shadow-amber-500/40 animate-pulse"
-                   >
-                     Commit & Save
-                   </motion.button>
-                )}
-             </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Registry - Technical Data Grid Style */}
-      <section ref={registryRef} className="px-6 py-8 space-y-6 scroll-mt-6">
-        <div className="flex items-end justify-between border-b-2 border-stone-200 pb-3">
-           <div>
-              <h2 className="text-3xl font-black text-stone-950 tracking-tighter uppercase leading-none">Registry.</h2>
-              <p className="text-[9px] text-stone-400 font-black uppercase tracking-[0.4em] mt-1.5">Geospatial Asset Database</p>
-           </div>
-           <div className="flex items-center gap-3">
-             <button 
-               onClick={() => {
-                 if (mapContainerRef.current) {
-                   mapContainerRef.current.scrollIntoView({ behavior: 'smooth' });
-                 }
-               }}
-               className="p-3 bg-stone-100 rounded-xl text-stone-400 hover:text-stone-900 transition-all shadow-inner"
-               title="Back to Map"
-             >
-               <ArrowUp className="w-5 h-5" />
-             </button>
-             <button 
-               onClick={() => {
-                 setActiveMode('Boundary');
-                 setDrawingPoints([]);
-                 if (mapContainerRef.current) {
-                   mapContainerRef.current.scrollIntoView({ behavior: 'smooth' });
-                 }
-               }}
-               className="flex items-center gap-2 px-4 py-2 bg-amber-500 rounded-xl text-[10px] font-black uppercase tracking-widest text-stone-950 hover:bg-amber-400 transition-all shadow-lg shadow-amber-500/20"
-             >
-               <Plus className="w-4 h-4" /> Draw New Parcel
-             </button>
-             <button onClick={exportGeoJSON} className="flex items-center gap-2 px-3 py-1.5 bg-stone-100 rounded-lg text-[9px] font-black uppercase tracking-widest text-stone-600 hover:bg-stone-200 transition-all">
-               <Download className="w-3.5 h-3.5" /> Export
-             </button>
-             <div className="p-3 bg-amber-500 rounded-xl shadow-xl shadow-amber-500/20"><Activity className="w-5 h-5 text-stone-950" /></div>
-           </div>
-        </div>
-
-        {savedFields.length === 0 ? (
-          <div className="py-20 text-center border-2 border-dashed border-stone-200 rounded-[2.5rem] bg-stone-50/50">
-             <div className="flex flex-col items-center gap-4 opacity-20">
-               <MapPinned className="w-12 h-12 text-stone-400" />
-               <p className="text-[10px] font-black uppercase tracking-[0.5em] text-stone-500">Awaiting Parcel Definitions</p>
-             </div>
-          </div>
-        ) : (
-          <div className="space-y-3">
-             {/* Column Headers - Editorial Style */}
-             <div className="grid grid-cols-[1fr_100px_100px_70px] px-6 text-[9px] font-serif italic text-stone-400 uppercase tracking-widest">
-               <span>Parcel Identity</span>
-               <span>Focus Crop</span>
-               <span>Coverage</span>
-               <span className="text-right">Status</span>
-             </div>
-
-             <div className="space-y-2">
-               {savedFields.map(field => {
-                  const isActive = activeField?.id === field.id;
-                  const statusInfo = STATUS_CONFIG[field.status || 'Active'];
-                  return (
-                    <motion.div 
-                      key={field.id} 
-                      layout
-                      className={`group relative bg-white border-2 transition-all rounded-[1.5rem] overflow-hidden ${isActive ? 'border-amber-500 shadow-xl' : 'border-stone-100 hover:border-stone-200 shadow-sm'}`}
-                    >
-                       <div className="grid grid-cols-[1fr_100px_100px_70px] items-center p-4 cursor-pointer" onClick={() => { setActiveField(field); if(mapRef.current) mapRef.current.fitBounds(L.latLngBounds(field.points), { padding: [50, 50] }); }}>
-                          <div className="flex items-center gap-4">
-                             <div className="w-10 h-10 rounded-xl flex items-center justify-center shadow-inner relative" style={{ background: `${field.color}15`, color: field.color }}>
-                                <Target className="w-5 h-5" />
-                                <div className="absolute -top-0.5 -right-0.5 w-3 h-3 bg-white rounded-full border-2 border-current flex items-center justify-center">
-                                  <div className="w-1 h-1 bg-current rounded-full" />
-                                </div>
-                             </div>
-                             <div>
-                                <h4 className="font-black text-stone-950 text-base tracking-tighter uppercase leading-none">{field.name}</h4>
-                                <p className="text-[7px] font-mono text-stone-400 uppercase mt-1 tracking-widest">ID: {field.id.slice(-8)}</p>
-                             </div>
-                          </div>
-                          
-                          <div className="text-xs font-black text-stone-600 uppercase tracking-tight">
-                            {field.cropType || '---'}
-                          </div>
-
-                          <div className="text-xs font-mono text-stone-900 font-black">
-                            {formatArea(field.area)}
-                          </div>
-
-                          <div className="flex justify-end">
-                            <span className={`text-[7px] font-black uppercase px-2 py-0.5 rounded-full ${statusInfo.bg} ${statusInfo.text} border border-current/10`}>
-                              {field.status}
-                            </span>
-                          </div>
-                       </div>
-
-                       <AnimatePresence mode="wait">
-                         {isActive && (
-                           <motion.div 
-                             initial={{ height: 0, opacity: 0 }}
-                             animate={{ height: 'auto', opacity: 1 }}
-                             exit={{ height: 0, opacity: 0 }}
-                             className="border-t-2 border-stone-50 bg-stone-50/50"
-                           >
-                             <div className="p-8 grid grid-cols-1 md:grid-cols-3 gap-8">
-                                <div className="space-y-4">
-                                    <div className="flex items-center justify-between mb-4">
-                                       <p className="text-[10px] font-black text-stone-400 uppercase tracking-[0.3em]">Spatial Metrics</p>
-                                       <button 
-                                         onClick={() => handleFieldAnalysis(field)}
-                                         disabled={isAnalyzingField}
-                                         className="flex items-center gap-1.5 px-3 py-1.5 bg-stone-900 text-amber-500 rounded-xl text-[8px] font-black uppercase tracking-widest hover:bg-amber-500 hover:text-stone-950 transition-all shadow-lg disabled:opacity-50"
-                                       >
-                                         {isAnalyzingField ? <Loader2 className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3" />}
-                                         {isAnalyzingField ? 'AI Report' : 'AI Report'}
-                                       </button>
-                                    </div>
-                                   <div className="grid grid-cols-2 gap-4">
-                                      <div className="bg-white p-4 rounded-2xl border border-stone-100 shadow-sm">
-                                         <p className="text-[8px] font-black text-stone-400 uppercase mb-1">Perimeter</p>
-                                         <p className="text-lg font-mono font-black text-stone-950">{(field.perimeter || 0).toFixed(0)}m</p>
-                                      </div>
-                                      <div className="bg-white p-4 rounded-2xl border border-stone-100 shadow-sm">
-                                         <p className="text-[8px] font-black text-stone-400 uppercase mb-1">Points</p>
-                                         <p className="text-lg font-mono font-black text-stone-950">{field.points.length}</p>
-                                      </div>
-                                   </div>
-                                </div>
-
-                                <div className="space-y-4">
-                                   <p className="text-[10px] font-black text-stone-400 uppercase tracking-[0.3em]">Infrastructure</p>
-                                   <div className="flex flex-wrap gap-2">
-                                      {(field.markers || []).map(m => (
-                                        <div key={m.id} className="bg-white px-3 py-2 rounded-xl border border-stone-100 shadow-sm flex items-center gap-2">
-                                          <div className="w-2 h-2 rounded-full bg-amber-500" />
-                                          <span className="text-[9px] font-black uppercase text-stone-600">{m.label}</span>
-                                        </div>
-                                      ))}
-                                      {(field.markers || []).length === 0 && <p className="text-[10px] italic text-stone-400">No assets registered</p>}
-                                   </div>
-                                </div>
-
-                                <div className="space-y-4">
-                                   <p className="text-[10px] font-black text-stone-400 uppercase tracking-[0.3em]">Operations</p>
-                                   <div className="flex flex-col gap-2">
-                                      <button onClick={() => fetchDetailedPlan(field)} disabled={adviceLoading} className="w-full bg-stone-950 text-white p-4 rounded-2xl flex items-center justify-between group active:scale-95 transition-all shadow-xl">
-                                         <div className="flex items-center gap-3">
-                                            <div className="p-2 bg-amber-500 rounded-xl text-stone-950">
-                                               {adviceLoading ? <RefreshCw className="w-4 h-4 animate-spin" /> : <ClipboardList className="w-4 h-4" />}
-                                            </div>
-                                            <span className="text-[10px] font-black uppercase tracking-widest">Protocol Engine</span>
-                                         </div>
-                                         <ChevronRight className="w-4 h-4 text-stone-600 group-hover:text-amber-400" />
-                                      </button>
-                                      <div className="flex gap-2">
-                                        <button className="flex-1 py-3 bg-white border border-stone-200 rounded-xl text-[9px] font-black uppercase text-stone-400 hover:text-rose-500 hover:border-rose-200 transition-all" onClick={async () => { 
-                                          setConfirmDialog({
-                                            isOpen: true,
-                                            title: 'Delete Parcel',
-                                            message: `Are you sure you want to delete ${field.name}? This action cannot be undone.`,
-                                            type: 'danger',
-                                            onConfirm: async () => {
-                                              if (!auth.currentUser) return;
-                                              const path = `users/${activeFarmId}/fields/${field.id}`;
-                                              try {
-                                                await deleteDoc(doc(db, path));
-                                              } catch (error) {
-                                                handleFirestoreError(error, OperationType.DELETE, path);
-                                              }
-                                            }
-                                         });
-                                        }}>Delete</button>
-                                        <button className="flex-1 py-3 bg-white border border-stone-200 rounded-xl text-[9px] font-black uppercase text-stone-400 hover:text-amber-500 hover:border-amber-200 transition-all">Edit</button>
-                                      </div>
-                                   </div>
-                                </div>
-                             </div>
-                           </motion.div>
-                         )}
-                       </AnimatePresence>
-                    </motion.div>
-                  );
-               })}
-             </div>
-          </div>
-        )}
-      </section>
-
-      {/* Discovery Results List */}
+      {/* EDIT ASSET POI MODAL SHEET */}
       <AnimatePresence>
-        {discoveryResults.length > 0 && (
-          <motion.section 
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: 20 }}
-            className="px-6 py-4 space-y-4"
-          >
-            <div className="flex items-center justify-between border-b border-stone-200 pb-2">
-              <h3 className="text-sm font-black text-stone-950 uppercase tracking-widest">Discovery Results</h3>
-              <button onClick={() => { setDiscoveryResults([]); discoveryLayersRef.current?.clearLayers(); }} className="text-[10px] font-black text-stone-400 uppercase hover:text-rose-500 transition-colors">Clear</button>
-            </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              {discoveryResults.map((result, idx) => (
-                <div key={idx} className="bg-white p-4 rounded-2xl border border-stone-100 shadow-sm flex items-center justify-between group hover:border-amber-500 transition-all">
-                  <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 bg-amber-50 rounded-lg flex items-center justify-center text-amber-600">
-                      <MapPin className="w-4 h-4" />
-                    </div>
-                    <div>
-                      <h4 className="text-[11px] font-black text-stone-900 uppercase leading-none">{result.maps?.title || result.web?.title || 'Unknown Location'}</h4>
-                      <p className="text-[8px] font-bold text-stone-400 uppercase tracking-tighter mt-1">Found via AI Grounding</p>
-                    </div>
-                  </div>
-                  {result.maps?.uri && (
-                    <a 
-                      href={result.maps.uri} 
-                      target="_blank" 
-                      rel="noopener noreferrer"
-                      className="p-2 bg-stone-50 text-stone-400 hover:bg-amber-500 hover:text-stone-950 rounded-lg transition-all"
-                    >
-                      <ArrowUpRight className="w-4 h-4" />
-                    </a>
-                  )}
-                </div>
-              ))}
-            </div>
-          </motion.section>
-        )}
-      </AnimatePresence>
-
-      {fieldAnalysis && (
-        <div className="absolute inset-0 z-[5000] bg-black/90 backdrop-blur-2xl flex items-center justify-center p-6 animate-in fade-in">
+        {editingPOI && (
           <motion.div 
-            initial={{ opacity: 0, scale: 0.9, y: 20 }}
-            animate={{ opacity: 1, scale: 1, y: 0 }}
-            className="bg-white w-full max-w-2xl max-h-[80vh] rounded-[3rem] overflow-hidden shadow-2xl flex flex-col"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[6000] bg-black/80 backdrop-blur-md flex items-end sm:items-center justify-center p-0 sm:p-4"
           >
-            <div className="p-8 border-b border-stone-100 flex items-center justify-between bg-stone-50">
-               <div className="flex items-center gap-4">
-                  <div className="w-12 h-12 bg-amber-500 rounded-2xl flex items-center justify-center text-stone-950 shadow-lg">
-                     <Sparkles className="w-6 h-6" />
-                  </div>
-                  <div>
-                     <h3 className="text-2xl font-black text-stone-900 tracking-tighter uppercase leading-none">AI Field Report</h3>
-                     <p className="text-[10px] font-black text-stone-400 uppercase tracking-widest mt-1">Geospatial & Agronomic Analysis</p>
-                  </div>
-               </div>
-               <button onClick={() => setFieldAnalysis(null)} className="w-10 h-10 bg-white border border-stone-200 rounded-xl flex items-center justify-center text-stone-400 hover:text-rose-500 transition-all">
-                  <X className="w-5 h-5" />
-               </button>
-            </div>
-            <div className="flex-1 overflow-y-auto p-10">
-               <div className="prose prose-stone max-w-none">
-                  <div className="markdown-body">
-                    <ReactMarkdown>{fieldAnalysis.report}</ReactMarkdown>
-                  </div>
-               </div>
-            </div>
-            <div className="p-8 bg-stone-50 border-t border-stone-100 flex justify-end">
-               <button onClick={() => setFieldAnalysis(null)} className="px-8 py-4 bg-stone-900 text-white rounded-2xl font-black text-[10px] uppercase tracking-widest shadow-lg hover:bg-amber-500 hover:text-stone-950 transition-all">Close Report</button>
-            </div>
-          </motion.div>
-        </div>
-      )}
-
-      {showZoneModal && (
-        <div className="absolute inset-0 z-[4000] bg-black/80 backdrop-blur-xl flex items-center justify-center p-6 animate-in fade-in">
-           <div className="bg-white w-full max-w-sm rounded-[3.5rem] p-10 shadow-2xl relative">
-              <h3 className="text-3xl font-black text-stone-900 tracking-tighter mb-8 leading-none">Define Zone</h3>
-              <div className="space-y-6">
-                 <div className="space-y-1">
-                    <label className="text-[10px] font-black text-stone-400 uppercase tracking-widest ml-4">Zone Label</label>
-                    <input 
-                      value={zoneFormData.label} 
-                      onChange={e => setZoneFormData({...zoneFormData, label: e.target.value})} 
-                      placeholder="e.g. High Moisture Area" 
-                      className="w-full bg-stone-50 border border-stone-100 p-5 rounded-3xl font-bold text-sm outline-none" 
-                    />
-                 </div>
-                 <div className="space-y-1">
-                    <label className="text-[10px] font-black text-stone-400 uppercase tracking-widest ml-4">Zone Type</label>
-                    <div className="grid grid-cols-2 gap-2">
-                       {ZONE_TYPES.map(z => (
-                         <button 
-                           key={z.type}
-                           onClick={() => setZoneFormData({...zoneFormData, type: z.type})}
-                           className={`flex items-center gap-2 p-3 rounded-2xl border-2 transition-all ${zoneFormData.type === z.type ? 'bg-stone-900 border-stone-900 text-white' : 'bg-stone-50 border-stone-100 text-stone-400'}`}
-                         >
-                            <z.icon className="w-4 h-4" />
-                            <span className="text-[8px] font-black uppercase tracking-tighter">{z.label}</span>
-                         </button>
-                       ))}
-                    </div>
-                 </div>
-                 <div className="space-y-1">
-                    <label className="text-[10px] font-black text-stone-400 uppercase tracking-widest ml-4">Zone Color</label>
-                    <div className="flex gap-2 p-3 bg-stone-50 rounded-3xl border border-stone-100 justify-between">
-                       {ZONE_COLORS.map(c => (
-                         <button 
-                           key={c} 
-                           onClick={() => setZoneFormData({...zoneFormData, color: c})} 
-                           className={`w-8 h-8 rounded-full border-2 transition-all ${zoneFormData.color === c ? 'border-stone-900 scale-110 shadow-md' : 'border-transparent'}`} 
-                           style={{ background: c }} 
-                         />
-                       ))}
-                    </div>
-                 </div>
-                 <div className="space-y-1">
-                    <label className="text-[10px] font-black text-stone-400 uppercase tracking-widest ml-4">Notes</label>
-                    <textarea 
-                      value={zoneFormData.notes} 
-                      onChange={e => setZoneFormData({...zoneFormData, notes: e.target.value})} 
-                      placeholder="Special instructions..." 
-                      className="w-full bg-stone-50 border border-stone-100 p-5 rounded-3xl font-bold text-sm outline-none h-24 resize-none" 
-                    />
-                 </div>
-                 <div className="flex gap-3 pt-6">
-                    <button onClick={() => setShowZoneModal(false)} className="px-6 py-4 bg-stone-100 text-stone-500 font-black rounded-2xl text-[10px] uppercase tracking-widest">Back</button>
-                    <button onClick={async () => {
-                      if (!activeField) {
-                        setAlertDialog({
-                          isOpen: true,
-                          title: 'Field Required',
-                          message: 'Please select a field first to attach this zone.'
-                        });
-                        return;
-                      }
-                      if (!auth.currentUser) return;
-
-                      const typeInfo = ZONE_TYPES.find(z => z.type === zoneFormData.type)!;
-                      const newZone = {
-                        id: Date.now().toString(),
-                        type: zoneFormData.type,
-                        label: zoneFormData.label || typeInfo.label,
-                        points: drawingPoints,
-                        color: zoneFormData.color,
-                        notes: zoneFormData.notes
-                      };
-                      
-                      const path = `users/${activeFarmId}/fields/${activeField.id}`;
-                      try {
-                        await updateDoc(doc(db, path), {
-                          zones: [...(activeField.zones || []), newZone]
-                        });
-                        setDrawingPoints([]); 
-                        setActiveMode('Navigate'); 
-                        setShowZoneModal(false);
-                        setZoneFormData({ label: '', type: 'Irrigation', color: ZONE_COLORS[0], notes: '' });
-                      } catch (error) {
-                        handleFirestoreError(error, OperationType.UPDATE, path);
-                      }
-                    }} className="flex-1 bg-stone-900 text-white font-black py-4 rounded-2xl shadow-xl flex items-center justify-center gap-2"><CheckCircle2 className="w-5 h-5 text-emerald-400"/> Attach Zone</button>
-                 </div>
-              </div>
-           </div>
-        </div>
-      )}
-
-      {showSaveModal && (
-        <div className="absolute inset-0 z-[4000] bg-black/80 backdrop-blur-xl flex items-center justify-center p-6 animate-in fade-in">
-           <div className="bg-white w-full max-w-sm rounded-[3.5rem] p-10 shadow-2xl relative">
-              <h3 className="text-3xl font-black text-stone-900 tracking-tighter mb-8 leading-none">Register Plot</h3>
-              <div className="space-y-6">
-                 <div className="space-y-1">
-                    <label className="text-[10px] font-black text-stone-400 uppercase tracking-widest ml-4">Parcel Identifier</label>
-                    <input value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} placeholder="e.g. North Ridge" className="w-full bg-stone-50 border border-stone-100 p-5 rounded-3xl font-bold text-sm outline-none" />
-                 </div>
-                 <div className="space-y-1">
-                    <label className="text-[10px] font-black text-stone-400 uppercase tracking-widest ml-4">Focus Crop</label>
-                    <input value={formData.crop} onChange={e => setFormData({...formData, crop: e.target.value})} placeholder="e.g. Basmati Rice" className="w-full bg-stone-50 border border-stone-100 p-5 rounded-3xl font-bold text-sm outline-none" />
-                 </div>
-                 <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-1">
-                       <label className="text-[10px] font-black text-stone-400 uppercase tracking-widest ml-4">Current Status</label>
-                       <select value={formData.status} onChange={e => setFormData({...formData, status: e.target.value as any})} className="w-full bg-stone-50 border border-stone-100 p-5 rounded-3xl font-black text-[10px] uppercase outline-none">
-                          <option>Active</option><option>Fallow</option><option>Harvested</option><option>Prepping</option>
-                       </select>
-                    </div>
-                    <div className="space-y-1">
-                       <label className="text-[10px] font-black text-stone-400 uppercase tracking-widest ml-4">Color ID</label>
-                       <div className="flex gap-2 p-1 bg-stone-50 rounded-2xl border border-stone-100 justify-between">
-                          {FIELD_COLORS.slice(0, 4).map(c => (
-                            <button key={c} onClick={() => setFormData({...formData, color: c})} className={`w-7 h-7 rounded-full border-2 transition-all ${formData.color === c ? 'border-stone-900 scale-110 shadow-md' : 'border-transparent'}`} style={{ background: c }} />
-                          ))}
-                       </div>
-                    </div>
-                 </div>
-                 <div className="flex gap-3 pt-6">
-                    <button onClick={() => setShowSaveModal(false)} className="px-6 py-4 bg-stone-100 text-stone-500 font-black rounded-2xl text-[10px] uppercase tracking-widest">Back</button>
-                    <button onClick={async () => {
-                      if (!auth.currentUser) return;
-                      const areaHectares = calculateArea(drawingPoints) / 10000;
-                      const perimeter = drawingPoints.reduce((acc, p, i) => acc + (i > 0 ? calculateDistance(drawingPoints[i-1], p) : 0), 0);
-                      
-                      const path = `users/${activeFarmId}/fields`;
-                      const fieldData = {
-                        name: formData.name || `Parcel ${savedFields.length + 1}`,
-                        cropType: formData.crop,
-                        points: drawingPoints,
-                        markers: tempMarkers,
-                        area: areaHectares,
-                        perimeter,
-                        createdAt: new Date().toISOString(),
-                        color: formData.color,
-                        status: formData.status
-                      };
-
-                      try {
-                        await addDoc(collection(db, path), fieldData);
-                        setDrawingPoints([]); 
-                        setTempMarkers([]); 
-                        setActiveMode('Navigate'); 
-                        setShowSaveModal(false);
-                      } catch (error) {
-                        handleFirestoreError(error, OperationType.CREATE, path);
-                      }
-                    }} className="flex-1 bg-stone-900 text-white font-black py-4 rounded-2xl shadow-xl flex items-center justify-center gap-2"><CheckCircle2 className="w-5 h-5 text-emerald-400"/> Confirm</button>
-                 </div>
-              </div>
-           </div>
-        </div>
-      )}
-
-      {detailedAdvice && (
-        <div className="absolute inset-0 z-[5000] bg-stone-950/90 backdrop-blur-2xl flex flex-col animate-in slide-in-from-bottom-full duration-500">
-           <header className="p-8 flex items-center justify-between border-b border-white/5">
-              <div className="flex items-center gap-5">
-                 <div className="p-4 bg-amber-500 rounded-2xl"><FileBadge className="w-7 h-7 text-stone-950" /></div>
-                 <div>
-                    <h2 className="text-2xl font-black text-white leading-none">Field Protocol</h2>
-                    <p className="text-[10px] font-bold text-emerald-400 uppercase tracking-widest mt-2">AI Agronomy Report</p>
-                 </div>
-              </div>
-              <button onClick={() => setDetailedAdvice(null)} className="p-4 bg-white/10 text-white rounded-full"><X className="w-6 h-6" /></button>
-           </header>
-           <main className="flex-1 overflow-y-auto p-8 custom-scrollbar">
-              <div className="max-w-3xl mx-auto space-y-8">
-                 <div className="bg-white/5 border border-white/10 p-10 rounded-[3rem] shadow-2xl relative overflow-hidden">
-                    <div className="absolute top-0 right-0 p-10 opacity-[0.03] rotate-12"><Sprout className="w-64 h-64" /></div>
-                    <div className="relative z-10">
-                       <h3 className="text-emerald-400 font-black text-[11px] uppercase tracking-[0.3em] mb-8 flex items-center gap-3">
-                          <Target className="w-5 h-5" /> Biological Objectives
-                       </h3>
-                       <p className="text-white text-2xl font-black leading-tight mb-8">{detailedAdvice.cropRequirements}</p>
-                       <div className="h-px bg-white/10 mb-8" />
-                       <p className="text-stone-300 text-sm font-medium leading-relaxed italic">{detailedAdvice.soilAdjustments}</p>
-                    </div>
-                 </div>
-                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pb-20">
-                    {detailedAdvice.fertilizers.map((f, i) => (
-                      <div key={i} className="bg-white p-8 rounded-[2.5rem] shadow-lg flex flex-col justify-between group hover:shadow-2xl transition-all">
-                         <div className="space-y-6">
-                            <div className="flex justify-between items-start">
-                               <div className="p-4 bg-stone-50 rounded-2xl"><Box className="w-7 h-7 text-stone-400" /></div>
-                               <span className="bg-stone-900 text-white px-4 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-widest">{f.npk}</span>
-                            </div>
-                            <div>
-                               <h4 className="text-xl font-black text-stone-900 mb-2">{f.name}</h4>
-                               <p className="text-sm font-medium text-stone-500 leading-relaxed italic">"{f.description}"</p>
-                            </div>
-                         </div>
-                      </div>
-                    ))}
-                 </div>
-              </div>
-           </main>
-        </div>
-      )}
-
-      {/* Custom Alert Dialog */}
-      <AnimatePresence>
-        {alertDialog.isOpen && (
-          <div className="absolute inset-0 z-[10000] bg-black/60 backdrop-blur-md flex items-center justify-center p-6 animate-in fade-in">
             <motion.div 
-              initial={{ opacity: 0, scale: 0.9, y: 20 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.9, y: 20 }}
-              className="bg-white w-full max-w-sm rounded-[2.5rem] p-8 shadow-2xl border border-stone-100"
+              initial={{ y: "100%" }}
+              animate={{ y: 0 }}
+              exit={{ y: "100%" }}
+              className="bg-stone-900 border border-stone-800 w-full max-w-md rounded-t-3xl sm:rounded-3xl p-6 space-y-6 max-h-[85vh] overflow-y-auto"
             >
-              <div className="flex flex-col items-center text-center">
-                <div className="w-16 h-16 bg-amber-500/10 rounded-2xl flex items-center justify-center text-amber-500 mb-6">
-                  <Info className="w-8 h-8" />
+              <div className="flex items-center justify-between pb-3 border-b border-stone-800">
+                <div className="flex items-center gap-3">
+                  <div className="p-2.5 bg-amber-500/10 text-amber-400 rounded-xl">
+                    <Edit3 className="w-5 h-5" />
+                  </div>
+                  <h3 className="text-base font-bold text-white">Configure Asset Pin</h3>
                 </div>
-                <h3 className="text-xl font-black text-stone-900 uppercase tracking-tighter mb-2">{alertDialog.title}</h3>
-                <p className="text-sm font-medium text-stone-500 leading-relaxed mb-8">{alertDialog.message}</p>
+                <button onClick={() => setEditingPOI(null)} className="p-2 text-stone-400 hover:text-white">
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              <div className="space-y-4 text-xs">
+                <div>
+                  <label className="block text-stone-400 font-bold mb-1">Asset Name / Tag</label>
+                  <input 
+                    value={editingPOI.poi.label}
+                    onChange={e => setEditingPOI({ ...editingPOI, poi: { ...editingPOI.poi, label: e.target.value } })}
+                    className="w-full bg-stone-950 border border-stone-800 p-3 rounded-xl font-bold text-white outline-none focus:border-amber-500" 
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-stone-400 font-bold mb-1">Status Condition</label>
+                  <div className="grid grid-cols-3 gap-2">
+                     {Object.keys(POI_STATUS_THEMES).map(status => (
+                       <button 
+                         key={status}
+                         onClick={() => setEditingPOI({ ...editingPOI, poi: { ...editingPOI.poi, status: status as any } })}
+                         className={`py-2 rounded-xl text-[10px] font-bold transition-all border ${
+                           editingPOI.poi.status === status ? 'bg-amber-500 border-amber-400 text-stone-950' : 'bg-stone-950 border-stone-800 text-stone-400'
+                         }`}
+                       >
+                          {status}
+                       </button>
+                     ))}
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-stone-400 font-bold mb-1">Select Asset Type</label>
+                  <div className="grid grid-cols-3 gap-2 max-h-48 overflow-y-auto p-1">
+                    {POI_TYPES.map(type => (
+                      <button 
+                        key={type.type}
+                        onClick={() => setEditingPOI({ ...editingPOI, poi: { ...editingPOI.poi, type: type.type } })}
+                        className={`flex flex-col items-center gap-1.5 p-3 rounded-xl border transition-all ${
+                          editingPOI.poi.type === type.type ? 'bg-amber-500/20 border-amber-500 text-amber-300' : 'bg-stone-950 border-stone-800 text-stone-400'
+                        }`}
+                      >
+                        <div dangerouslySetInnerHTML={{ __html: `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">${type.svg}</svg>` }} />
+                        <span className="text-[9px] font-bold">{type.label}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex gap-3 pt-2">
+                <button onClick={() => setEditingPOI(null)} className="py-3 px-4 bg-stone-800 text-stone-300 rounded-xl font-bold text-xs">
+                  Cancel
+                </button>
                 <button 
-                  onClick={() => setAlertDialog({ ...alertDialog, isOpen: false })}
-                  className="w-full py-4 bg-stone-900 text-white rounded-2xl font-black text-[10px] uppercase tracking-widest shadow-lg hover:bg-amber-500 hover:text-stone-950 transition-all"
+                  onClick={() => handlePOISave(editingPOI.poi)} 
+                  className="flex-1 py-3 bg-amber-500 text-stone-950 font-bold rounded-xl text-xs uppercase"
                 >
-                  Understood
+                  Save Asset
                 </button>
               </div>
             </motion.div>
-          </div>
+          </motion.div>
         )}
       </AnimatePresence>
 
-      {/* Custom Confirm Dialog */}
+      {/* SAVE FIELD MODAL SHEET */}
       <AnimatePresence>
-        {confirmDialog.isOpen && (
-          <div className="absolute inset-0 z-[10000] bg-black/60 backdrop-blur-md flex items-center justify-center p-6 animate-in fade-in">
+        {showSaveModal && (
+          <motion.div 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[6000] bg-black/80 backdrop-blur-md flex items-end sm:items-center justify-center p-0 sm:p-4"
+          >
             <motion.div 
-              initial={{ opacity: 0, scale: 0.9, y: 20 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.9, y: 20 }}
-              className="bg-white w-full max-w-sm rounded-[2.5rem] p-8 shadow-2xl border border-stone-100"
+              initial={{ y: "100%" }}
+              animate={{ y: 0 }}
+              exit={{ y: "100%" }}
+              className="bg-stone-900 border border-stone-800 w-full max-w-md rounded-t-3xl sm:rounded-3xl p-6 space-y-6"
             >
-              <div className="flex flex-col items-center text-center">
-                <div className={`w-16 h-16 ${confirmDialog.type === 'danger' ? 'bg-rose-500/10 text-rose-500' : 'bg-amber-500/10 text-amber-500'} rounded-2xl flex items-center justify-center mb-6`}>
-                  {confirmDialog.type === 'danger' ? <Trash2 className="w-8 h-8" /> : <Info className="w-8 h-8" />}
+              <div className="flex items-center justify-between pb-3 border-b border-stone-800">
+                <h3 className="text-base font-bold text-white">Register Mapped Plot</h3>
+                <button onClick={() => setShowSaveModal(false)} className="p-2 text-stone-400 hover:text-white">
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              <div className="space-y-4 text-xs">
+                <div>
+                  <label className="block text-stone-400 font-bold mb-1">Parcel Name / Identifier</label>
+                  <input 
+                    value={formData.name} 
+                    onChange={e => setFormData({...formData, name: e.target.value})} 
+                    placeholder="e.g. North Field / Borwell Plot" 
+                    className="w-full bg-stone-950 border border-stone-800 p-3 rounded-xl font-bold text-white outline-none focus:border-amber-500" 
+                  />
                 </div>
-                <h3 className="text-xl font-black text-stone-900 uppercase tracking-tighter mb-2">{confirmDialog.title}</h3>
-                <p className="text-sm font-medium text-stone-500 leading-relaxed mb-8">{confirmDialog.message}</p>
-                <div className="flex gap-3 w-full">
-                  <button 
-                    onClick={() => setConfirmDialog({ ...confirmDialog, isOpen: false })}
-                    className="flex-1 py-4 bg-stone-100 text-stone-500 rounded-2xl font-black text-[10px] uppercase tracking-widest hover:bg-stone-200 transition-all"
-                  >
-                    Cancel
-                  </button>
-                  <button 
-                    onClick={() => {
-                      confirmDialog.onConfirm();
-                      setConfirmDialog({ ...confirmDialog, isOpen: false });
-                    }}
-                    className={`flex-1 py-4 ${confirmDialog.type === 'danger' ? 'bg-rose-500' : 'bg-stone-900'} text-white rounded-2xl font-black text-[10px] uppercase tracking-widest shadow-lg hover:opacity-90 transition-all`}
-                  >
-                    Confirm
-                  </button>
+
+                <div>
+                  <label className="block text-stone-400 font-bold mb-1">Target / Focus Crop</label>
+                  <input 
+                    value={formData.crop} 
+                    onChange={e => setFormData({...formData, crop: e.target.value})} 
+                    placeholder="e.g. Paddy, Cotton, Wheat" 
+                    className="w-full bg-stone-950 border border-stone-800 p-3 rounded-xl font-bold text-white outline-none focus:border-amber-500" 
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-stone-400 font-bold mb-1">Khasra / Survey No (Optional)</label>
+                  <input 
+                    value={formData.khasraNo} 
+                    onChange={e => setFormData({...formData, khasraNo: e.target.value})} 
+                    placeholder="e.g. 142/2A or Survey 88" 
+                    className="w-full bg-stone-950 border border-stone-800 p-3 rounded-xl font-bold text-white outline-none focus:border-amber-500" 
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-stone-400 font-bold mb-1">Current Status</label>
+                    <select 
+                      value={formData.status} 
+                      onChange={e => setFormData({...formData, status: e.target.value as any})} 
+                      className="w-full bg-stone-950 border border-stone-800 p-3 rounded-xl font-bold text-white outline-none"
+                    >
+                      <option>Active</option>
+                      <option>Fallow</option>
+                      <option>Harvested</option>
+                      <option>Prepping</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-stone-400 font-bold mb-1">Map ID Color</label>
+                    <div className="flex gap-2 p-2 bg-stone-950 rounded-xl border border-stone-800 justify-between">
+                      {FIELD_COLORS.slice(0, 4).map(c => (
+                        <button 
+                          key={c} 
+                          onClick={() => setFormData({...formData, color: c})} 
+                          className={`w-6 h-6 rounded-full border-2 transition-all ${formData.color === c ? 'border-white scale-110' : 'border-transparent'}`} 
+                          style={{ background: c }} 
+                        />
+                      ))}
+                    </div>
+                  </div>
                 </div>
               </div>
+
+              <div className="flex gap-3 pt-2">
+                <button onClick={() => setShowSaveModal(false)} className="py-3 px-4 bg-stone-800 text-stone-300 rounded-xl font-bold text-xs">
+                  Back
+                </button>
+                <button 
+                  onClick={async () => {
+                    if (drawingPoints.length < 3) {
+                      setAlertDialog({
+                        isOpen: true,
+                        title: 'Incomplete Boundary',
+                        message: 'Please tap at least 3 corner points on the map to form a plot boundary before saving.'
+                      });
+                      return;
+                    }
+
+                    const effectiveFarmId = activeFarmId || auth.currentUser?.uid || localStorage.getItem('agri_simulated_uid') || 'demo_user_123';
+                    if (!auth.currentUser) {
+                      try { await signInAnonymously(auth); } catch (e) {}
+                    }
+
+                    const areaHectares = calculateArea(drawingPoints) / 10000;
+                    const perimeter = drawingPoints.reduce((acc, p, i) => acc + (i > 0 ? calculateDistance(drawingPoints[i-1], p) : 0), 0);
+                    
+                    const path = `users/${effectiveFarmId}/fields`;
+                    const fieldName = formData.name.trim() || `Parcel ${savedFields.length + 1}`;
+                    const fieldData = {
+                      name: fieldName,
+                      cropType: formData.crop.trim(),
+                      points: drawingPoints,
+                      markers: tempMarkers,
+                      area: areaHectares,
+                      perimeter,
+                      createdAt: new Date().toISOString(),
+                      color: formData.color,
+                      status: formData.status,
+                      khasraNo: formData.khasraNo ? formData.khasraNo.trim() : undefined
+                    };
+
+                    try {
+                      const docRef = await addDoc(collection(db, path), fieldData);
+                      const newFieldWithId = { id: docRef.id, ...fieldData };
+                      setSavedFields(prev => {
+                        const exists = prev.some(f => f.id === docRef.id);
+                        return exists ? prev : [newFieldWithId, ...prev];
+                      });
+                    } catch (error) {
+                      console.warn("Firestore save error, saving locally:", error);
+                      const localField = { id: `local_${Date.now()}`, ...fieldData };
+                      setSavedFields(prev => [localField, ...prev]);
+                    }
+
+                    setDrawingPoints([]); 
+                    setTempMarkers([]); 
+                    setActiveMode('Navigate'); 
+                    setShowSaveModal(false);
+                    setFormData({ name: '', crop: '', status: 'Active', color: FIELD_COLORS[0], khasraNo: '', subDivision: '' });
+                    
+                    setAlertDialog({
+                      isOpen: true,
+                      title: 'Plot Registered Successfully! 🌾',
+                      message: `${fieldName} (${formatArea(areaHectares)}) has been registered to your farm.`
+                    });
+                  }} 
+                  className="flex-1 py-3 bg-amber-500 text-stone-950 font-bold rounded-xl text-xs uppercase flex items-center justify-center gap-1.5 active:scale-95 transition-all"
+                >
+                  <CheckCircle2 className="w-4 h-4" /> Save Field
+                </button>
+              </div>
             </motion.div>
-          </div>
+          </motion.div>
         )}
       </AnimatePresence>
 
-      {/* Floating View Scroll Assists */}
-      <div className="fixed bottom-28 right-6 z-[3000] flex flex-col gap-3">
-        <motion.button
-          whileHover={{ scale: 1.1 }}
-          whileTap={{ scale: 0.9 }}
-          onClick={() => {
-            if (mapContainerRef.current) {
-              mapContainerRef.current.scrollIntoView({ behavior: 'smooth' });
-            }
-          }}
-          className="w-12 h-12 bg-stone-950/90 hover:bg-stone-900 text-amber-500 rounded-full flex items-center justify-center border border-white/10 shadow-2xl active:scale-95 transition-all"
-          title="Scroll up to Map"
-        >
-          <ArrowUp className="w-5 h-5" />
-        </motion.button>
-        
-        <motion.button
-          whileHover={{ scale: 1.1 }}
-          whileTap={{ scale: 0.9 }}
-          onClick={() => {
-            if (registryRef.current) {
-              registryRef.current.scrollIntoView({ behavior: 'smooth' });
-            }
-          }}
-          className="w-12 h-12 bg-stone-950/90 hover:bg-stone-900 text-amber-500 rounded-full flex items-center justify-center border border-white/10 shadow-2xl active:scale-95 transition-all"
-          title="Scroll down to Registry"
-        >
-          <ArrowDown className="w-5 h-5" />
-        </motion.button>
-      </div>
+      {/* DEFINE ZONE MODAL SHEET */}
+      <AnimatePresence>
+        {showZoneModal && (
+          <motion.div 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[6000] bg-black/80 backdrop-blur-md flex items-end sm:items-center justify-center p-0 sm:p-4"
+          >
+            <motion.div 
+              initial={{ y: "100%" }}
+              animate={{ y: 0 }}
+              exit={{ y: "100%" }}
+              className="bg-stone-900 border border-stone-800 w-full max-w-md rounded-t-3xl sm:rounded-3xl p-6 space-y-6 max-h-[85vh] overflow-y-auto"
+            >
+              <div className="flex items-center justify-between pb-3 border-b border-stone-800">
+                <h3 className="text-base font-bold text-white">Attach Sub-Zone to Parcel</h3>
+                <button onClick={() => setShowZoneModal(false)} className="p-2 text-stone-400 hover:text-white">
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              <div className="space-y-4 text-xs">
+                <div>
+                  <label className="block text-stone-400 font-bold mb-1">Zone Label</label>
+                  <input 
+                    value={zoneFormData.label} 
+                    onChange={e => setZoneFormData({...zoneFormData, label: e.target.value})} 
+                    placeholder="e.g. High Moisture Area / Drip Sub-line" 
+                    className="w-full bg-stone-950 border border-stone-800 p-3 rounded-xl font-bold text-white outline-none focus:border-amber-500" 
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-stone-400 font-bold mb-1">Zone Type</label>
+                  <div className="grid grid-cols-2 gap-2">
+                     {ZONE_TYPES.map(z => (
+                       <button 
+                         key={z.type}
+                         onClick={() => setZoneFormData({...zoneFormData, type: z.type})}
+                         className={`flex items-center gap-2 p-2.5 rounded-xl border transition-all ${
+                           zoneFormData.type === z.type ? 'bg-amber-500/20 border-amber-500 text-amber-300' : 'bg-stone-950 border-stone-800 text-stone-400'
+                         }`}
+                       >
+                          <z.icon className="w-4 h-4" />
+                          <span className="text-[10px] font-bold">{z.label}</span>
+                       </button>
+                     ))}
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-stone-400 font-bold mb-1">Zone Color</label>
+                  <div className="flex gap-2 p-2 bg-stone-950 rounded-xl border border-stone-800 justify-between">
+                     {ZONE_COLORS.map(c => (
+                       <button 
+                         key={c} 
+                         onClick={() => setZoneFormData({...zoneFormData, color: c})} 
+                         className={`w-6 h-6 rounded-full border-2 transition-all ${zoneFormData.color === c ? 'border-white scale-110' : 'border-transparent'}`} 
+                         style={{ background: c }} 
+                       />
+                     ))}
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex gap-3 pt-2">
+                <button onClick={() => setShowZoneModal(false)} className="py-3 px-4 bg-stone-800 text-stone-300 rounded-xl font-bold text-xs">
+                  Back
+                </button>
+                <button 
+                  onClick={async () => {
+                    if (!activeField) {
+                      setAlertDialog({
+                        isOpen: true,
+                        title: 'Select Field First',
+                        message: 'Please tap a parcel on the map to select it before attaching a zone.'
+                      });
+                      return;
+                    }
+
+                    if (drawingPoints.length < 3) {
+                      setAlertDialog({
+                        isOpen: true,
+                        title: 'Incomplete Zone',
+                        message: 'Please tap at least 3 points on the map to define the zone boundary.'
+                      });
+                      return;
+                    }
+
+                    const effectiveFarmId = activeFarmId || auth.currentUser?.uid || localStorage.getItem('agri_simulated_uid') || 'demo_user_123';
+                    if (!auth.currentUser) {
+                      try { await signInAnonymously(auth); } catch (e) {}
+                    }
+
+                    const typeInfo = ZONE_TYPES.find(z => z.type === zoneFormData.type)!;
+                    const newZone = {
+                      id: Date.now().toString(),
+                      type: zoneFormData.type,
+                      label: zoneFormData.label || typeInfo.label,
+                      points: drawingPoints,
+                      color: zoneFormData.color,
+                      notes: zoneFormData.notes
+                    };
+                    
+                    const path = `users/${effectiveFarmId}/fields/${activeField.id}`;
+                    const updatedZones = [...(activeField.zones || []), newZone];
+                    try {
+                      if (!activeField.id.startsWith('local_')) {
+                        await updateDoc(doc(db, path), { zones: updatedZones });
+                      }
+                    } catch (error) {
+                      console.warn("Zone update error in Firestore:", error);
+                    }
+                    setSavedFields(prev => prev.map(f => f.id === activeField.id ? { ...f, zones: updatedZones } : f));
+                    setDrawingPoints([]); 
+                    setActiveMode('Navigate'); 
+                    setShowZoneModal(false);
+                    setZoneFormData({ label: '', type: 'Irrigation', color: ZONE_COLORS[0], notes: '' });
+                    setAlertDialog({
+                      isOpen: true,
+                      title: 'Zone Attached 📍',
+                      message: `New ${newZone.label} attached to ${activeField.name}.`
+                    });
+                  }} 
+                  className="flex-1 py-3 bg-amber-500 text-stone-950 font-bold rounded-xl text-xs uppercase flex items-center justify-center gap-1.5"
+                >
+                  <CheckCircle2 className="w-4 h-4" /> Attach Zone
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* AI FIELD ANALYSIS REPORT MODAL */}
+      <AnimatePresence>
+        {fieldAnalysis && (
+          <motion.div 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[7000] bg-black/85 backdrop-blur-md flex items-center justify-center p-4"
+          >
+            <motion.div 
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              className="bg-stone-900 border border-stone-800 w-full max-w-xl max-h-[85vh] rounded-3xl overflow-hidden flex flex-col shadow-2xl"
+            >
+              <div className="p-4 border-b border-stone-800 flex items-center justify-between bg-stone-950">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 bg-amber-500/10 text-amber-400 rounded-xl">
+                    <Sparkles className="w-5 h-5" />
+                  </div>
+                  <h3 className="text-sm font-bold text-white">AI Spatial Field Report</h3>
+                </div>
+                <button onClick={() => setFieldAnalysis(null)} className="p-2 text-stone-400 hover:text-white">
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              <div className="flex-1 overflow-y-auto p-6 text-xs text-stone-300 leading-relaxed space-y-4">
+                <div className="prose prose-invert max-w-none">
+                  <div className="markdown-body">
+                    <ReactMarkdown>{fieldAnalysis.report}</ReactMarkdown>
+                  </div>
+                </div>
+              </div>
+
+              <div className="p-4 bg-stone-950 border-t border-stone-800 text-right">
+                <button 
+                  onClick={() => setFieldAnalysis(null)} 
+                  className="px-6 py-2.5 bg-amber-500 text-stone-950 font-bold rounded-xl text-xs uppercase"
+                >
+                  Done
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* FERTILIZER PROTOCOL MODAL */}
+      <AnimatePresence>
+        {detailedAdvice && (
+          <motion.div 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[7000] bg-black/85 backdrop-blur-md flex items-center justify-center p-4"
+          >
+            <motion.div 
+              initial={{ scale: 0.95 }}
+              animate={{ scale: 1 }}
+              exit={{ scale: 0.95 }}
+              className="bg-stone-900 border border-stone-800 w-full max-w-xl max-h-[85vh] rounded-3xl overflow-hidden flex flex-col shadow-2xl"
+            >
+              <div className="p-4 border-b border-stone-800 flex items-center justify-between bg-stone-950">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 bg-emerald-500/10 text-emerald-400 rounded-xl">
+                    <ClipboardList className="w-5 h-5" />
+                  </div>
+                  <h3 className="text-sm font-bold text-white">Agronomic Field Protocol</h3>
+                </div>
+                <button onClick={() => setDetailedAdvice(null)} className="p-2 text-stone-400 hover:text-white">
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              <div className="flex-1 overflow-y-auto p-6 text-xs text-stone-300 space-y-4">
+                <div className="p-4 bg-stone-950 rounded-2xl border border-stone-800 space-y-2">
+                  <p className="font-bold text-emerald-400">Crop Requirements & Goals:</p>
+                  <p className="text-white font-medium">{detailedAdvice.cropRequirements}</p>
+                </div>
+
+                <div className="p-4 bg-stone-950 rounded-2xl border border-stone-800 space-y-2">
+                  <p className="font-bold text-amber-400">Soil Adjustments:</p>
+                  <p className="text-stone-300">{detailedAdvice.soilAdjustments}</p>
+                </div>
+
+                <div className="space-y-2">
+                  <p className="font-bold text-stone-400 uppercase text-[10px]">Recommended Fertilizers</p>
+                  {detailedAdvice.fertilizers.map((f, i) => (
+                    <div key={i} className="p-3 bg-stone-950 rounded-xl border border-stone-800 flex items-center justify-between">
+                      <div>
+                        <p className="font-bold text-white">{f.name}</p>
+                        <p className="text-[10px] text-stone-400">{f.description}</p>
+                      </div>
+                      <span className="px-2 py-1 bg-stone-800 text-amber-400 rounded-lg font-mono font-bold text-[10px]">
+                        {f.npk}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="p-4 bg-stone-950 border-t border-stone-800 text-right">
+                <button 
+                  onClick={() => setDetailedAdvice(null)} 
+                  className="px-6 py-2.5 bg-amber-500 text-stone-950 font-bold rounded-xl text-xs uppercase"
+                >
+                  Close
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* ALERT DIALOG */}
+      <AnimatePresence>
+        {alertDialog.isOpen && (
+          <motion.div 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[10000] bg-black/80 backdrop-blur-md flex items-center justify-center p-4"
+          >
+            <div className="bg-stone-900 border border-stone-800 w-full max-w-sm rounded-2xl p-6 text-center space-y-4">
+              <Info className="w-10 h-10 text-amber-400 mx-auto" />
+              <h3 className="text-base font-bold text-white">{alertDialog.title}</h3>
+              <p className="text-xs text-stone-300">{alertDialog.message}</p>
+              <button 
+                onClick={() => setAlertDialog({ ...alertDialog, isOpen: false })}
+                className="w-full py-3 bg-amber-500 text-stone-950 font-bold rounded-xl text-xs uppercase"
+              >
+                Understood
+              </button>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* QUICK PRESET PLOT MODAL */}
+      <AnimatePresence>
+        {showPresetModal && (
+          <motion.div 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[10000] bg-black/80 backdrop-blur-md flex items-center justify-center p-4"
+          >
+            <div className="bg-stone-900 border border-stone-800 w-full max-w-sm rounded-2xl p-6 space-y-4">
+              <div className="flex items-center justify-between border-b border-stone-800 pb-3">
+                <div className="flex items-center gap-2">
+                  <Box className="w-5 h-5 text-emerald-400" />
+                  <h3 className="text-base font-bold text-white">Quick Preset Plot</h3>
+                </div>
+                <button 
+                  onClick={() => setShowPresetModal(false)}
+                  className="p-1 text-stone-400 hover:text-white"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              <p className="text-xs text-stone-300">
+                Select a standard plot area to drop a precision geometric rectangular parcel directly on your map center:
+              </p>
+
+              <div className="grid grid-cols-2 gap-2.5">
+                <button
+                  onClick={() => createQuickPresetPlot(0.5)}
+                  className="p-3.5 bg-stone-950 hover:bg-stone-800 border border-stone-800 rounded-xl text-left space-y-1 active:scale-95 transition-all"
+                >
+                  <p className="text-xs font-bold text-amber-400">0.5 Acre</p>
+                  <p className="text-[10px] text-stone-400">20 Gunthas (45m × 45m)</p>
+                </button>
+
+                <button
+                  onClick={() => createQuickPresetPlot(1.0)}
+                  className="p-3.5 bg-stone-950 hover:bg-stone-800 border border-stone-800 rounded-xl text-left space-y-1 active:scale-95 transition-all"
+                >
+                  <p className="text-xs font-bold text-emerald-400">1.0 Acre</p>
+                  <p className="text-[10px] text-stone-400">40 Gunthas (63.6m × 63.6m)</p>
+                </button>
+
+                <button
+                  onClick={() => createQuickPresetPlot(2.0)}
+                  className="p-3.5 bg-stone-950 hover:bg-stone-800 border border-stone-800 rounded-xl text-left space-y-1 active:scale-95 transition-all"
+                >
+                  <p className="text-xs font-bold text-cyan-400">2.0 Acres</p>
+                  <p className="text-[10px] text-stone-400">80 Gunthas (90m × 90m)</p>
+                </button>
+
+                <button
+                  onClick={() => createQuickPresetPlot(5.0)}
+                  className="p-3.5 bg-stone-950 hover:bg-stone-800 border border-stone-800 rounded-xl text-left space-y-1 active:scale-95 transition-all"
+                >
+                  <p className="text-xs font-bold text-indigo-400">5.0 Acres</p>
+                  <p className="text-[10px] text-stone-400">200 Gunthas (142m × 142m)</p>
+                </button>
+              </div>
+
+              <button
+                onClick={() => setShowPresetModal(false)}
+                className="w-full py-2.5 bg-stone-800 text-stone-300 font-bold rounded-xl text-xs uppercase"
+              >
+                Cancel
+              </button>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* CONFIRM DIALOG */}
+      <AnimatePresence>
+        {confirmDialog.isOpen && (
+          <motion.div 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[10000] bg-black/80 backdrop-blur-md flex items-center justify-center p-4"
+          >
+            <div className="bg-stone-900 border border-stone-800 w-full max-w-sm rounded-2xl p-6 text-center space-y-4">
+              <AlertTriangle className={`w-10 h-10 mx-auto ${confirmDialog.type === 'danger' ? 'text-rose-400' : 'text-amber-400'}`} />
+              <h3 className="text-base font-bold text-white">{confirmDialog.title}</h3>
+              <p className="text-xs text-stone-300">{confirmDialog.message}</p>
+              <div className="flex gap-2">
+                <button 
+                  onClick={() => setConfirmDialog({ ...confirmDialog, isOpen: false })}
+                  className="flex-1 py-3 bg-stone-800 text-stone-300 font-bold rounded-xl text-xs"
+                >
+                  Cancel
+                </button>
+                <button 
+                  onClick={() => {
+                    confirmDialog.onConfirm();
+                    setConfirmDialog({ ...confirmDialog, isOpen: false });
+                  }}
+                  className={`flex-1 py-3 font-bold rounded-xl text-xs text-white ${
+                    confirmDialog.type === 'danger' ? 'bg-rose-500' : 'bg-amber-500 text-stone-950'
+                  }`}
+                >
+                  Confirm
+                </button>
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 };
-
-const ModeBtn: React.FC<{ id: any, icon: any, active: boolean, onClick: (m: any) => void }> = ({ id, icon: Icon, active, onClick }) => (
-  <button
-    onClick={() => onClick(id)}
-    className={`w-12 h-12 rounded-2xl flex flex-col items-center justify-center transition-all gap-0.5 ${active ? 'bg-amber-500 text-stone-950 shadow-xl scale-110' : 'text-white/40 hover:text-white'}`}
-  >
-    <Icon className="w-5 h-5" />
-    <span className="text-[7px] font-black uppercase tracking-tighter">{id}</span>
-  </button>
-);
 
 export default FieldMap;

@@ -7,6 +7,7 @@ import {
   Beaker, 
   MapPin, 
   Calculator, 
+  FlaskConical,
   Calendar, 
   Maximize,
   ChevronRight,
@@ -56,6 +57,7 @@ const TOOLS = [
   { id: 'inputs', icon: <ShoppingCart />, label: 'Input Advisor', view: AppView.INPUT_ADVISOR, category: 'Finance', theme: 'amber', desc: 'Smart procurement advice' },
   { id: 'advisor', icon: <Lightbulb />, label: 'Crop Advisor', view: AppView.CROP_ADVISOR, category: 'Daily', theme: 'amber', desc: 'AI agronomy recommendations' },
   { id: 'rotation', icon: <ArrowRightLeft />, label: 'Rotation', view: AppView.CROP_ROTATION_ADVISOR, category: 'Daily', theme: 'amber', desc: 'Soil health optimization' },
+  { id: 'fertilizer', icon: <FlaskConical />, label: 'Fertilizer Calc', view: AppView.FERTILIZER_CALCULATOR, category: 'Daily', theme: 'amber', desc: 'NPK ratio & bag dosage calculator' },
   { id: 'spraying', icon: <Beaker />, label: 'Spraying', view: AppView.SPRAYING_ADVISOR, category: 'Daily', theme: 'amber', desc: 'Pesticide dosage calculator' },
   { id: 'irrigation', icon: <Droplets />, label: 'Irrigation', view: AppView.IRRIGATION_HUB, category: 'Daily', theme: 'amber', desc: 'Water management hub' },
   { id: 'harvest', icon: <Calendar />, label: 'Harvest', view: AppView.HARVEST_SCHEDULER, category: 'Daily', theme: 'amber', desc: 'Optimal timing scheduler' },
@@ -85,57 +87,57 @@ const ToolsHub: React.FC<ToolsHubProps> = ({ setView }) => {
   const categories = Array.from(new Set(filteredTools.map(t => t.category)));
 
   return (
-    <div className="w-full flex flex-col pb-40 bg-black min-h-screen">
+    <div className="w-full flex flex-col pb-40 min-h-screen bg-[#090e0c] text-stone-100">
       
       {/* Hero Header */}
-      <section className="px-6 pt-16 pb-12 relative overflow-hidden">
-        <div className="absolute top-0 right-0 w-64 h-64 bg-amber-500/5 rounded-full blur-3xl -mr-32 -mt-32" />
-        <div className="relative z-10 space-y-8">
-          <div className="space-y-2">
+      <section className="px-6 pt-10 pb-8 relative overflow-hidden">
+        <div className="absolute top-0 right-0 w-80 h-80 bg-emerald-500/10 rounded-full blur-[100px] -mr-40 -mt-40 pointer-events-none" />
+        <div className="relative z-10 space-y-6">
+          <div className="space-y-1">
             <div className="flex items-center gap-2">
-              <span className="w-8 h-[2px] bg-amber-600" />
-              <span className="text-[10px] font-black text-amber-500 uppercase tracking-[0.4em]">Advanced Toolkit</span>
+              <span className="w-2 h-2 rounded-full bg-emerald-400" />
+              <span className="text-[11px] font-bold text-emerald-400 uppercase tracking-widest">Advanced Agriculture Suite</span>
             </div>
-            <h2 className="text-6xl font-black text-white tracking-tighter leading-[0.9]">
-              Smart <span className="text-amber-500">Farming</span><br/>
-              <span className="italic font-serif font-light">Solutions.</span>
+            <h2 className="text-3xl font-extrabold text-white tracking-tight">
+              Smart <span className="text-emerald-400 font-serif italic">Farmer Toolkit</span>
             </h2>
+            <p className="text-xs text-stone-400">All precision AI advisory, GIS mapping, and financial ledger tools in one hub.</p>
           </div>
           
           <div className="relative group max-w-md">
-            <div className="absolute inset-y-0 left-6 flex items-center pointer-events-none">
-              <Search className="w-5 h-5 text-stone-600 group-focus-within:text-amber-500 transition-colors" />
+            <div className="absolute inset-y-0 left-4 flex items-center pointer-events-none">
+              <Search className="w-4 h-4 text-stone-400 group-focus-within:text-emerald-400 transition-colors" />
             </div>
             <input 
               type="text" 
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search tools, categories..."
-              className="w-full bg-stone-950 border border-amber-500/10 p-6 pl-16 rounded-[2rem] outline-none shadow-2xl shadow-black/40 text-sm text-white focus:border-amber-600/50 focus:ring-8 focus:ring-amber-500/10 transition-all placeholder:text-stone-700 font-medium"
+              placeholder="Search tools, categories, diagnosis..."
+              className="w-full bg-[#121a14] border border-emerald-500/20 p-3.5 pl-11 rounded-2xl outline-none shadow-xl text-sm text-white focus:border-emerald-500/50 focus:ring-4 focus:ring-emerald-500/10 transition-all placeholder:text-stone-500 font-medium"
             />
           </div>
         </div>
       </section>
 
-      <div className="px-6 space-y-20">
+      <div className="px-6 space-y-10">
         
         {/* Featured Section */}
         {searchQuery === '' && (
-          <section className="space-y-8">
+          <section className="space-y-4">
             <div className="flex items-center justify-between">
-              <h3 className="text-[11px] font-black text-amber-500/40 uppercase tracking-[0.3em] flex items-center gap-3">
-                <Star className="w-4 h-4 text-amber-400 fill-amber-400" /> Featured Intelligence
+              <h3 className="text-xs font-extrabold text-emerald-400 uppercase tracking-widest flex items-center gap-2">
+                <Star className="w-3.5 h-3.5 text-amber-400 fill-amber-400" /> Featured Tool
               </h3>
-              <div className="h-px flex-1 bg-amber-500/10 ml-6" />
+              <div className="h-px flex-1 bg-emerald-500/10 ml-4" />
             </div>
-            <div className="grid grid-cols-1 gap-6">
+            <div className="grid grid-cols-1 gap-4">
               <FeaturedTool 
                 icon={<Wallet />} 
                 title="Finance Ledger" 
-                desc="Real-time P&L monitoring, automated expense tracking, and fiscal audits."
+                desc="Real-time P&L monitoring, automated input expense tracking, and fiscal audits."
                 onClick={() => handleSetView(AppView.FINANCE_LEDGER)}
-                color="bg-stone-950"
-                accent="text-amber-500"
+                color="glass-card"
+                accent="text-emerald-400"
               />
             </div>
           </section>
@@ -143,16 +145,16 @@ const ToolsHub: React.FC<ToolsHubProps> = ({ setView }) => {
 
         {/* Dynamic Tool Grid */}
         {categories.map((category, idx) => (
-          <section key={category} className="space-y-8">
+          <section key={category} className="space-y-4">
             <div className="flex items-center justify-between">
-              <div className="flex items-center gap-4">
-                <span className="text-2xl font-black text-amber-900 font-mono">0{idx + 1}</span>
-                <h3 className="text-[11px] font-black text-amber-500/40 uppercase tracking-[0.3em]">{category} Tools</h3>
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-mono font-bold text-emerald-400/60">0{idx + 1}</span>
+                <h3 className="text-xs font-extrabold text-stone-300 uppercase tracking-widest">{category} Tools</h3>
               </div>
-              <div className="h-px flex-1 bg-amber-500/10 ml-6" />
+              <div className="h-px flex-1 bg-emerald-500/10 ml-4" />
             </div>
             
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
               {filteredTools.filter(t => t.category === category).map(tool => (
                 <ToolBentoCard 
                   key={tool.id}
@@ -160,7 +162,6 @@ const ToolsHub: React.FC<ToolsHubProps> = ({ setView }) => {
                   label={tool.label}
                   desc={tool.desc}
                   onClick={() => handleSetView(tool.view)}
-                  theme={tool.theme as any}
                 />
               ))}
             </div>
@@ -169,77 +170,66 @@ const ToolsHub: React.FC<ToolsHubProps> = ({ setView }) => {
 
         {/* Admin Tools */}
         {profile?.role === 'admin' && searchQuery === '' && (
-          <section className="space-y-8">
+          <section className="space-y-4">
             <div className="flex items-center justify-between">
-              <div className="flex items-center gap-4">
-                <span className="text-2xl font-black text-amber-900 font-mono">XX</span>
-                <h3 className="text-[11px] font-black text-amber-500 uppercase tracking-[0.3em]">System Admin</h3>
+              <div className="flex items-center gap-2">
+                <ShieldCheck className="w-4 h-4 text-emerald-400" />
+                <h3 className="text-xs font-extrabold text-stone-300 uppercase tracking-widest">System Admin</h3>
               </div>
-              <div className="h-px flex-1 bg-amber-500/10 ml-6" />
+              <div className="h-px flex-1 bg-emerald-500/10 ml-4" />
             </div>
-            <div className="grid grid-cols-1 gap-4">
+            <div>
               <button 
                 onClick={() => handleSetView(AppView.ADMIN_PANEL)}
-                className="flex items-center gap-6 p-8 bg-stone-950 rounded-[2.5rem] border border-amber-500/5 active:scale-[0.98] transition-all group shadow-2xl shadow-black/40 text-left"
+                className="w-full flex items-center gap-4 p-5 glass-card glass-card-hover rounded-2xl border border-emerald-500/20 shadow-md text-left group"
               >
-                <div className="p-5 bg-amber-500/10 text-amber-500 rounded-2xl border border-amber-500/20 group-hover:bg-amber-500 group-hover:text-black transition-all">
-                  <ShieldCheck className="w-8 h-8" />
+                <div className="p-3 bg-emerald-950/80 text-emerald-400 rounded-xl border border-emerald-500/30 group-hover:scale-105 transition-all">
+                  <ShieldCheck className="w-6 h-6" />
                 </div>
                 <div className="flex-1">
-                  <h4 className="text-lg font-black text-white uppercase tracking-wider mb-1">Admin Control Center</h4>
-                  <p className="text-[10px] text-stone-500 font-bold uppercase tracking-widest">System metrics, node logs & broadcasts</p>
+                  <h4 className="text-sm font-bold text-white mb-0.5">Admin Control Center</h4>
+                  <p className="text-xs text-stone-400">System metrics, node logs & broadcasts</p>
                 </div>
-                <ArrowRight className="w-6 h-6 text-stone-700 group-hover:text-amber-500 group-hover:translate-x-2 transition-all" />
+                <ArrowRight className="w-5 h-5 text-stone-500 group-hover:text-emerald-400 group-hover:translate-x-1 transition-all" />
               </button>
             </div>
           </section>
         )}
 
         {filteredTools.length === 0 && (
-          <div className="py-20 text-center space-y-4">
-            <div className="w-20 h-20 bg-stone-100 rounded-full flex items-center justify-center mx-auto">
-              <Search className="w-8 h-8 text-stone-300" />
+          <div className="py-16 text-center space-y-3 glass-card rounded-3xl">
+            <div className="w-12 h-12 bg-emerald-950/80 rounded-2xl flex items-center justify-center mx-auto border border-emerald-500/20">
+              <Search className="w-6 h-6 text-emerald-400" />
             </div>
-            <p className="text-sm font-bold text-stone-400 uppercase tracking-widest">No tools match your search</p>
+            <p className="text-xs font-bold text-stone-300">No tools match "{searchQuery}"</p>
           </div>
         )}
       </div>
 
       {/* Footer */}
-      <section className="px-6 mt-32 mb-10 text-center">
-        <div className="flex items-center justify-center gap-4 mb-6 opacity-20">
-          <div className="h-px w-16 bg-stone-400" />
-          <span className="text-[9px] font-black uppercase tracking-[0.6em] text-stone-500">Bharat Kisan</span>
-          <div className="h-px w-16 bg-stone-400" />
-        </div>
-        <p className="text-[9px] font-black text-stone-300 uppercase tracking-[0.4em]">
-          © {new Date().getFullYear()} BHARAT-KISAN-SYSTEMS • V2.5.2
+      <section className="px-6 mt-20 mb-6 text-center">
+        <p className="text-[10px] font-mono font-medium text-stone-500">
+          Bharat Kisan Smart Systems • v2.5
         </p>
       </section>
     </div>
   );
 };
 
-const ToolBentoCard: React.FC<{ icon: React.ReactNode, label: string, desc: string, onClick: () => void, theme: 'amber' | 'orange' | 'stone' }> = ({ icon, label, desc, onClick, theme }) => {
-  const themes = {
-    amber: 'bg-amber-500/10 text-amber-500 border-amber-500/20',
-    orange: 'bg-orange-500/10 text-orange-500 border-orange-500/20',
-    stone: 'bg-stone-900 text-stone-400 border-stone-800'
-  };
-
+const ToolBentoCard: React.FC<{ icon: React.ReactNode, label: string, desc: string, onClick: () => void }> = ({ icon, label, desc, onClick }) => {
   return (
     <button 
       onClick={onClick}
-      className="bg-stone-950 p-6 rounded-[2.5rem] border border-amber-500/5 flex flex-col items-start text-left gap-6 active:scale-95 transition-all group shadow-sm hover:shadow-2xl hover:shadow-black/40 hover:border-amber-500/20"
+      className="glass-card glass-card-hover p-4 rounded-2xl border border-emerald-500/15 flex flex-col items-start text-left gap-3 active:scale-95 transition-all group shadow-sm hover:border-emerald-500/30"
     >
-      <div className={`${themes[theme]} p-5 rounded-2xl border transition-all group-hover:scale-110 group-hover:rotate-6`}>
-        {React.cloneElement(icon as React.ReactElement, { className: 'w-6 h-6' } as any)}
+      <div className="p-3 bg-emerald-950/80 text-emerald-400 rounded-xl border border-emerald-500/20 group-hover:scale-105 transition-all">
+        {React.cloneElement(icon as React.ReactElement, { className: 'w-5 h-5' } as any)}
       </div>
-      <div className="space-y-1">
-        <h4 className="text-xs font-black text-white uppercase tracking-wider group-hover:text-amber-500 transition-colors">
+      <div>
+        <h4 className="text-xs font-bold text-white group-hover:text-emerald-300 transition-colors">
           {label}
         </h4>
-        <p className="text-[9px] text-stone-600 font-bold uppercase tracking-widest leading-tight opacity-0 group-hover:opacity-100 transition-opacity">
+        <p className="text-[10px] text-stone-400 font-normal leading-snug mt-0.5 line-clamp-2">
           {desc}
         </p>
       </div>
@@ -250,22 +240,24 @@ const ToolBentoCard: React.FC<{ icon: React.ReactNode, label: string, desc: stri
 const FeaturedTool: React.FC<{ icon: React.ReactNode, title: string, desc: string, onClick: () => void, color: string, accent: string }> = ({ icon, title, desc, onClick, color, accent }) => (
   <button 
     onClick={onClick}
-    className={`w-full ${color} p-12 rounded-[3rem] border border-amber-500/5 shadow-2xl shadow-black/40 relative overflow-hidden group active:scale-[0.98] transition-all text-left`}
+    className={`w-full ${color} p-6 rounded-3xl border border-emerald-500/20 shadow-xl relative overflow-hidden group active:scale-[0.98] transition-all text-left glass-card-hover`}
   >
-    <div className="absolute top-0 right-0 p-12 opacity-[0.03] group-hover:opacity-[0.08] transition-opacity">
-      {React.cloneElement(icon as React.ReactElement, { className: 'w-64 h-64 -mr-16 -mt-16 rotate-12' } as any)}
-    </div>
-    <div className="relative z-10 space-y-8">
-      <div className="bg-white/5 backdrop-blur-xl w-fit p-5 rounded-2xl border border-white/10 shadow-inner">
-        {React.cloneElement(icon as React.ReactElement, { className: `w-10 h-10 ${accent}` } as any)}
+    <div className="relative z-10 space-y-4">
+      <div className="flex items-center justify-between">
+        <div className="p-3 bg-emerald-950/80 rounded-xl border border-emerald-500/20">
+          {React.cloneElement(icon as React.ReactElement, { className: `w-6 h-6 ${accent}` } as any)}
+        </div>
+        <span className="text-[10px] font-bold text-emerald-400 bg-emerald-950/80 px-2.5 py-1 rounded-full border border-emerald-500/30">
+          Finance Hub
+        </span>
       </div>
-      <div className="space-y-3">
-        <h4 className={`text-4xl font-black tracking-tighter ${accent} uppercase`}>{title}</h4>
-        <p className="text-white/40 text-[11px] font-bold uppercase tracking-[0.2em] leading-relaxed max-w-[300px]">{desc}</p>
+      <div className="space-y-1">
+        <h4 className="text-base font-extrabold text-white tracking-tight">{title}</h4>
+        <p className="text-stone-300 text-xs leading-relaxed max-w-[320px]">{desc}</p>
       </div>
-      <div className="flex items-center gap-4 text-[10px] font-black uppercase tracking-[0.4em] text-white/20 group-hover:text-white transition-colors">
-        <span className="w-12 h-px bg-white/10 group-hover:bg-white transition-colors" />
-        Launch Tool <ArrowRight className="w-4 h-4 group-hover:translate-x-3 transition-transform" />
+      <div className="flex items-center gap-2 text-xs font-bold text-emerald-400 group-hover:text-emerald-300 transition-colors pt-1">
+        <span>Open Ledger</span> 
+        <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-1 transition-transform" />
       </div>
     </div>
   </button>

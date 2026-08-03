@@ -69,24 +69,50 @@ const IrrigationHub: React.FC<IrrigationHubProps> = ({ language }) => {
   }, [activeFarmId]);
 
   React.useEffect(() => {
-    navigator.geolocation.getCurrentPosition(async (pos) => {
-      try {
-        const res = await fetch(`https://api.openweathermap.org/data/2.5/weather?lat=${pos.coords.latitude}&lon=${pos.coords.longitude}&appid=${WEATHER_API_KEY}&units=metric`);
-        const data = await res.json();
-        setWeather(data);
-      } catch (err) {
-        console.error("Weather fetch failed", err);
-      }
-    });
+    const fallbackWeather = {
+      main: { temp: 28, humidity: 65 },
+      weather: [{ main: 'Clear', description: 'clear sky' }],
+      wind: { speed: 3.2 }
+    };
+
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        async (pos) => {
+          try {
+            const res = await fetch(`https://api.openweathermap.org/data/2.5/weather?lat=${pos.coords.latitude}&lon=${pos.coords.longitude}&appid=${WEATHER_API_KEY}&units=metric`);
+            const data = await res.json();
+            if (data && data.main) {
+              setWeather(data);
+            } else {
+              setWeather(fallbackWeather);
+            }
+          } catch (err) {
+            console.error("Weather fetch failed", err);
+            setWeather(fallbackWeather);
+          }
+        },
+        (geoErr) => {
+          console.warn("Geolocation failed/denied", geoErr);
+          setWeather(fallbackWeather);
+        },
+        { timeout: 5000 }
+      );
+    } else {
+      setWeather(fallbackWeather);
+    }
   }, []);
 
   const getAiRecommendation = async (zone: IrrigationZone) => {
-    if (!weather || !activeFarmId) return;
+    if (!activeFarmId) return;
     setAnalyzing(zone.id);
     try {
       const ai = getAIClient();
+      const tempStr = weather?.main?.temp != null ? `${weather.main.temp}°C` : '28°C';
+      const humidityStr = weather?.main?.humidity != null ? `${weather.main.humidity}%` : '65%';
+      const descStr = weather?.weather?.[0]?.description || 'clear sky';
+
       const prompt = `Provide a precise irrigation recommendation for a zone named "${zone.name}" with "${zone.cropType}" crops and "${zone.soilType}" soil. 
-      Local Weather: ${weather.main.temp}°C, Humidity ${weather.main.humidity}%, Condition: ${weather.weather[0].description}. 
+      Local Weather: ${tempStr}, Humidity ${humidityStr}, Condition: ${descStr}. 
       Return a single brief, expert instruction (max 20 words) in ${language}.`;
       
       const response = await ai.models.generateContent({
@@ -173,17 +199,17 @@ const IrrigationHub: React.FC<IrrigationHubProps> = ({ language }) => {
 
         {/* Weather Banner */}
         <div className="bg-gradient-to-r from-amber-500 to-amber-700 rounded-[2rem] p-6 text-stone-950 mb-8 flex items-center justify-between relative overflow-hidden shadow-xl shadow-amber-500/10">
-           {loading ? <Loader2 className="animate-spin" /> : (
+           {!weather || !weather.main ? <Loader2 className="animate-spin" /> : (
              <>
                <div className="relative z-10">
                  <p className="text-[10px] font-black uppercase tracking-widest opacity-60">Field Conditions</p>
                  <div className="flex items-baseline gap-2">
-                    <span className="text-3xl font-black">{Math.round(weather.main.temp)}°C</span>
-                    <span className="text-sm font-bold opacity-80">{weather.weather[0].main}</span>
+                    <span className="text-3xl font-black">{Math.round(weather.main?.temp ?? 28)}°C</span>
+                    <span className="text-sm font-bold opacity-80">{weather.weather?.[0]?.main || 'Clear'}</span>
                  </div>
                  <div className="flex gap-4 mt-2">
-                    <div className="flex items-center gap-1 text-[10px] font-bold"><Droplets className="w-3 h-3" /> {weather.main.humidity}%</div>
-                    <div className="flex items-center gap-1 text-[10px] font-bold"><Wind className="w-3 h-3" /> {Math.round(weather.wind.speed * 3.6)}k</div>
+                    <div className="flex items-center gap-1 text-[10px] font-bold"><Droplets className="w-3 h-3" /> {weather.main?.humidity ?? 65}%</div>
+                    <div className="flex items-center gap-1 text-[10px] font-bold"><Wind className="w-3 h-3" /> {Math.round((weather.wind?.speed ?? 3) * 3.6)}k</div>
                  </div>
                </div>
                <CloudRain className="w-20 h-20 opacity-10 absolute -right-4 -top-4" />

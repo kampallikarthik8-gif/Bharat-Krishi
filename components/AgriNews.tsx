@@ -139,7 +139,7 @@ const AgriNews: React.FC<AgriNewsProps> = ({ language: initialLanguage }) => {
             </div>
           </div>
           
-          {weather && !detecting && (
+          {weather?.main && !detecting && (
              <div className="bg-stone-800 px-4 py-2 rounded-2xl border border-stone-700 flex items-center gap-3 animate-in fade-in slide-in-from-right-4">
                 <div className="text-right">
                    <p className="text-[9px] font-bold text-stone-500 uppercase tracking-widest">Context</p>
@@ -153,11 +153,11 @@ const AgriNews: React.FC<AgriNewsProps> = ({ language: initialLanguage }) => {
         </div>
 
         {/* Mini Weather Brief for Search Grounding */}
-        {weather && (
+        {weather?.main && (
           <div className="grid grid-cols-3 gap-3">
              <WeatherBadge icon={<Thermometer className="w-3 h-3" />} label="Temp" value={`${Math.round(weather.main.temp)}°`} />
              <WeatherBadge icon={<Droplets className="w-3 h-3" />} label="Humidity" value={`${weather.main.humidity}%`} />
-             <WeatherBadge icon={<Wind className="w-3 h-3" />} label="Wind" value={`${Math.round(weather.wind.speed * 3.6)}k`} />
+             <WeatherBadge icon={<Wind className="w-3 h-3" />} label="Wind" value={`${Math.round((weather.wind?.speed ?? 0) * 3.6)}k`} />
           </div>
         )}
 
